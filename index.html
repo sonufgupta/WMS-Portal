@@ -111,14 +111,22 @@
                             </div>
                             
                             <!-- Summary Cards Side-by-Side -->
-                            <div style="display: flex; gap: 16px; flex-shrink: 0; width: 100%;">
-                                <div style="flex: 1; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; gap: 16px; flex-shrink: 0; width: 100%; flex-wrap: wrap;">
+                                <div style="flex: 1; min-width: 120px; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
                                     <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total PCs</span>
                                     <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-blue);" id="inventoryTotalItems">0</span>
                                 </div>
-                                <div style="flex: 1; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                <div style="flex: 1; min-width: 120px; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
                                     <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Unique Items</span>
                                     <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-emerald);" id="inventoryUniqueProducts">0</span>
+                                </div>
+                                <div style="flex: 1; min-width: 120px; background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Boxes</span>
+                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-purple);" id="inventoryTotalBoxes">0</span>
+                                </div>
+                                <div style="flex: 1; min-width: 120px; background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Weight</span>
+                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-amber);" id="inventoryTotalWeight">0.00 kg</span>
                                 </div>
                             </div>
 
@@ -424,6 +432,21 @@
                                 <div class="card-title-group">
                                     <h2>Completed Outbound Logs</h2>
                                     <p>History of previously closed dispatch sessions</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Today's Dispatch Summary Bar -->
+                            <div style="display: flex; gap: 16px; padding: 12px 24px; border-bottom: 1px solid var(--border-color); background: rgba(16, 185, 129, 0.02); flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted);">Today's Dispatch Summary:</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; color: var(--accent-blue);">
+                                    <span>Total Boxes:</span>
+                                    <span id="todayOutboundBoxes">0</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; color: var(--accent-amber);">
+                                    <span>Total Weight:</span>
+                                    <span id="todayOutboundWeight">0.000 kg</span>
                                 </div>
                             </div>
                             
@@ -939,9 +962,12 @@
                     </div>
                 </div>
             </div>
-            <!-- Hidden input to capture double scans on warning modal -->
-            <input type="text" id="warningModalConfirmInput" style="position: absolute; opacity: 0; pointer-events: none;" autocomplete="off">
-            <div class="modal-footer" style="margin-top: 8px; display: flex; gap: 12px; width: 100%;">
+            <!-- Input container to capture scans on warning modal -->
+            <div id="warningModalInputContainer" style="display: none; flex-direction: column; gap: 8px; margin-top: 16px; width: 100%;">
+                <label for="warningModalConfirmInput" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Scan Serial Number again to Confirm / Add Product:</label>
+                <input type="text" id="warningModalConfirmInput" placeholder="Scan barcode again to confirm add..." style="background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 12px 16px; border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.95rem; width: 100%;" autocomplete="off">
+            </div>
+            <div class="modal-footer" style="margin-top: 16px; display: flex; gap: 12px; width: 100%;">
                 <button type="button" id="allowLengthBtn" style="display: none; border: 1px solid var(--accent-emerald); color: var(--accent-emerald); background: rgba(16,185,129,0.05); flex: 1; border-radius: var(--radius-sm); font-weight: 700; padding: 12px; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); text-align: center;">
                     Allow & Save Length
                 </button>

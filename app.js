@@ -4,10 +4,10 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Fresh build initializer: clear previous debug data once
-    if (!localStorage.getItem('wms_fresh_testing_build_v3')) {
-        localStorage.clear();
-        localStorage.setItem('wms_fresh_testing_build_v3', 'true');
+    // Cache upgrade check for mock data
+    const existingHist = localStorage.getItem('wms_inbound_history');
+    if (existingHist && !existingHist.includes("inbound_mock_1")) {
+        localStorage.removeItem('wms_inbound_history');
     }
 
     function escapeHtmlAttr(str) {
@@ -16,7 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Firebase Configuration & Realtime Sync Integration ---
-    // Update these configuration keys with your own Firebase Project details
     const firebaseConfig = {
         apiKey: "AIzaSyALpgMRgKEz93jKhmXRevHO0L87lDkeiCI",
         authDomain: "wms-portal-g.firebaseapp.com",
@@ -24,7 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
         projectId: "wms-portal-g",
         storageBucket: "wms-portal-g.firebasestorage.app",
         messagingSenderId: "9299535740",
-        appId: "1:9299535740:web:9d2f620aa536a96d6fe6f9"
+        appId: "1:9299535740:web:9d2f620aa536a96d6fe6f9",
+        measurementId: "G-LW16F1YZ6P"
     };
 
     let isFirebaseConnected = false;
@@ -52,44 +52,117 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function syncCloudDataToLocal(key, value) {
+        if (value === null || value === undefined) {
+            return false;
+        }
         const currentLocal = localStorage.getItem(key);
-        const newStr = value === null || value === undefined ? null : JSON.stringify(value);
+        const newStr = JSON.stringify(value);
         if (currentLocal !== newStr) {
-            if (newStr === null) {
-                localStorage.removeItem(key);
-            } else {
-                localStorage.setItem(key, newStr);
-            }
+            localStorage.setItem(key, newStr);
             return true;
         }
         return false;
     }
 
-    // Listen for Realtime Database changes
     if (isFirebaseConnected && db) {
-        db.ref('wms_data').on('value', (snapshot) => {
-            const data = snapshot.val() || {};
-            let changed = false;
-
-            if (data.inbound_history !== undefined && syncCloudDataToLocal('wms_inbound_history', data.inbound_history)) changed = true;
-            if (data.outbound_history !== undefined && syncCloudDataToLocal('wms_outbound_history', data.outbound_history)) changed = true;
-            if (data.product_weights !== undefined && syncCloudDataToLocal('wms_product_weights', data.product_weights)) changed = true;
-            if (data.wos_items !== undefined && syncCloudDataToLocal('wms_wos_items', data.wos_items)) changed = true;
-            if (data.active_inbound_session !== undefined && syncCloudDataToLocal('wms_active_inbound_session', data.active_inbound_session)) changed = true;
-            if (data.active_outbound_session !== undefined && syncCloudDataToLocal('wms_active_outbound_session', data.active_outbound_session)) changed = true;
-            if (data.inbound_items !== undefined && syncCloudDataToLocal('wms_inbound_items', data.inbound_items)) changed = true;
-
-            if (changed) {
-                restoreSessionState();
-                restoreOutboundSessionState();
-                renderHistoryTable();
-                renderOutboundHistoryTable();
-                renderInventoryPanel();
-                renderWosDropdownItems();
-                if (window.populateMisProductsDropdown) {
-                    window.populateMisProductsDropdown();
+        // 1. Sync Active Inbound Session (High Frequency, Small Size)
+        db.ref('wms_data/active_inbound_session').on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val === null) {
+                const localActive = localStorage.getItem('wms_active_inbound_session');
+                if (localActive) firebaseSet('active_inbound_session', JSON.parse(localActive));
+            } else {
+                if (syncCloudDataToLocal('wms_active_inbound_session', val)) {
+                    restoreSessionState();
+                    console.log("Active Inbound Session synchronized.");
                 }
-                console.log("Local WMS states synchronized from Firebase Database.");
+            }
+        });
+
+        // 2. Sync Active Outbound Session (High Frequency, Small Size)
+        db.ref('wms_data/active_outbound_session').on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val === null) {
+                const localActiveOut = localStorage.getItem('wms_active_outbound_session');
+                if (localActiveOut) firebaseSet('active_outbound_session', JSON.parse(localActiveOut));
+            } else {
+                if (syncCloudDataToLocal('wms_active_outbound_session', val)) {
+                    restoreOutboundSessionState();
+                    console.log("Active Outbound Session synchronized.");
+                }
+            }
+        });
+
+        // 3. Sync Product Weights (Low Frequency, Small Size)
+        db.ref('wms_data/product_weights').on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val === null) {
+                const localWeights = getProductWeights();
+                if (Object.keys(localWeights).length > 0) firebaseSet('product_weights', localWeights);
+            } else {
+                if (syncCloudDataToLocal('wms_product_weights', val)) {
+                    renderHistoryTable();
+                    renderInventoryPanel();
+                    renderOutboundHistoryTable();
+                    console.log("Product Weights synchronized.");
+                }
+            }
+        });
+
+        // 4. Sync WOS Items (Low Frequency, Small Size)
+        db.ref('wms_data/wos_items').on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val === null) {
+                const localWos = getWosItems();
+                if (localWos.length > 0) firebaseSet('wos_items', localWos);
+            } else {
+                if (syncCloudDataToLocal('wms_wos_items', val)) {
+                    renderWosDropdownItems();
+                    console.log("WOS Items synchronized.");
+                }
+            }
+        });
+
+        // 5. Sync Inbound Items (Low Frequency, Small Size)
+        db.ref('wms_data/inbound_items').on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val === null) {
+                const localItems = getInboundItems();
+                if (localItems.length > 0) firebaseSet('inbound_items', localItems);
+            } else {
+                if (syncCloudDataToLocal('wms_inbound_items', val)) {
+                    console.log("Inbound Items synchronized.");
+                }
+            }
+        });
+
+        // 6. Sync Inbound History (Medium Frequency, Medium Size)
+        db.ref('wms_data/inbound_history').on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val === null) {
+                const localHist = getHistory();
+                if (localHist.length > 0) firebaseSet('inbound_history', localHist);
+            } else {
+                if (syncCloudDataToLocal('wms_inbound_history', val)) {
+                    renderHistoryTable();
+                    renderInventoryPanel();
+                    console.log("Inbound History synchronized.");
+                }
+            }
+        });
+
+        // 7. Sync Outbound History (Medium Frequency, Medium Size)
+        db.ref('wms_data/outbound_history').on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val === null) {
+                const localOutHist = getOutboundHistory();
+                if (localOutHist.length > 0) firebaseSet('outbound_history', localOutHist);
+            } else {
+                if (syncCloudDataToLocal('wms_outbound_history', val)) {
+                    renderOutboundHistoryTable();
+                    renderInventoryPanel();
+                    console.log("Outbound History synchronized.");
+                }
             }
         });
     }
@@ -118,16 +191,6 @@ document.addEventListener('DOMContentLoaded', () => {
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
-
-            if (link.id === 'navMisReport') {
-                const pass = prompt("Enter password to access MIS Report:");
-                if (pass === '1998') {
-                    window.open('https://geonix-desk.vercel.app/', '_blank');
-                } else if (pass !== null) {
-                    alert("Incorrect password!");
-                }
-                return;
-            }
             
             // Remove active class from all navigation links
             navLinks.forEach(item => item.classList.remove('active'));
@@ -708,6 +771,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Setup double-scan gesture inputs inside the warning modal
+        const warningModalInputContainer = document.getElementById('warningModalInputContainer');
+        if (warningModalInputContainer) {
+            warningModalInputContainer.style.display = showAddBtn ? 'flex' : 'none';
+        }
+
         if (warningModalConfirmInput) {
             warningModalConfirmInput.value = '';
             warningModalConfirmInput.onkeydown = null;
@@ -753,7 +821,68 @@ document.addEventListener('DOMContentLoaded', () => {
         if (saved) {
             return JSON.parse(saved);
         }
-        return [];
+        // Default mock history data on first run
+        const defaultHistory = [
+            {
+                id: "inbound_mock_1",
+                timestamp: "19:42:10",
+                vehicle: "MH-04-GP-1234",
+                item: "LED Monitor 19.5\" (Geonix)",
+                count: 25,
+                expected: 25,
+                items: [{
+                    name: "LED Monitor 19.5\" (Geonix)",
+                    expectedQty: 25,
+                    skuAlphabetPattern: { 0: "G", 1: "X", 2: "T", 3: "F", 4: "T", 8: "V", 9: "C", 10: "P", 11: "B" },
+                    lockedLength: 18,
+                    scannedCount: 25,
+                    allowedPatterns: [{
+                        pattern: { 0: "G", 1: "X", 2: "T", 3: "F", 4: "T", 8: "V", 9: "C", 10: "P", 11: "B" },
+                        length: 18
+                    }]
+                }],
+                serials: []
+            },
+            {
+                id: "inbound_mock_2",
+                timestamp: "18:15:33",
+                vehicle: "Not Specified",
+                item: "Bubble Wrap Roll",
+                count: 10,
+                expected: 10,
+                items: [{
+                    name: "Bubble Wrap Roll",
+                    expectedQty: 10,
+                    skuAlphabetPattern: { 0: "B", 1: "W", 2: "R" },
+                    lockedLength: 9,
+                    scannedCount: 10,
+                    allowedPatterns: [{
+                        pattern: { 0: "B", 1: "W", 2: "R" },
+                        length: 9
+                    }]
+                }],
+                serials: []
+            }
+        ];
+
+        // Populate dummy serials with matching formats
+        for (let i = 1; i <= 25; i++) {
+            defaultHistory[0].serials.push({
+                serial: `GXTFT185VCPB${602280 + i}`, // 18 chars
+                boxNo: Math.ceil(i / 5),
+                itemName: "LED Monitor 19.5\" (Geonix)"
+            });
+        }
+        for (let i = 1; i <= 10; i++) {
+            defaultHistory[1].serials.push({
+                serial: `BWR00918${i}`, // 9 chars
+                boxNo: Math.ceil(i / 5),
+                itemName: "Bubble Wrap Roll"
+            });
+        }
+
+        saveHistory(defaultHistory);
+        return defaultHistory;
     }
 
     function renderHistoryTable() {
@@ -788,9 +917,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const badgeStyle = weight 
                     ? 'background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--accent-emerald);' 
                     : 'background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--accent-blue);';
-                const safeName = escapeHtmlAttr(item.name);
+                
                 return `
-                    <button type="button" class="btn-item-weight-trigger" data-item-name="${safeName}" style="${badgeStyle} padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; transition: var(--transition-smooth); gap: 4px; margin-right: 6px; margin-bottom: 4px; border-style: solid;">
+                    <button type="button" class="btn-item-weight-trigger" data-item-name="${escapeHtmlAttr(item.name)}" style="${badgeStyle} padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; transition: var(--transition-smooth); gap: 4px; margin-right: 6px; margin-bottom: 4px; border-style: solid;">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1M12 20v1M4 12H3m18 0h-1M6.343 6.343l.707.707M16.95 16.95l.707.707M6.343 17.657l-.707-.707m11.314-11.314l-.707.707M12 7a5 5 0 100 10 5 5 0 000-10z" />
                         </svg>
@@ -799,9 +928,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
             }).join('');
 
-            let countDisplay = row.expected > 0 ? `${row.count} / ${row.expected}` : `${row.count}`;
-            if (row.boxCount && row.boxCount > 0) {
-                countDisplay = `${row.count} PCs (${row.boxCount} Boxes)`;
+            let finalBoxCount = row.boxCount;
+            if ((!finalBoxCount || finalBoxCount <= 0) && row.serials && row.serials.length > 0) {
+                const uniqueBoxes = new Set(row.serials.map(s => s.boxNo));
+                finalBoxCount = uniqueBoxes.size;
+            }
+            if (!finalBoxCount || finalBoxCount < 0) {
+                finalBoxCount = 0;
+            }
+
+            let countDisplay = `${row.count} PCs (${finalBoxCount} Boxes)`;
+            if (row.expected > 0) {
+                countDisplay = `${row.count} / ${row.expected} PCs (${finalBoxCount} Boxes)`;
             }
 
             tr.innerHTML = `
@@ -1942,44 +2080,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Count scanned serials for this matched product
-        const currentScans = activeSession.serials.filter(s => s.itemName === matchedItem.name).length;
-        if (matchedItem.expectedQty > 0) {
-            const remainingQty = matchedItem.expectedQty - currentScans;
-            if (count > remainingQty) {
-                alert(`Cannot generate sequence! Generating ${count} serials would exceed the expected quantity limit of ${matchedItem.expectedQty} for "${matchedItem.name}". You can only scan ${remainingQty} more item(s) of this product.`);
-                return;
-            }
-        }
-
-        // Determine Box Number for this batch (grouped under a single new Box, Product-Specific)
-        const itemSerials = activeSession.serials.filter(s => s.itemName === matchedItem.name);
-        const maxBoxNo = itemSerials.reduce((max, item) => item.boxNo > max ? item.boxNo : max, 0);
-        const nextBoxNo = maxBoxNo + 1;
-
-        // Regex matcher to split prefix and trailing numbers: e.g. "Box-001" -> ["Box-", "001"]
-        const regex = /^(.*?)(\d+)$/;
-        const match = baseCode.match(regex);
-
-        const tempSerials = [];
-
-        if (match) {
-            const prefix = match[1];
-            const startString = match[2];
-            const startNum = parseInt(startString);
-            const padLength = startString.length;
-
-            for (let i = 0; i < count; i++) {
-                const nextNum = startNum + i;
-                const paddedNum = String(nextNum).padStart(padLength, '0');
-                tempSerials.push(prefix + paddedNum);
-            }
-        } else {
-            for (let i = 1; i <= count; i++) {
-                tempSerials.push(`${baseCode}${i}`);
-            }
-        }
-
         // Initialize allowedPatterns if missing (legacy recovery)
         if (!matchedItem.allowedPatterns) {
             matchedItem.allowedPatterns = matchedItem.skuAlphabetPattern ? [{
@@ -1988,24 +2088,69 @@ document.addEventListener('DOMContentLoaded', () => {
             }] : [];
         }
 
-        // Determine active patterns list for validation
-        // If not locked yet, extract pattern from first serial in sequence batch to validate the rest
-        const activeAllowedPatterns = matchedItem.allowedPatterns.length > 0 ? matchedItem.allowedPatterns : [{
-            pattern: extractAlphabetPattern(tempSerials[0]),
-            length: tempSerials[0].length
-        }];
+        const baseCodes = baseCode.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        if (baseCodes.length === 0) return;
 
-        // Pre-validate all items in tempSerials
-        for (let i = 0; i < tempSerials.length; i++) {
-            const checkSerial = tempSerials[i];
+        // We will collect all generated serials across all base codes to validate and insert them
+        const allTempSerials = []; // Array of { serial, boxNo }
+        
+        const itemSerials = activeSession.serials.filter(s => s.itemName === matchedItem.name);
+        let maxBoxNo = itemSerials.reduce((max, item) => item.boxNo > max ? item.boxNo : max, 0);
 
-            // Find matched item for this checkSerial (strictly route to selected workstation product)
-            const itemForSerial = matchedItem;
-
-            if (!itemForSerial) {
-                alert('No target product identified for scan validation.');
+        // Track how many scans we are adding in total
+        let totalNewScans = baseCodes.length * count;
+        const currentScans = activeSession.serials.filter(s => s.itemName === matchedItem.name).length;
+        if (matchedItem.expectedQty > 0) {
+            const remainingQty = matchedItem.expectedQty - currentScans;
+            if (totalNewScans > remainingQty) {
+                alert(`Cannot generate sequence! Generating ${totalNewScans} serials would exceed the expected quantity limit of ${matchedItem.expectedQty} for "${matchedItem.name}". You can only scan ${remainingQty} more item(s) of this product.`);
                 return;
             }
+        }
+
+        let currentBoxOffset = 1;
+        for (const singleBase of baseCodes) {
+            const nextBoxNo = maxBoxNo + currentBoxOffset;
+            currentBoxOffset++;
+
+            const tempSerials = [];
+            const regex = /^(.*?)(\d+)$/;
+            const match = singleBase.match(regex);
+
+            if (match) {
+                const prefix = match[1];
+                const startString = match[2];
+                const startNum = parseInt(startString);
+                const padLength = startString.length;
+
+                for (let i = 0; i < count; i++) {
+                    const nextNum = startNum + i;
+                    const paddedNum = String(nextNum).padStart(padLength, '0');
+                    tempSerials.push(prefix + paddedNum);
+                }
+            } else {
+                for (let i = 1; i <= count; i++) {
+                    tempSerials.push(`${singleBase}${i}`);
+                }
+            }
+
+            tempSerials.forEach(s => {
+                allTempSerials.push({ serial: s, boxNo: nextBoxNo });
+            });
+        }
+
+        // Determine active patterns list for validation
+        // If not locked yet, extract pattern from first serial in batch to validate the rest
+        const firstSerialOfBatch = allTempSerials[0].serial;
+        const activeAllowedPatterns = matchedItem.allowedPatterns.length > 0 ? matchedItem.allowedPatterns : [{
+            pattern: extractAlphabetPattern(firstSerialOfBatch),
+            length: firstSerialOfBatch.length
+        }];
+
+        // Pre-validate all items in allTempSerials
+        for (let i = 0; i < allTempSerials.length; i++) {
+            const checkSerial = allTempSerials[i].serial;
+            const targetBoxNo = allTempSerials[i].boxNo;
 
             // Check duplicate across existing serials in session
             const foundItem = activeSession.serials.find(item => item.serial === checkSerial);
@@ -2015,17 +2160,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Check duplicate in same batch
-            if (tempSerials.indexOf(checkSerial) !== i) {
-                showScanWarning('duplicate-batch', nextBoxNo, checkSerial);
-                return;
-            }
-
-            // Count total scans of this product (including previous items in this batch)
-            const itemScans = activeSession.serials.filter(s => s.itemName === itemForSerial.name).length;
-            const batchScans = tempSerials.slice(0, i).filter(s => true).length;
-
-            if (itemForSerial.expectedQty > 0 && itemScans + batchScans + 1 > itemForSerial.expectedQty) {
-                alert(`Cannot generate sequence! Generating this batch would exceed the expected quantity limit of ${itemForSerial.expectedQty} for "${itemForSerial.name}".`);
+            const batchIndex = allTempSerials.findIndex(item => item.serial === checkSerial);
+            if (batchIndex !== i) {
+                showScanWarning('duplicate-batch', targetBoxNo, checkSerial);
                 return;
             }
 
@@ -2067,21 +2204,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // If all items pass validation, lock pattern/length for product if not locked yet, and add them
         if (matchedItem.allowedPatterns.length === 0) {
-            const firstSerial = tempSerials[0];
-            const pattern = extractAlphabetPattern(firstSerial);
+            const pattern = extractAlphabetPattern(firstSerialOfBatch);
             matchedItem.allowedPatterns = [{
                 pattern: pattern,
-                length: firstSerial.length
+                length: firstSerialOfBatch.length
             }];
             // Sync legacy fields for safety
             matchedItem.skuAlphabetPattern = pattern;
-            matchedItem.lockedLength = firstSerial.length;
+            matchedItem.lockedLength = firstSerialOfBatch.length;
             console.log(`Auto-locked SKU pattern from sequence first serial for "${matchedItem.name}":`, pattern);
         }
 
-        tempSerials.forEach(checkSerial => {
-            const itemForSerial = matchedItem;
-            activeSession.serials.push({ serial: checkSerial, boxNo: nextBoxNo, itemName: itemForSerial.name });
+        allTempSerials.forEach(item => {
+            activeSession.serials.push({ serial: item.serial, boxNo: item.boxNo, itemName: matchedItem.name });
         });
 
         // Update stats, re-render cards, and save active session state
@@ -2122,6 +2257,9 @@ document.addEventListener('DOMContentLoaded', () => {
  
                 // Add to history array & save to localStorage
                 const historyData = getHistory();
+                const uniqueBoxes = new Set(activeSession.serials.map(s => s.boxNo));
+                const boxCountVal = uniqueBoxes.size;
+
                 historyData.unshift({
                     id: Date.now().toString(),
                     timestamp: timeStr,
@@ -2129,6 +2267,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     item: activeSession.items.map(i => i.name).join(' + '),
                     count: count,
                     expected: totalExpected,
+                    boxCount: boxCountVal,
                     items: activeSession.items,
                     serials: activeSession.serials
                 });
@@ -2322,8 +2461,10 @@ document.addEventListener('DOMContentLoaded', () => {
         rejectScanBtn.addEventListener('click', () => {
             skuWarningModal.classList.remove('active');
             
-            // Clear incorrect scan and refocus unified input
-            if (unifiedSerialInput) {
+            // Clear incorrect scan and refocus correct input
+            if (activeOutboundSession) {
+                refocusOutboundInput();
+            } else if (unifiedSerialInput) {
                 unifiedSerialInput.value = '';
                 unifiedSerialInput.focus();
             }
@@ -2497,6 +2638,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 closeWeightModal();
                 renderHistoryTable();
                 renderInventoryPanel();
+                renderOutboundHistoryTable();
             }
         });
     }
@@ -3183,7 +3325,19 @@ document.addEventListener('DOMContentLoaded', () => {
     function getOutboundHistory() {
         const saved = localStorage.getItem('wms_outbound_history');
         if (saved) return JSON.parse(saved);
-        return [];
+
+        const defaultHist = [
+            { id: "out_mock_1", timestamp: "14:10:00", shopName: "Rudra Electronics", invoiceNo: "INV-2026-901", items: [{name: "LED Monitor 19.5\" (Geonix)"}], serials: [] }
+        ];
+        for (let i = 1; i <= 12; i++) {
+            defaultHist[0].serials.push({
+                serial: `GXTFT185VCPB${603310 + i}`,
+                boxNo: Math.ceil(i / 5),
+                itemName: "LED Monitor 19.5\" (Geonix)"
+            });
+        }
+        localStorage.setItem('wms_outbound_history', JSON.stringify(defaultHist));
+        return defaultHist;
     }
 
     function saveOutboundHistory(historyData) {
@@ -3195,6 +3349,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const body = document.getElementById('outboundHistoryBody');
         if (!body) return;
         body.innerHTML = '';
+        
+        let todayBoxesSum = 0;
+        let todayWeightSum = 0;
         
         const historyData = getOutboundHistory();
         historyData.forEach(row => {
@@ -3221,8 +3378,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 totalBoxes = new Set((row.serials || []).map(s => s.boxNo)).size;
             }
 
+            // Check if this log was created today
+            let rowIsToday = false;
+            const logTimestamp = parseInt(row.id);
+            if (!isNaN(logTimestamp)) {
+                const logDate = new Date(logTimestamp);
+                const today = new Date();
+                if (logDate.getDate() === today.getDate() &&
+                    logDate.getMonth() === today.getMonth() &&
+                    logDate.getFullYear() === today.getFullYear()) {
+                    rowIsToday = true;
+                }
+            }
+
+            if (rowIsToday) {
+                todayBoxesSum += totalBoxes;
+                todayWeightSum += totalWeight;
+            }
+
+            let timestampHtml = row.timestamp;
+            if (rowIsToday) {
+                timestampHtml = `${row.timestamp} <span style="background: var(--accent-emerald); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; margin-left: 6px; display: inline-block; vertical-align: middle;">Today</span>`;
+                tr.style.borderLeft = "4px solid var(--accent-emerald)";
+                tr.style.background = "rgba(16, 185, 129, 0.015)";
+            }
+
             tr.innerHTML = `
-                <td class="font-mono">${row.timestamp}</td>
+                <td class="font-mono">${timestampHtml}</td>
                 <td>${row.shopName}</td>
                 <td class="font-mono">${row.invoiceNo}</td>
                 <td>${itemNames}</td>
@@ -3240,6 +3422,11 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             body.appendChild(tr);
         });
+
+        const todayOutboundBoxesEl = document.getElementById('todayOutboundBoxes');
+        const todayOutboundWeightEl = document.getElementById('todayOutboundWeight');
+        if (todayOutboundBoxesEl) todayOutboundBoxesEl.textContent = todayBoxesSum;
+        if (todayOutboundWeightEl) todayOutboundWeightEl.textContent = `${todayWeightSum.toFixed(3)} kg`;
     }
 
     function downloadOutboundLogExcel(log) {
@@ -3410,7 +3597,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div style="font-weight: 700; color: var(--text-primary); font-size: 0.9rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex: 1;" title="${item.name}">
                             ${item.name}
                         </div>
-                        <button type="button" class="btn-clear-product-serials" data-name="${escapeHtmlAttr(item.name)}" title="Clear all serials of this product" style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2); color: var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
+                        <button type="button" class="btn-clear-product-serials" data-name="${item.name}" title="Clear all serials of this product" style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2); color: var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 10px; height: 10px; stroke-width: 2.5;">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
@@ -3542,16 +3729,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
                 });
 
-                const historyData = getOutboundHistory();
-                historyData.unshift({
+                const logObj = {
                     id: Date.now().toString(),
                     timestamp: timeStr,
                     shopName: activeOutboundSession.shopName,
                     invoiceNo: activeOutboundSession.invoiceNo,
                     items: activeOutboundSession.items,
                     serials: activeOutboundSession.serials
-                });
+                };
+
+                const historyData = getOutboundHistory();
+                historyData.unshift(logObj);
                 saveOutboundHistory(historyData);
+
+                // Auto download Excel immediately
+                downloadOutboundLogExcel(logObj);
 
                 activeOutboundSession = null;
                 saveActiveOutboundSession();
@@ -3704,8 +3896,21 @@ document.addEventListener('DOMContentLoaded', () => {
         // Set Overview Available Stock Counters
         const uniqueProductNames = Object.keys(productStock).filter(name => productStock[name].serialsCount > 0);
         const totalAvailableCount = Object.values(productStock).reduce((sum, item) => sum + item.serialsCount, 0);
+        
+        const totalBoxesEl = document.getElementById('inventoryTotalBoxes');
+        const totalWeightEl = document.getElementById('inventoryTotalWeight');
+        const weights = getProductWeights();
+
+        const totalAvailableBoxes = Object.values(productStock).reduce((sum, item) => sum + (item.serialsCount > 0 ? item.boxNumbers.size : 0), 0);
+        const totalAvailableWeight = Object.values(productStock).reduce((sum, item) => {
+            const unitWeight = parseFloat(weights[item.name]) || 0;
+            return sum + (item.serialsCount * unitWeight);
+        }, 0);
+
         if (totalItemsEl) totalItemsEl.textContent = totalAvailableCount;
         if (uniqueProductsEl) uniqueProductsEl.textContent = uniqueProductNames.length;
+        if (totalBoxesEl) totalBoxesEl.textContent = totalAvailableBoxes;
+        if (totalWeightEl) totalWeightEl.textContent = `${totalAvailableWeight.toFixed(3)} kg`;
 
         // Map Colors dynamically to products
         let colorIdx = 0;
@@ -3902,7 +4107,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function getWosItems() {
         const saved = localStorage.getItem('wms_wos_items');
         if (saved) return JSON.parse(saved);
-        return [];
+
+        const defaultWos = [
+            'Bubble Wrap Roll',
+            'Serial Scanner Box'
+        ];
+        localStorage.setItem('wms_wos_items', JSON.stringify(defaultWos));
+        return defaultWos;
     }
 
     function saveWosItems(items) {
