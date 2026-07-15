@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warehouse Activity Portal</title>
+    <meta name="description" content="A premium customizable landing page and dashboard for warehouse operations tracking and activity logs.">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="app-sidebar" id="appSidebar">
+            <div class="sidebar-logo">
+                <div class="logo-wrapper">
+                    <div class="logo-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                    </div>
+                    <span class="logo-text">WMS Portal</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-link active" id="navOverview">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z" />
+                    </svg>
+                    <span>Stock Overview</span>
+                </a>
+                <a href="#" class="nav-link" id="navInbound">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Inbound Logs</span>
+                </a>
+                <a href="#" class="nav-link" id="navOutbound">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Outbound Logs</span>
+                </a>
+                <a href="#" class="nav-link" id="navInventory">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                    </svg>
+                    <span>Inventory</span>
+                </a>
+                <a href="#" class="nav-link" id="navMisReport">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>MIS Report</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="status-badge">
+                    <div class="status-dot"></div>
+                    <span id="systemStatusText">System Connected</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-panel">
+            <!-- Top Header Bar -->
+            <header class="app-header">
+                <div class="header-left">
+                    <button class="menu-toggle" id="menuToggleButton" aria-label="Toggle Sidebar Menu">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+                    <div class="header-title">
+                        <h1 id="pageMainHeading">Warehouse Activity</h1>
+                    </div>
+                </div>
+
+                <div class="header-right">
+                    <div class="header-widget" id="headerClockWidget">
+                        00:00:00
+                    </div>
+                    <button class="theme-btn" id="themeTogglerButton" aria-label="Toggle Theme Mode">
+                        <!-- Sun Icon for Light Mode -->
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" id="themeSunIcon">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                        </svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Working Content Container -->
+            <div class="content-area" id="mainContentArea">
+                
+                <!-- 1. OVERVIEW SECTION -->
+                <section class="content-section active" id="sectionOverview" style="padding: 24px; box-sizing: border-box; height: 100%; overflow-y: auto;">
+                    <div style="display: flex; flex-direction: column; gap: 24px; width: 100%;">
+                        <!-- Statistics & Stock Overview Card -->
+                        <div class="dashboard-card" style="width: 100%; padding: 24px; display: flex; flex-direction: column; gap: 20px; justify-content: flex-start; overflow: hidden; height: 680px; flex-shrink: 0;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; flex-shrink: 0; width: 100%;">
+                                <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin: 0;">Stock Overview</h3>
+                                <button type="button" id="btnDownloadStockReportExcel" class="btn-primary" style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-style: solid; height: auto;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                    </svg>
+                                    <span>Download Stock Report</span>
+                                </button>
+                            </div>
+                            
+                            <!-- Summary Cards Side-by-Side -->
+                            <div style="display: flex; gap: 16px; flex-shrink: 0; width: 100%;">
+                                <div style="flex: 1; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total PCs</span>
+                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-blue);" id="inventoryTotalItems">0</span>
+                                </div>
+                                <div style="flex: 1; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Unique Items</span>
+                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-emerald);" id="inventoryUniqueProducts">0</span>
+                                </div>
+                            </div>
+
+                            <!-- Detailed Stock Register Table -->
+                            <div style="flex: 1; display: flex; flex-direction: column; gap: 10px; overflow: hidden; width: 100%;">
+                                <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-secondary); margin: 0; flex-shrink: 0;">Product Stock Register</h4>
+                                <div class="table-container" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-y: auto; background: var(--bg-primary); flex: 1; width: 100%;">
+                                    <table class="portal-table" style="font-size: 0.85rem; margin: 0; width: 100%;">
+                                        <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 10; border-bottom: 1px solid var(--border-color);">
+                                            <tr>
+                                                <th style="padding: 10px 8px; font-weight: 700; text-align: left;">Item Name</th>
+                                                <th style="padding: 10px 8px; font-weight: 700; text-align: right; width: 80px;">Box Qty</th>
+                                                <th style="padding: 10px 8px; font-weight: 700; text-align: right; width: 80px;">PC Qty</th>
+                                                <th style="padding: 10px 8px; font-weight: 700; text-align: right; width: 100px;">Total Weight</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="inventoryStockRegisterBody">
+                                            <!-- Populated dynamically by JS -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. INBOUND SECTION -->
+                <section class="content-section" id="sectionInbound" style="display: none;">
+                    
+                    <!-- State A: Inbound Session Inactive -->
+                    <div id="inboundInactiveState" style="width: 100%;">
+                        <div class="welcome-container" style="min-height: 320px; margin-bottom: 24px;">
+                            <div class="welcome-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                            </div>
+                            <h2>Start Inbound Shipment Scanning</h2>
+                            <p>Shipment details register karne aur box/item serial numbers scan karne ke liye niche click karne.</p>
+                            <button type="button" class="btn-primary" id="startInboundSessionBtn">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>Start Inbound Session</span>
+                            </button>
+                        </div>
+                        
+                        <!-- History Log list -->
+                        <div class="dashboard-card table-card">
+                            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                <div style="display: flex; align-items: center; gap: 16px;">
+                                    <div class="card-icon emerald">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" />
+                                        </svg>
+                                    </div>
+                                    <div class="card-title-group">
+                                        <h2>Completed Inbound Logs</h2>
+                                        <p>History of previously closed scanning sessions</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="inbound-dropdown-container" style="position: relative; display: inline-block;">
+                                    <button type="button" class="btn-secondary" id="inboundActionsDropdownBtn" style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; height: auto;">
+                                        <span>More Actions</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </button>
+                                    <div class="custom-dropdown-menu" id="inboundActionsDropdownMenu" style="position: absolute; top: 100%; right: 0; margin-top: 6px; z-index: 100; min-width: 260px; display: none; box-shadow: var(--shadow-lg);">
+                                        <ul class="custom-dropdown-list" style="list-style: none; padding: 0; margin: 0;">
+                                            <li class="custom-dropdown-item" id="btnOpenWithoutSerialInward" style="padding: 12px; cursor: pointer; transition: var(--transition-smooth); font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 10px;">
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; color: var(--accent-amber); stroke-width: 2.5;">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                </svg>
+                                                <span>Without Serial Number Inward</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="table-container">
+                                <table class="portal-table" id="inboundHistoryTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Timestamp</th>
+                                            <th>Vehicle No.</th>
+                                            <th>Item Name</th>
+                                            <th>Total Scanned</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="inboundHistoryBody">
+                                        <!-- History items will be logged here -->
+                                        <tr>
+                                            <td class="font-mono">19:42:10</td>
+                                            <td>MH-04-GP-1234</td>
+                                            <td>LED Monitor 19.5" (Geonix)</td>
+                                            <td class="font-mono">25 / 25</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="font-mono">18:15:33</td>
+                                            <td class="text-muted">Not Specified</td>
+                                            <td>Bubble Wrap Roll</td>
+                                            <td class="font-mono">10 / 10</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- State B: Inbound Session Active & Locked -->
+                    <div id="inboundActiveState" style="width: 100%; display: none; flex-direction: column; gap: 24px;">
+                        <!-- Session Info Locking Bar -->
+                        <div class="session-bar-card" style="display: flex; flex-direction: column; gap: 16px; align-items: stretch; width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                                <div style="display: flex; align-items: center; gap: 30px;">
+                                    <div class="session-detail-item">
+                                        <span class="detail-label">VEHICLE NO.</span>
+                                        <span class="detail-val" id="activeSessionVehicle">MH-04-GP-1234</span>
+                                    </div>
+                                    <div class="session-detail-item">
+                                        <span class="detail-label">TOTAL SESSION PROGRESS</span>
+                                        <span class="detail-val font-mono" id="activeSessionProgress">0 / 0 Scanned</span>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 12px; align-items: center;">
+                                    <button type="button" class="btn-secondary" id="openAddProductToActiveSessionModalBtn" style="border-color: var(--accent-blue); color: var(--accent-blue); padding: 10px 16px; display: flex; align-items: center; gap: 8px;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                        </svg>
+                                        <span>+ Add Item</span>
+                                    </button>
+                                    <button type="button" class="btn-secondary" id="cancelActiveInboundSessionBtn" style="border-color: var(--accent-rose); color: var(--accent-rose); padding: 10px 16px;">
+                                        <span>Cancel Session</span>
+                                    </button>
+                                    <button type="button" class="btn-danger" id="endInboundSessionBtn">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <span>End & Save Session</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- List of configured items table -->
+                            <div style="width: 100%; overflow-x: auto;">
+                                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                                    <thead>
+                                        <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-muted); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">
+                                            <th style="padding: 10px 8px; width: 40%;">Active Item</th>
+                                            <th style="padding: 10px 8px; width: 20%;">Progress</th>
+                                            <th style="padding: 10px 8px; width: 20%;">Barcode Length</th>
+                                            <th style="padding: 10px 8px; width: 20%;">SKU Filter</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="activeSessionRowsContainer">
+                                        <!-- Populated dynamically by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Scanning Interface Grid -->
+                        <div class="inbound-grid">
+                            <!-- Left: Unified Inbound Workstation Card -->
+                            <div class="dashboard-card" style="display: flex; flex-direction: column; justify-content: flex-start; height: 520px; gap: 16px;">
+                                <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 16px;">
+                                    <div class="card-icon blue" style="width:38px; height:38px; min-width: 38px;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:18px; height:18px;">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                                        </svg>
+                                    </div>
+                                    <div class="card-title-group">
+                                        <h2>Inbound Workstation</h2>
+                                        <p>Scan barcode directly or toggle sequence generation</p>
+                                    </div>
+                                </div>
+                                
+                                <form id="unifiedScanForm" class="entry-form" style="display: flex; flex-direction: column; gap: 20px; margin-top: 16px;">
+                                    <!-- Toggle switch group -->
+                                    <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-primary); padding: 12px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                                            <span style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary);">Sequence Generator</span>
+                                            <span style="font-size: 0.75rem; color: var(--text-muted);">Toggle to generate multiple items at once</span>
+                                        </div>
+                                        <label class="switch-toggle">
+                                            <input type="checkbox" id="sequenceToggle">
+                                            <span class="slider-round"></span>
+                                        </label>
+                                    </div>
+                                    <!-- Dynamic Active Product Selector dropdown (visible only when items.length > 1) -->
+                                    <div class="form-group" id="workstationProductSelectorGroup" style="display: none; margin-bottom: 0;">
+                                        <label for="workstationProductSelect">Active Scanning Product</label>
+                                        <select id="workstationProductSelect" style="background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 12px 16px; border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.95rem; width: 100%; cursor: pointer;">
+                                            <!-- Populated dynamically with configured session items -->
+                                        </select>
+                                    </div>
+                                    <!-- Serial / Base Code input -->
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label for="unifiedSerialInput" id="inputLabel">Scan Serial Number</label>
+                                        <input type="text" id="unifiedSerialInput" placeholder="Scan barcode with reader or type here..." required autocomplete="off">
+                                        <p class="input-helper-text" id="inputHelper">Press Enter key to save immediately</p>
+                                    </div>
+
+                                    <!-- Collapsible Quantity Input (hidden by default) -->
+                                    <div class="form-group" id="qtyInputGroup" style="display: none; margin-bottom: 0; animation: fadeIn 0.3s ease;">
+                                        <label for="unifiedQtyInput">Quantity to Generate</label>
+                                        <input type="number" id="unifiedQtyInput" min="1" value="5">
+                                        <p class="input-helper-text">Number of items to generate for the current box</p>
+                                    </div>
+
+                                    <!-- Action button -->
+                                    <button type="submit" class="btn-primary" style="width: 100%; margin-top: 8px;" id="unifiedScanSubmitBtn">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px;" id="submitBtnIcon">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span id="submitBtnText">Scan Item</span>
+                                    </button>
+                                </form>
+                            </div>
+
+                            <!-- Right: Scanned serials grouped in Box Cards -->
+                             <div class="dashboard-card table-card" style="height: 520px; display: flex; flex-direction: column; padding: 28px; overflow: hidden;">
+                                <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 16px; margin-bottom: 0; display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                    <div style="display: flex; align-items: center; gap: 16px;">
+                                        <div class="card-icon blue" style="width:38px; height:38px; min-width: 38px;">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:18px; height:18px;">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" />
+                                            </svg>
+                                        </div>
+                                        <div class="card-title-group" style="display: flex; align-items: center; gap: 12px;">
+                                            <h2 style="margin: 0;">Scanned Serials</h2>
+                                            <button type="button" id="clearAllInboundSerialsBtn" class="btn-clear-all" title="Clear all scanned serials" style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2); color: var(--accent-rose); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth); display: inline-flex; align-items: center; gap: 4px;">
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                                <span>Clear All</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; gap: 10px; align-items: center;">
+                                        <!-- Pieces counter box -->
+                                        <div class="live-counter-box" title="Total Pieces Scanned">
+                                            <span class="live-counter-label">PIECES</span>
+                                            <span class="live-counter-val blink-pulse" id="sessionScannedCount">0</span>
+                                        </div>
+                                        <!-- Boxes counter box -->
+                                        <div class="live-counter-box boxes-box" title="Total Boxes Scanned">
+                                            <span class="live-counter-label">BOXES</span>
+                                            <span class="live-counter-val" id="sessionScannedBoxesCount">0</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Box cards scrollable container -->
+                                <div id="sessionBoxesContainer" style="flex: 1; display: flex; flex-direction: row; flex-wrap: nowrap; gap: 20px; margin-top: 16px; overflow-x: auto; overflow-y: hidden; height: calc(100% - 80px); padding-bottom: 8px;">
+                                    <div id="emptyScannedState" style="text-align: center; color: var(--text-muted); padding: 48px 24px; width: 100%;">
+                                        No serials scanned yet. Start scanning or generating above.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+
+                <!-- 3. OUTBOUND SECTION -->
+                <section class="content-section" id="sectionOutbound" style="display: none; padding: 24px; height: 100%; width: 100%; box-sizing: border-box; overflow-y: auto;">
+                    
+                    <!-- State A: Outbound Session Inactive -->
+                    <div id="outboundInactiveState" style="width: 100%; display: flex; flex-direction: column; gap: 24px;">
+                        <div class="welcome-container" style="padding: 30px; display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl);">
+                            <div style="display: flex; align-items: center; gap: 20px;">
+                                <div class="welcome-icon" style="background-color: var(--accent-blue-glow); color: var(--accent-blue); width: 56px; height: 56px; min-width: 56px; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 28px; height: 28px; stroke-width: 2.5;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h1 style="font-size: 1.8rem; font-weight: 800; color: var(--text-primary); margin: 0;">Outbound Dispatch Workspace</h1>
+                                    <p style="color: var(--text-muted); font-size: 0.95rem; margin: 4px 0 0 0;">Create outbound scans and ship products to customers</p>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-primary" id="startOutboundSessionBtn" style="padding: 12px 24px; font-weight: 700; display: flex; align-items: center; gap: 8px; border-radius: var(--radius-md); box-shadow: 0 4px 12px var(--accent-blue-glow); cursor: pointer;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>New Outbound Session</span>
+                            </button>
+                        </div>
+                        
+                        <!-- History Log list -->
+                        <div class="dashboard-card table-card">
+                            <div class="card-header">
+                                <div class="card-icon emerald">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" />
+                                    </svg>
+                                </div>
+                                <div class="card-title-group">
+                                    <h2>Completed Outbound Logs</h2>
+                                    <p>History of previously closed dispatch sessions</p>
+                                </div>
+                            </div>
+                            
+                            <div class="table-container">
+                                <table class="portal-table" id="outboundHistoryTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Timestamp</th>
+                                            <th>Shop Name</th>
+                                            <th>Invoice No.</th>
+                                            <th>Total Items</th>
+                                            <th>Total Weight</th>
+                                            <th>Total PCs</th>
+                                            <th>Total Boxes</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="outboundHistoryBody">
+                                        <!-- Completed logs populated dynamically -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- State B: Outbound Session Active -->
+                    <div id="outboundActiveState" style="width: 100%; display: none; flex-direction: column; gap: 24px;">
+                        <!-- Session Info Locking Bar -->
+                        <div class="session-bar-card" style="display: flex; flex-direction: column; gap: 16px; align-items: stretch; width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                                <div style="display: flex; align-items: center; gap: 30px;">
+                                    <div class="session-detail-item">
+                                        <span class="detail-label">SHOP NAME</span>
+                                        <span class="detail-val" id="activeOutboundShop">Shop Name</span>
+                                    </div>
+                                    <div class="session-detail-item">
+                                        <span class="detail-label">INVOICE NO.</span>
+                                        <span class="detail-val" id="activeOutboundInvoice">INV-XXXX</span>
+                                    </div>
+                                    <div class="session-detail-item">
+                                        <span class="detail-label">TOTAL DISPATCH WEIGHT</span>
+                                        <span class="detail-val font-mono" id="activeOutboundWeight" style="color: var(--accent-emerald);">0.000 kg</span>
+                                    </div>
+                                    <div class="session-detail-item">
+                                        <span class="detail-label">TOTAL DISPATCH BOXES</span>
+                                        <span class="detail-val font-mono" id="activeOutboundBoxesCount" style="color: var(--accent-blue);">0 Boxes</span>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 12px; align-items: center;">
+                                    <button type="button" class="btn-primary" id="endOutboundSessionBtn" style="background-color: var(--accent-emerald); border-color: var(--accent-emerald); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); padding: 10px 18px; display: flex; align-items: center; gap: 8px;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <span>End & Save Session</span>
+                                    </button>
+                                    <button type="button" class="btn-secondary-link" id="cancelActiveOutboundSessionBtn" style="color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.2); background: rgba(244, 63, 94, 0.05); padding: 10px 18px; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
+                                        Cancel Session
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Active items display table -->
+                            <div class="table-container" style="max-height: 150px; overflow-y: auto;">
+                                <table class="portal-table" style="width: 100%;">
+                                    <thead>
+                                        <tr style="font-size: 0.75rem; text-transform: uppercase;">
+                                            <th>Product Name</th>
+                                            <th>Total Scanned</th>
+                                            <th>Weight Subtotal</th>
+                                            <th>SKU Pattern Filter</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="outboundActiveRowsContainer">
+                                        <!-- Active product rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Grid section (Form & Scan list) -->
+                        <div class="inbound-grid">
+                            <!-- Left: Scan Form -->
+                            <div class="dashboard-card" style="height: 520px; padding: 28px; justify-content: flex-start; display: flex; flex-direction: column;">
+                                <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 16px; margin-bottom: 0; display: flex; align-items: center; gap: 16px; width: 100%;">
+                                    <div class="card-icon blue">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                                        </svg>
+                                    </div>
+                                    <div class="card-title-group">
+                                        <h2>Outbound Workstation</h2>
+                                        <p>Scan barcode directly or toggle sequence generation</p>
+                                    </div>
+                                </div>
+                                
+                                <form id="outboundUnifiedScanForm" class="entry-form" style="display: flex; flex-direction: column; gap: 20px; margin-top: 16px;">
+                                    <!-- Toggle switch group -->
+                                    <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-primary); padding: 12px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                                            <span style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary);">Sequence Generator</span>
+                                            <span style="font-size: 0.75rem; color: var(--text-muted);">Toggle to generate multiple items at once</span>
+                                        </div>
+                                        <label class="switch-toggle">
+                                            <input type="checkbox" id="outboundSequenceToggle">
+                                            <span class="slider-round"></span>
+                                        </label>
+                                    </div>
+                                    <!-- Serial / Base Code input -->
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label for="outboundUnifiedSerialInput" id="outboundInputLabel">Scan Serial Number</label>
+                                        <input type="text" id="outboundUnifiedSerialInput" placeholder="Scan barcode with reader or type here..." required autocomplete="off">
+                                        <p class="input-helper-text" id="outboundInputHelper">Press Enter key to save immediately</p>
+                                    </div>
+
+                                    <!-- Collapsible Quantity Input (hidden by default) -->
+                                    <div class="form-group" id="outboundQtyInputGroup" style="display: none; margin-bottom: 0; animation: fadeIn 0.3s ease;">
+                                        <label for="outboundUnifiedQtyInput">Quantity to Generate</label>
+                                        <input type="number" id="outboundUnifiedQtyInput" min="1" value="5">
+                                        <p class="input-helper-text">Number of items to generate for the current box</p>
+                                    </div>
+
+                                    <!-- Action button -->
+                                    <button type="submit" class="btn-primary" style="width: 100%; margin-top: 8px;" id="outboundUnifiedScanSubmitBtn">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px;" id="outboundSubmitBtnIcon">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span id="outboundSubmitBtnText">Scan Item</span>
+                                    </button>
+
+                                    <button type="button" class="btn-secondary" style="width: 100%; margin-top: 12px; border-color: var(--accent-amber); color: var(--accent-amber); background: rgba(245, 158, 11, 0.03); display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700; height: auto; padding: 12px;" id="btnOpenOutboundWithoutSerialModal">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        <span>Dispatch Without Serial Number</span>
+                                    </button>
+                                </form>
+                            </div>
+
+                            <!-- Right: Scanned serials grouped in Box Cards -->
+                             <div class="dashboard-card table-card" style="height: 520px; display: flex; flex-direction: column; padding: 28px; overflow: hidden;">
+                                <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 16px; margin-bottom: 0; display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                    <div style="display: flex; align-items: center; gap: 16px;">
+                                        <div class="card-icon blue" style="width:38px; height:38px; min-width: 38px;">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:18px; height:18px;">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" />
+                                            </svg>
+                                        </div>
+                                        <div class="card-title-group" style="display: flex; align-items: center; gap: 12px;">
+                                            <div style="display: flex; flex-direction: column;">
+                                                <h2 style="margin: 0;">Scanned Outbound Serials</h2>
+                                                <p id="outboundSessionScannedCount" style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">0 Scans across 0 boxes</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="outboundSessionBoxesContainer" style="flex: 1; display: flex; flex-direction: row; flex-wrap: nowrap; gap: 20px; margin-top: 16px; overflow-x: auto; overflow-y: hidden; height: calc(100% - 80px); padding-bottom: 8px;">
+                                    <div id="outboundEmptyScannedState" style="text-align: center; color: var(--text-muted); padding: 48px 24px; width: 100%;">
+                                        No serials scanned yet. Start scanning or generating above.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. WITHOUT SERIAL NUMBER INWARD SECTION -->
+                <section class="content-section" id="sectionWithoutSerialInbound" style="display: none; padding: 24px; box-sizing: border-box; height: 100%; overflow-y: auto; width: 100%;">
+                    <div class="welcome-container" style="max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; width: 100%;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 16px; width: 100%;">
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <button type="button" id="btnBackToInboundLogs" class="btn-secondary" style="padding: 8px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; border: 1px solid var(--border-color); height: auto;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                    <span>Back</span>
+                                </button>
+                                <h1 style="font-size: 1.6rem; font-weight: 800; color: var(--text-primary); margin: 0;">Without Serial Number Inward</h1>
+                            </div>
+                        </div>
+
+                        <!-- Config Form Card -->
+                        <div class="dashboard-card" style="padding: 32px; display: flex; flex-direction: column; gap: 24px;">
+                            <form id="withoutSerialInwardForm" class="entry-form" style="display: flex; flex-direction: column; gap: 20px; width: 100%;">
+                                <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                                    <label for="wosVehicleNo" style="font-weight: 700; font-size: 0.9rem; color: var(--text-secondary);">Vehicle Number <span class="optional-tag" style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">(Optional)</span></label>
+                                    <input type="text" id="wosVehicleNo" placeholder="e.g. MH-04-GP-1234" autocomplete="off" style="width: 100%; padding: 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.95rem;">
+                                </div>
+
+                                <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                                    <label for="wosItemSelect" style="font-weight: 700; font-size: 0.9rem; color: var(--text-secondary);">Select Product Item</label>
+                                    <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+                                        <div class="custom-dropdown-container" id="wosItemDropdownContainer" style="flex: 1; position: relative;">
+                                            <input type="hidden" id="wosItemSelect" required>
+                                            <div class="custom-dropdown-trigger" id="wosItemDropdownTrigger" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.95rem; cursor: pointer;">
+                                                <span id="wosItemDropdownSelectedText">Choose an item...</span>
+                                                <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                            </div>
+                                            <div class="custom-dropdown-menu" id="wosItemDropdownMenu" style="position: absolute; top: 100%; left: 0; width: 100%; z-index: 100; box-shadow: var(--shadow-lg);">
+                                                <ul class="custom-dropdown-list" id="wosItemDropdownList" style="list-style: none; padding: 0; margin: 0;">
+                                                    <!-- Populated by JS -->
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        <button type="button" id="btnAddNewWosProduct" class="btn-secondary" style="height: 45px; width: 45px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); border: 1px solid var(--border-color); cursor: pointer; padding: 0;" title="Add new product item">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px; stroke-width: 2.5;">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                                    <label for="wosQty" style="font-weight: 700; font-size: 0.9rem; color: var(--text-secondary);">Quantity (PCs count)</label>
+                                    <input type="number" id="wosQty" min="1" value="10" required style="width: 100%; padding: 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.95rem;">
+                                </div>
+
+                                <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                                    <label for="wosBoxCount" style="font-weight: 700; font-size: 0.9rem; color: var(--text-secondary);">Box Count</label>
+                                    <input type="number" id="wosBoxCount" min="1" value="1" required style="width: 100%; padding: 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.95rem;">
+                                </div>
+
+                                <div style="display: flex; justify-content: flex-end; margin-top: 10px; width: 100%;">
+                                    <button type="submit" class="btn-primary" style="width: 100%; padding: 14px; font-size: 1rem; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px var(--accent-blue-glow);">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span>Complete Inward & Add to Stock</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. INVENTORY SECTION -->
+                <section class="content-section" id="sectionInventory" style="display: none; padding: 24px; box-sizing: border-box; height: 100%; overflow-y: auto;">
+                    <style>
+                        @keyframes subtleBlink {
+                            0%, 100% { opacity: 0.9; }
+                            50% { opacity: 0.5; }
+                        }
+                        .blink-text {
+                            animation: subtleBlink 2s infinite ease-in-out;
+                        }
+                        .inventory-serial-card {
+                            padding: 12px 16px;
+                            border-radius: var(--radius-md);
+                            display: flex;
+                            flex-direction: column;
+                            gap: 4px;
+                            transition: var(--transition-smooth);
+                        }
+                        .inventory-serial-card:hover {
+                            transform: translateY(-1px);
+                            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                        }
+                    </style>
+                    <div style="display: flex; flex-direction: column; gap: 24px; width: 100%;">
+                        <div class="inventory-grid" style="display: flex; gap: 24px; width: 100%; min-height: 500px; align-items: stretch;">
+                            <!-- Expanded Column: Tall Scrollable Barcodes List + Search (Full Width) -->
+                            <div class="dashboard-card" style="flex: 1; padding: 24px; display: flex; flex-direction: column; gap: 16px; height: 680px; overflow: hidden;">
+                                <div style="display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px;">
+                                    <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin: 0;">Stock Serials List</h3>
+                                    
+                                    <!-- Search Input & Button Bar -->
+                                    <div style="display: flex; gap: 8px; width: 100%; margin-top: 6px;">
+                                        <input type="text" id="inventorySearchInput" placeholder="Search Serial Number..." style="flex: 1; background: var(--bg-primary); border: 1px solid var(--border-color); padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.85rem; font-family: var(--font-mono);" autocomplete="off">
+                                        <button type="button" id="inventorySearchBtn" class="btn-primary" style="padding: 8px 16px; font-size: 0.85rem; font-weight: 700; cursor: pointer; border-radius: var(--radius-sm);">
+                                            Search
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Scrollable Container for Serial Cards -->
+                                <div id="inventorySerialsListContainer" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px;">
+                                    <div style="color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">No serials loaded yet.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. MIS REPORT SECTION -->
+                <section class="content-section" id="sectionMisReport" style="display: none; padding: 24px; box-sizing: border-box; height: 100%; overflow-y: auto;">
+                    <div style="display: flex; flex-direction: column; gap: 24px; width: 100%;">
+                        <div class="dashboard-card" style="width: 100%; padding: 24px; display: flex; flex-direction: column; gap: 20px; justify-content: flex-start; overflow: hidden; height: auto; flex-shrink: 0;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; flex-shrink: 0; width: 100%;">
+                                <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin: 0;">Mixed Inventory MIS Report Generator</h3>
+                                <button type="button" id="btnExportMisReportExcel" class="btn-primary" style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-style: solid; height: auto;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                    </svg>
+                                    <span>Export MIS Excel</span>
+                                </button>
+                            </div>
+
+                            <!-- Filter options -->
+                            <div style="display: flex; flex-wrap: wrap; gap: 16px; width: 100%; background: var(--bg-primary); padding: 16px; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                                <div style="flex: 1 1 200px; display: flex; flex-direction: column; gap: 6px;">
+                                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);">Select Product Filter</label>
+                                    <select id="misProductSelect" style="width: 100%; padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.85rem; font-family: inherit;">
+                                        <option value="ALL">All Products (Mixed)</option>
+                                    </select>
+                                </div>
+                                <div style="flex: 1 1 150px; display: flex; flex-direction: column; gap: 6px;">
+                                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);">From Date</label>
+                                    <input type="date" id="misFromDate" style="width: 100%; padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.85rem; font-family: inherit;">
+                                </div>
+                                <div style="flex: 1 1 150px; display: flex; flex-direction: column; gap: 6px;">
+                                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);">To Date</label>
+                                    <input type="date" id="misToDate" style="width: 100%; padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.85rem; font-family: inherit;">
+                                </div>
+                                <div style="flex: 0 0 auto; display: flex; align-items: flex-end;">
+                                    <button type="button" id="btnGenerateMisReport" class="btn-primary" style="padding: 8px 16px; font-size: 0.85rem; font-weight: 700; border-radius: var(--radius-sm);">
+                                        Filter & View
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Live preview section -->
+                            <div class="table-container" style="max-height: 400px; overflow-y: auto; width: 100%; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                                <table class="portal-table" id="misReportTable" style="width: 100%; border-collapse: collapse;">
+                                    <thead>
+                                        <tr>
+                                            <th>Timestamp</th>
+                                            <th>Activity</th>
+                                            <th>Product Name</th>
+                                            <th>Serial Number / Type</th>
+                                            <th>Box No.</th>
+                                            <th>Qty (Pcs)</th>
+                                            <th>Details</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="misReportTableBody">
+                                        <tr>
+                                            <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                                                No MIS report generated yet. Select filters and click "Filter & View".
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Summary totals card -->
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap; width: 100%;">
+                                <div style="flex: 1 1 180px; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Inward Pcs</span>
+                                    <span style="font-size: 1.3rem; font-weight: 800; color: var(--accent-blue);" id="misTotalInwardPcs">0</span>
+                                </div>
+                                <div style="flex: 1 1 180px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Outward Pcs</span>
+                                    <span style="font-size: 1.3rem; font-weight: 800; color: var(--accent-rose);" id="misTotalOutwardPcs">0</span>
+                                </div>
+                                <div style="flex: 1 1 180px; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Net Quantity Pcs</span>
+                                    <span style="font-size: 1.3rem; font-weight: 800; color: var(--accent-emerald);" id="misNetPcs">0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Inbound Session Configuration Modal -->
+    <div class="modal-overlay" id="inboundConfigModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Configure Inbound Session</h3>
+                <button class="modal-close" id="closeInboundConfigModalBtn" aria-label="Close modal">&times;</button>
+            </div>
+            <form id="inboundConfigForm" class="entry-form">
+                <div class="form-group">
+                    <label for="configVehicleNo">Vehicle Number <span class="optional-tag">(Optional)</span></label>
+                    <input type="text" id="configVehicleNo" placeholder="e.g. MH-04-GP-1234" autocomplete="off">
+                </div>
+                
+                <div class="form-group">
+                    <label for="configItemSelect">Select Item to Inbound</label>
+                    <div class="input-row">
+                        <div class="custom-dropdown-container" id="configItemDropdownContainer">
+                            <input type="hidden" id="configItemSelect" required>
+                            <div class="custom-dropdown-trigger" id="configItemDropdownTrigger">
+                                <span id="configItemDropdownSelectedText">Choose an item...</span>
+                                <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                            <div class="custom-dropdown-menu" id="configItemDropdownMenu">
+                                <ul class="custom-dropdown-list" id="configItemDropdownList">
+                                    <!-- Populated by JS -->
+                                </ul>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-secondary" id="openAddItemModalBtnInModal" title="Add New Item">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            <span>Add</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group" style="display: none;">
+                    <label for="configExpectedQty">Expected Qty</label>
+                    <input type="number" id="configExpectedQty" min="0" value="0" required>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary-link" id="cancelInboundConfigModalBtn">Cancel</button>
+                    <button type="submit" class="btn-primary" id="confirmInboundSessionBtn">Lock Details & Start Scanning</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for adding new Items -->
+    <div class="modal-overlay" id="addItemModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Add New Item</h3>
+                <button class="modal-close" id="closeAddItemModalBtn" aria-label="Close modal">&times;</button>
+            </div>
+            <form id="newItemForm">
+                <div class="form-group">
+                    <label for="newItemName">Item Name</label>
+                    <input type="text" id="newItemName" placeholder="e.g. Geonix Motherboard H61" required autocomplete="off">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary-link" id="cancelAddItemModalBtn">Cancel</button>
+                    <button type="submit" class="btn-primary">Save Item</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- Modal for adding new Product to Active Session -->
+    <div class="modal-overlay" id="addProductToActiveSessionModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Add Product to Active Session</h3>
+                <button class="modal-close" id="closeAddProductToActiveSessionModalBtn" aria-label="Close modal">&times;</button>
+            </div>
+            <form id="addProductToActiveSessionForm" class="entry-form">
+                <div class="form-group">
+                    <label for="activeConfigItemSelect">Select Item</label>
+                    <div class="input-row">
+                        <div class="custom-dropdown-container" id="activeConfigItemDropdownContainer">
+                            <input type="hidden" id="activeConfigItemSelect" required>
+                            <div class="custom-dropdown-trigger" id="activeConfigItemDropdownTrigger">
+                                <span id="activeConfigItemDropdownSelectedText">Choose an item...</span>
+                                <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                            <div class="custom-dropdown-menu" id="activeConfigItemDropdownMenu">
+                                <ul class="custom-dropdown-list" id="activeConfigItemDropdownList">
+                                    <!-- Populated by JS -->
+                                </ul>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-secondary" id="openAddItemModalBtnInActiveModal" title="Add New Item">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            <span>Add</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group" style="display: none;">
+                    <label for="activeConfigExpectedQty">Expected Qty</label>
+                    <input type="number" id="activeConfigExpectedQty" min="0" value="0" required>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary-link" id="cancelAddProductToActiveSessionModalBtn">Cancel</button>
+                    <button type="submit" class="btn-primary">Add Product to Session</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- Custom Reject Modal for Scan Validation Mismatches -->
+    <div class="modal-overlay" id="skuWarningModal">
+        <div class="modal-card" style="border-color: var(--accent-rose); box-shadow: 0 20px 50px rgba(244, 63, 94, 0.15);">
+            <div class="modal-header" style="color: var(--accent-rose);">
+                <h3 style="display: flex; align-items: center; gap: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:24px; height:24px; stroke-width: 2.5;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span id="warningTitleText">Another Item Detected!</span>
+                </h3>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;" id="warningDescText">
+                    Scanned serial barcode does not belong to this shipment item's SKU pattern.
+                </p>
+                <div style="background-color: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+                        <span style="color: var(--text-muted);" id="warningExpectedLabel">EXPECTED SKU FILTER:</span>
+                        <span class="font-mono" style="font-weight: 700; color: var(--accent-emerald);" id="warningExpectedSku">X19X</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; border-top: 1px solid var(--border-color); padding-top: 10px;">
+                        <span style="color: var(--text-muted);" id="warningScannedLabel">SCANNED BARCODE:</span>
+                        <span class="font-mono" style="font-weight: 700; color: var(--accent-rose);" id="warningScannedSerial">X18X01</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; border-top: 1px solid var(--border-color); padding-top: 10px; display: none;" id="warningExtraRow">
+                        <span style="color: var(--text-muted);" id="warningExtraLabel">SCANNED SERIAL:</span>
+                        <span class="font-mono" style="font-weight: 700; color: var(--text-primary);" id="warningExtraSerial">SERIAL123</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Hidden input to capture double scans on warning modal -->
+            <input type="text" id="warningModalConfirmInput" style="position: absolute; opacity: 0; pointer-events: none;" autocomplete="off">
+            <div class="modal-footer" style="margin-top: 8px; display: flex; gap: 12px; width: 100%;">
+                <button type="button" id="allowLengthBtn" style="display: none; border: 1px solid var(--accent-emerald); color: var(--accent-emerald); background: rgba(16,185,129,0.05); flex: 1; border-radius: var(--radius-sm); font-weight: 700; padding: 12px; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); text-align: center;">
+                    Allow & Save Length
+                </button>
+                <button type="button" id="warningAddProductBtn" style="display: none; border: 1px solid var(--accent-blue); color: var(--accent-blue); background: rgba(59,130,246,0.05); flex: 1; border-radius: var(--radius-sm); font-weight: 700; padding: 12px; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); text-align: center;">
+                    Add Product
+                </button>
+                <button type="button" class="btn-primary" id="rejectScanBtn" style="background-color: var(--accent-rose); box-shadow: 0 4px 12px rgba(244, 63, 94, 0.2); flex: 1; width: 100%;">
+                    Reject & Dismiss Scan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Outbound Dispatch Without Serial Number Modal -->
+    <div class="modal-overlay" id="outboundWithoutSerialModal">
+        <div class="modal-card" style="max-width: 460px; border-color: var(--accent-amber); box-shadow: 0 20px 50px rgba(245, 158, 11, 0.15);">
+            <div class="modal-header" style="color: var(--accent-amber); padding-bottom: 12px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="display: flex; align-items: center; gap: 8px; margin: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:22px; height:22px; stroke-width: 2.5;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span>Dispatch Without Serial Number</span>
+                </h3>
+                <button type="button" class="close-modal" id="closeOutboundWithoutSerialModalBtn" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <form id="outboundWithoutSerialForm" style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
+                <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4; margin: 0;">
+                    Select an item and quantity to dispatch directly without scanning barcode serials.
+                </p>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="outboundWosItemSelect" style="font-weight:600; color:var(--text-primary); margin-bottom:8px; display:block;">Select Product Item</label>
+                    <div class="custom-dropdown-container" id="outboundWosItemDropdownContainer" style="width: 100%; position: relative;">
+                        <input type="hidden" id="outboundWosItemSelect" required>
+                        <div class="custom-dropdown-trigger" id="outboundWosItemDropdownTrigger" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.95rem; cursor: pointer;">
+                            <span id="outboundWosItemDropdownSelectedText">Choose an item...</span>
+                            <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
+                        <div class="custom-dropdown-menu" id="outboundWosItemDropdownMenu" style="position: absolute; top: 100%; left: 0; width: 100%; z-index: 100; box-shadow: var(--shadow-lg);">
+                            <ul class="custom-dropdown-list" id="outboundWosItemDropdownList" style="list-style: none; padding: 0; margin: 0;">
+                                <!-- Populated by JS -->
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="outboundWosQty" style="font-weight:600; color:var(--text-primary); margin-bottom:8px; display:block;">Quantity to Dispatch (PCs)</label>
+                    <input type="number" id="outboundWosQty" min="1" value="10" required style="background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 12px; border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.95rem; width: 100%;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="outboundWosBoxCount" style="font-weight:600; color:var(--text-primary); margin-bottom:8px; display:block;">Box Count</label>
+                    <input type="number" id="outboundWosBoxCount" min="1" value="1" required style="background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 12px; border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.95rem; width: 100%;">
+                </div>
+                <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end; width: 100%;">
+                    <button type="button" class="btn-secondary-link" id="cancelOutboundWithoutSerialModalBtn">Cancel</button>
+                    <button type="submit" class="btn-primary" style="background-color: var(--accent-amber); border-color: var(--accent-amber); box-shadow: 0 4px 12px rgba(245,158,11,0.2);">Deduct Stock & Dispatch</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Product Weight Configuration Modal -->
+    <div class="modal-overlay" id="productWeightModal">
+        <div class="modal-card" style="max-width: 420px; border-color: var(--accent-blue);">
+            <div class="modal-header" style="color: var(--accent-blue); padding-bottom: 12px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="display: flex; align-items: center; gap: 8px; margin: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:22px; height:22px; stroke-width: 2.5;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1M12 20v1M4 12H3m18 0h-1M6.343 6.343l.707.707M16.95 16.95l.707.707M6.343 17.657l-.707-.707m11.314-11.314l-.707.707M12 7a5 5 0 100 10 5 5 0 000-10z" />
+                    </svg>
+                    <span id="weightModalTitle">Set Product Weight</span>
+                </h3>
+                <button type="button" class="close-modal" id="closeWeightModalBtn" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <form id="productWeightForm" style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
+                <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4; margin: 0;" id="weightModalProductDesc">
+                    Configure the weight per piece for this product.
+                </p>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="weightInputVal" style="font-weight:600; color:var(--text-primary); margin-bottom:8px; display:block;">Weight per PC (kg)</label>
+                    <input type="number" step="0.001" min="0" id="weightInputVal" placeholder="e.g. 1.250" style="background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 12px; border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.95rem; width: 100%;">
+                    <p class="input-helper-text" style="color: var(--text-muted); font-size: 0.75rem; margin-top: 6px; margin-bottom:0;">Optional. Leave empty or enter 0 if not applicable.</p>
+                </div>
+                <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end; width: 100%;">
+                    <button type="button" class="btn-secondary-link" id="cancelWeightModalBtn" style="border:1px solid var(--border-color); color:var(--text-secondary); background:none; border-radius:var(--radius-sm); font-weight:600; padding:10px 16px; font-size:0.9rem; cursor:pointer; text-align:center;">Cancel</button>
+                    <button type="submit" class="btn-primary" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); border-radius:var(--radius-sm); font-weight:600; padding:10px 20px; font-size:0.9rem; cursor:pointer; color:white; border-style:solid;">Save Weight</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Configure Outbound Session Modal -->
+    <div class="modal-overlay" id="outboundConfigModal">
+        <div class="modal-card" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 style="display: flex; align-items: center; gap: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:24px; height:24px; stroke-width: 2;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Configure Outbound Session</span>
+                </h3>
+                <button type="button" class="close-modal" id="closeOutboundConfigModalBtn" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <form id="outboundConfigForm" style="display: flex; flex-direction: column; gap: 20px; margin-top: 16px;">
+                <div class="form-group">
+                    <label for="configShopName">Shop Name</label>
+                    <input type="text" id="configShopName" placeholder="e.g. Geeta Electronics" required autocomplete="off">
+                </div>
+                
+                <div class="form-group">
+                    <label for="configInvoiceNo">Sales Order / Invoice Number</label>
+                    <input type="text" id="configInvoiceNo" placeholder="e.g. SO-2026-0081" required autocomplete="off">
+                </div>
+
+                <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end; width: 100%;">
+                    <button type="button" class="btn-secondary-link" id="cancelOutboundConfigModalBtn" style="border:1px solid var(--border-color); color:var(--text-secondary); background:none; border-radius:var(--radius-sm); font-weight:600; padding:10px 16px; font-size:0.9rem; cursor:pointer; text-align:center;">Cancel</button>
+                    <button type="submit" class="btn-primary" id="confirmOutboundSessionBtn" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); border-radius:var(--radius-sm); font-weight:600; padding:10px 20px; font-size:0.9rem; cursor:pointer; color:white; border-style:solid;">Lock Details & Start Scanning</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Unrecognized Outbound Barcode Modal -->
+    <div class="modal-overlay" id="unrecognizedBarcodeModal">
+        <div class="modal-card" style="max-width: 420px; border-color: var(--accent-purple);">
+            <div class="modal-header" style="color: var(--accent-purple); padding-bottom: 12px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="display: flex; align-items: center; gap: 8px; margin: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:22px; height:22px; stroke-width: 2.5;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Unrecognized Barcode</span>
+                </h3>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
+                <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4; margin: 0;">
+                    Scanned serial <strong id="unrecognizedSerialVal" class="font-mono" style="color: var(--accent-purple);">[Serial]</strong> could not be matched to any inbound log database. Please select its product type manually to continue:
+                </p>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="unrecognizedProductSelect" style="font-weight:600; color:var(--text-primary); margin-bottom:8px; display:block;">Select Product Type</label>
+                    <select id="unrecognizedProductSelect" style="background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 12px; border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.95rem; width: 100%; cursor: pointer;">
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+                <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end; width: 100%;">
+                    <button type="button" class="btn-secondary-link" id="cancelUnrecognizedModalBtn" style="border:1px solid var(--border-color); color:var(--text-secondary); background:none; border-radius:var(--radius-sm); font-weight:600; padding:10px 16px; font-size:0.9rem; cursor:pointer; text-align:center;">Cancel Scan</button>
+                    <button type="button" class="btn-primary" id="confirmUnrecognizedModalBtn" style="background-color: var(--accent-purple); border-color: var(--accent-purple); box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2); border-radius:var(--radius-sm); font-weight:600; padding:10px 20px; font-size:0.9rem; cursor:pointer; color:white; border-style:solid;">Associate & Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Outbound Add Another Product Confirmation Modal -->
+    <div class="modal-overlay" id="outboundAddProductConfirmModal">
+        <div class="modal-card" style="max-width: 420px; border-color: var(--accent-blue);">
+            <div class="modal-header" style="color: var(--accent-blue); padding-bottom: 12px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="display: flex; align-items: center; gap: 8px; margin: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:22px; height:22px; stroke-width: 2.5;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Another Product Detected!</span>
+                </h3>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
+                <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4; margin: 0;">
+                    Scanned serial barcode belongs to product:
+                    <strong id="outboundAddProductConfirmName" style="color: var(--accent-blue); display:block; margin: 6px 0; font-size:1rem;">LED Monitor 18.5" (Geonix)</strong>
+                    Do you want to add this product to the current outbound dispatch?
+                </p>
+                <div style="font-size: 0.8rem; color: var(--accent-blue); background: rgba(59, 130, 246, 0.05); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(59, 130, 246, 0.1); margin: 0; line-height: 1.4; display: flex; align-items: center; gap: 6px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; flex-shrink: 0; stroke-width: 2.5;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    <span><strong>Shortcut:</strong> Scan the same serial again to automatically add.</span>
+                </div>
+                <input type="text" id="outboundAddProductConfirmInput" style="position: absolute; opacity: 0; pointer-events: none;" autocomplete="off">
+                <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end; width: 100%;">
+                    <button type="button" class="btn-secondary-link" id="cancelOutboundAddProductBtn" style="border:1px solid var(--border-color); color:var(--text-secondary); background:none; border-radius:var(--radius-sm); font-weight:600; padding:10px 16px; font-size:0.9rem; cursor:pointer; text-align:center;">Reject Scan</button>
+                    <button type="button" class="btn-primary" id="confirmOutboundAddProductBtn" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); border-radius:var(--radius-sm); font-weight:600; padding:10px 20px; font-size:0.9rem; cursor:pointer; color:white; border-style:solid;">Add Product</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK Compat -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
