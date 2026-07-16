@@ -7,6 +7,22 @@
     <meta name="description" content="A premium customizable landing page and dashboard for warehouse operations tracking and activity logs.">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script>
+        window.addEventListener('error', function(e) {
+            // Ignore cross-origin browser extension and masked script errors
+            if (e.message === 'Script error.' || !e.filename || e.lineno === 0) {
+                return;
+            }
+            let errDiv = document.getElementById('debugErrorLogger');
+            if (!errDiv) {
+                errDiv = document.createElement('div');
+                errDiv.id = 'debugErrorLogger';
+                errDiv.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; background: #f43f5e; color: white; padding: 12px; font-family: monospace; z-index: 999999; font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-height: 150px; overflow-y: auto;';
+                document.body.appendChild(errDiv);
+            }
+            errDiv.innerHTML += '<div><b>Runtime Error:</b> ' + e.message + ' at ' + e.filename + ':' + e.lineno + '</div>';
+        });
+    </script>
 </head>
 <body>
     <div class="app-container">

@@ -576,8 +576,11 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const index in pattern) {
             const idx = parseInt(index);
             if (idx >= serial.length) return false;
-            if (serial[idx].toUpperCase() !== pattern[index]) {
-                return false;
+            const expectedChar = pattern[index];
+            if (expectedChar !== null && expectedChar !== undefined && expectedChar !== '') {
+                if (serial[idx].toUpperCase() !== expectedChar) {
+                    return false;
+                }
             }
         }
         return true;
@@ -591,11 +594,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // Only verify if index is within scanned serial range
             if (idx < serial.length) {
                 const char = serial[idx];
-                // Only verify if the scanned serial also has a letter at this position
-                if (/[a-zA-Z]/.test(char)) {
-                    checkedCount++;
-                    if (char.toUpperCase() !== pattern[index]) {
-                        return false;
+                const expectedChar = pattern[index];
+                if (expectedChar !== null && expectedChar !== undefined && expectedChar !== '') {
+                    // Only verify if the scanned serial also has a letter at this position
+                    if (/[a-zA-Z]/.test(char)) {
+                        checkedCount++;
+                        if (char.toUpperCase() !== expectedChar) {
+                            return false;
+                        }
                     }
                 }
             }
@@ -1259,6 +1265,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 });
+            }
+
+            if (!activeSession.serials) {
+                activeSession.serials = [];
             }
 
             // Convert old string-array format to object-array format if loaded from old cache
@@ -2706,6 +2716,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 });
+            }
+
+            if (!activeOutboundSession.serials) {
+                activeOutboundSession.serials = [];
             }
 
             if (activeOutboundSession.serials) {
