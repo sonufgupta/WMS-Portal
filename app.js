@@ -353,6 +353,52 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Administrative Workspace Factory Reset Handler
+    const btnAdminResetPortal = document.getElementById('btnAdminResetPortal');
+    if (btnAdminResetPortal) {
+        btnAdminResetPortal.addEventListener('click', () => {
+            const pwd = prompt("Enter administrator password to factory reset and clear all workspace data:");
+            if (pwd === '1998') {
+                if (confirm("Are you absolutely sure? This will delete all completed Inbound history, Outbound history, product weights, items configs, and active sessions. This action CANNOT be undone!")) {
+                    localStorage.removeItem('wms_inbound_history');
+                    localStorage.removeItem('wms_outbound_history');
+                    localStorage.removeItem('wms_product_weights');
+                    localStorage.removeItem('wms_inbound_items');
+                    localStorage.removeItem('wms_wos_items');
+                    localStorage.removeItem('wms_active_inbound_session');
+                    localStorage.removeItem('wms_active_outbound_session');
+                    localStorage.clear(); // Complete browser clear fallback
+
+                    if (isFirebaseConnected && db) {
+                        const resetPayload = {
+                            active_inbound_session: null,
+                            active_outbound_session: null,
+                            inbound_history: null,
+                            outbound_history: null,
+                            product_weights: null,
+                            wos_items: null,
+                            inbound_items: null
+                        };
+
+                        db.ref('wms_data').update(resetPayload).then(() => {
+                            alert("Workspace reset successful! Reloading page...");
+                            window.location.reload();
+                        }).catch(err => {
+                            console.error("Firebase reset error:", err);
+                            alert("Firebase reset failed, but local storage was cleared. Reloading page...");
+                            window.location.reload();
+                        });
+                    } else {
+                        alert("Workspace reset successful! Reloading page...");
+                        window.location.reload();
+                    }
+                }
+            } else if (pwd !== null) {
+                alert("Incorrect password! Reset authorization denied.");
+            }
+        });
+    }
+
     // 3. Responsive Menu Toggle for Mobile Views
     const menuToggleButton = document.getElementById('menuToggleButton');
     const appSidebar = document.getElementById('appSidebar');
@@ -821,68 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (saved) {
             return JSON.parse(saved);
         }
-        // Default mock history data on first run
-        const defaultHistory = [
-            {
-                id: "inbound_mock_1",
-                timestamp: "19:42:10",
-                vehicle: "MH-04-GP-1234",
-                item: "LED Monitor 19.5\" (Geonix)",
-                count: 25,
-                expected: 25,
-                items: [{
-                    name: "LED Monitor 19.5\" (Geonix)",
-                    expectedQty: 25,
-                    skuAlphabetPattern: { 0: "G", 1: "X", 2: "T", 3: "F", 4: "T", 8: "V", 9: "C", 10: "P", 11: "B" },
-                    lockedLength: 18,
-                    scannedCount: 25,
-                    allowedPatterns: [{
-                        pattern: { 0: "G", 1: "X", 2: "T", 3: "F", 4: "T", 8: "V", 9: "C", 10: "P", 11: "B" },
-                        length: 18
-                    }]
-                }],
-                serials: []
-            },
-            {
-                id: "inbound_mock_2",
-                timestamp: "18:15:33",
-                vehicle: "Not Specified",
-                item: "Bubble Wrap Roll",
-                count: 10,
-                expected: 10,
-                items: [{
-                    name: "Bubble Wrap Roll",
-                    expectedQty: 10,
-                    skuAlphabetPattern: { 0: "B", 1: "W", 2: "R" },
-                    lockedLength: 9,
-                    scannedCount: 10,
-                    allowedPatterns: [{
-                        pattern: { 0: "B", 1: "W", 2: "R" },
-                        length: 9
-                    }]
-                }],
-                serials: []
-            }
-        ];
-
-        // Populate dummy serials with matching formats
-        for (let i = 1; i <= 25; i++) {
-            defaultHistory[0].serials.push({
-                serial: `GXTFT185VCPB${602280 + i}`, // 18 chars
-                boxNo: Math.ceil(i / 5),
-                itemName: "LED Monitor 19.5\" (Geonix)"
-            });
-        }
-        for (let i = 1; i <= 10; i++) {
-            defaultHistory[1].serials.push({
-                serial: `BWR00918${i}`, // 9 chars
-                boxNo: Math.ceil(i / 5),
-                itemName: "Bubble Wrap Roll"
-            });
-        }
-
-        saveHistory(defaultHistory);
-        return defaultHistory;
+        return [];
     }
 
     function renderHistoryTable() {
@@ -1317,12 +1302,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (saved) {
             inboundItems = JSON.parse(saved);
         } else {
-            // Default items
-            inboundItems = [
-                'LED Monitor 19.5" (Geonix)',
-                'Serial Scanner Box',
-                'Bubble Wrap Roll'
-            ];
+            inboundItems = [];
             saveInboundItems();
         }
     }
@@ -3325,19 +3305,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function getOutboundHistory() {
         const saved = localStorage.getItem('wms_outbound_history');
         if (saved) return JSON.parse(saved);
-
-        const defaultHist = [
-            { id: "out_mock_1", timestamp: "14:10:00", shopName: "Rudra Electronics", invoiceNo: "INV-2026-901", items: [{name: "LED Monitor 19.5\" (Geonix)"}], serials: [] }
-        ];
-        for (let i = 1; i <= 12; i++) {
-            defaultHist[0].serials.push({
-                serial: `GXTFT185VCPB${603310 + i}`,
-                boxNo: Math.ceil(i / 5),
-                itemName: "LED Monitor 19.5\" (Geonix)"
-            });
-        }
-        localStorage.setItem('wms_outbound_history', JSON.stringify(defaultHist));
-        return defaultHist;
+        return [];
     }
 
     function saveOutboundHistory(historyData) {
@@ -4107,13 +4075,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function getWosItems() {
         const saved = localStorage.getItem('wms_wos_items');
         if (saved) return JSON.parse(saved);
-
-        const defaultWos = [
-            'Bubble Wrap Roll',
-            'Serial Scanner Box'
-        ];
-        localStorage.setItem('wms_wos_items', JSON.stringify(defaultWos));
-        return defaultWos;
+        return [];
     }
 
     function saveWosItems(items) {
