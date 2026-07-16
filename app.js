@@ -69,6 +69,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (isFirebaseConnected && db) {
+        // 0. Sync Reset Timestamp to clear local storage on Factory Reset
+        db.ref('wms_data/reset_timestamp').on('value', (snapshot) => {
+            const cloudResetTime = snapshot.val();
+            if (cloudResetTime) {
+                const localResetTime = parseInt(localStorage.getItem('wms_reset_timestamp')) || 0;
+                if (cloudResetTime > localResetTime) {
+                    localStorage.clear();
+                    localStorage.setItem('wms_reset_timestamp', cloudResetTime.toString());
+                    console.log("Factory reset signal received from cloud. Clearing cache...");
+                    window.location.reload();
+                }
+            }
+        });
+
         // 1. Sync Active Inbound Session (High Frequency, Small Size)
         db.ref('wms_data/active_inbound_session').on('value', (snapshot) => {
             const val = snapshot.val();
@@ -398,6 +412,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     localStorage.removeItem('wms_deleted_serials');
                     localStorage.clear(); // Complete browser clear fallback
 
+                    const resetTime = Date.now();
+                    localStorage.setItem('wms_reset_timestamp', resetTime.toString());
+
                     if (isFirebaseConnected && db) {
                         const resetPayload = {
                             active_inbound_session: null,
@@ -407,7 +424,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             product_weights: null,
                             wos_items: null,
                             inbound_items: null,
-                            deleted_serials: null
+                            deleted_serials: null,
+                            reset_timestamp: resetTime
                         };
 
                         db.ref('wms_data').update(resetPayload).then(() => {
@@ -975,6 +993,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         </svg>
                         Excel
                     </button>
+                    <button type="button" class="btn-delete-inbound-log" data-id="${row.id}" title="Delete Inbound Session" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: var(--transition-smooth); border-style: solid; margin-left: 6px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        Delete
+                    </button>
                 </td>
             `;
             inboundHistoryBody.appendChild(tr);
@@ -1060,7 +1084,20 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log(`Excel file "${filename}" downloaded successfully with ${items.length} product sheets.`);
     }
 
-    // Bind event listener to Completed logs list for Excel downloads
+    function deleteInboundSessionFromHistory(logId) {
+        if (!confirm("Are you sure you want to permanently delete this completed inbound session? All scanned serials in this session will be removed from the stock register.")) {
+            return;
+        }
+
+        const historyData = getHistory();
+        const updated = historyData.filter(log => log.id !== logId);
+        
+        saveHistory(updated);
+        renderHistoryTable();
+        renderInventoryPanel();
+    }
+
+    // Bind event listener to Completed logs list for Excel downloads and Deletions
     if (inboundHistoryBody) {
         inboundHistoryBody.addEventListener('click', (e) => {
             const btn = e.target.closest('.btn-download-excel');
@@ -1075,6 +1112,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     alert('Completed log entry not found.');
                 }
+            }
+
+            const deleteBtn = e.target.closest('.btn-delete-inbound-log');
+            if (deleteBtn) {
+                e.stopPropagation();
+                const logId = deleteBtn.getAttribute('data-id');
+                deleteInboundSessionFromHistory(logId);
             }
         });
     }
