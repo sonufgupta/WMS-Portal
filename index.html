@@ -72,7 +72,13 @@
                 </a>
             </nav>
 
-            <div class="sidebar-footer" style="display: flex; flex-direction: column; gap: 12px; width: 100%; padding: 16px; border-top: 1px solid var(--border-color); box-sizing: border-box;">
+            <div class="sidebar-footer" style="display: flex; flex-direction: column; gap: 10px; width: 100%; padding: 16px; border-top: 1px solid var(--border-color); box-sizing: border-box;">
+                <button type="button" id="btnOpenDeviceManager" class="btn-primary" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--accent-blue); width: 100%; border-style: solid; padding: 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: var(--transition-smooth); margin-bottom: 2px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    <span>Device Approvals</span>
+                </button>
                 <button type="button" id="btnAdminResetPortal" class="btn-primary" style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2); color: var(--accent-rose); width: 100%; border-style: solid; padding: 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: var(--transition-smooth);">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -80,7 +86,7 @@
                     <span>Factory Reset</span>
                 </button>
                 <div class="status-badge" style="width: 100%; justify-content: center;">
-                    <div class="status-dot"></div>
+                    <div class="status-dot" id="systemStatusDot"></div>
                     <span id="systemStatusText">System Connected</span>
                 </div>
             </div>
@@ -1187,6 +1193,71 @@
                     <button type="button" class="btn-secondary-link" id="cancelOutboundAddProductBtn" style="border:1px solid var(--border-color); color:var(--text-secondary); background:none; border-radius:var(--radius-sm); font-weight:600; padding:10px 16px; font-size:0.9rem; cursor:pointer; text-align:center;">Reject Scan</button>
                     <button type="button" class="btn-primary" id="confirmOutboundAddProductBtn" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); border-radius:var(--radius-sm); font-weight:600; padding:10px 20px; font-size:0.9rem; cursor:pointer; color:white; border-style:solid;">Add Product</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Access Authorization Lock Screen Overlay -->
+    <div id="accessLockOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-card); z-index: 9999999; justify-content: center; align-items: center; padding: 24px; box-sizing: border-box;">
+        <div style="max-width: 480px; width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 32px; box-shadow: 0 12px 36px rgba(0,0,0,0.5); display: flex; flex-direction: column; align-items: center; text-align: center; gap: 20px;">
+            <div style="width: 60px; height: 60px; border-radius: 50%; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); display: flex; align-items: center; justify-content: center; color: var(--accent-amber);">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 32px; height: 32px; stroke-width: 2;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+            </div>
+            
+            <h2 style="font-size: 1.5rem; font-weight: 800; color: var(--text-primary); margin: 0; font-family: inherit;">Access Authorization Required</h2>
+            <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5; margin: 0; font-family: inherit;">This device is not authorized to access the Warehouse Management System. Please request approval from your system administrator.</p>
+            
+            <div style="width: 100%; background: var(--bg-card); border: 1px solid var(--border-color); padding: 12px; border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 0.95rem; font-weight: 700; color: var(--accent-blue); display: flex; flex-direction: column; gap: 4px; box-sizing: border-box;">
+                <span style="font-size: 0.65rem; color: var(--text-muted); font-family: inherit; font-weight: 600; text-transform: uppercase;">Your Device ID</span>
+                <span id="accessOverlayDeviceId">DEV-0000</span>
+            </div>
+            
+            <div id="accessOverlayStatus" style="font-size: 0.85rem; font-weight: 700; color: var(--accent-amber); display: flex; align-items: center; gap: 6px; font-family: inherit;">
+                <span class="status-dot" style="background-color: var(--accent-amber); box-shadow: 0 0 8px var(--accent-amber); width: 6px; height: 6px; animation: pulse 2s infinite;"></span>
+                <span>Waiting for admin approval...</span>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 12px; width: 100%; margin-top: 10px;">
+                <button type="button" id="btnUnlockOverlayWithPass" class="btn-primary" style="width: 100%; padding: 12px; font-weight: 700; font-size: 0.9rem; cursor: pointer; border-radius: var(--radius-sm); border: none; font-family: inherit;">
+                    Authorize with Admin Password
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Device Manager Modal -->
+    <div class="modal-overlay" id="deviceManagerModal">
+        <div class="modal-card" style="max-width: 650px; height: 500px; display: flex; flex-direction: column; box-sizing: border-box;">
+            <div class="modal-header" style="padding-bottom: 12px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
+                <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; color: var(--accent-blue);">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px; stroke-width: 2.5;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    <span>Authorized Devices Manager</span>
+                </h3>
+                <button class="modal-close" id="closeDeviceManagerModalBtn" aria-label="Close modal">&times;</button>
+            </div>
+            
+            <div style="flex: 1; overflow-y: auto; margin-top: 16px; width: 100%; box-sizing: border-box;">
+                <table class="portal-table" style="width: 100%; border-collapse: collapse; text-align: left; table-layout: fixed;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">
+                            <th style="padding: 10px 8px; width: 25%;">Device ID</th>
+                            <th style="padding: 10px 8px; width: 35%;">Requested At</th>
+                            <th style="padding: 10px 8px; width: 20%;">Status</th>
+                            <th style="padding: 10px 8px; width: 20%; text-align: right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="deviceManagerTableBody">
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; width: 100%; box-sizing: border-box; margin-top: auto;">
+                <button type="button" class="btn-secondary-link" id="closeDeviceManagerModalFooterBtn" style="border:1px solid var(--border-color); color:var(--text-secondary); background:none; border-radius:var(--radius-sm); font-weight:600; padding:10px 16px; font-size:0.9rem; cursor:pointer;">Close</button>
             </div>
         </div>
     </div>

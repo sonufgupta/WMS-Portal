@@ -1241,6 +1241,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const savedSession = localStorage.getItem('wms_active_inbound_session');
         if (savedSession) {
             activeSession = JSON.parse(savedSession);
+            if (activeSession && !activeSession.items) {
+                activeSession.items = [];
+            }
             
             // Backward compatibility conversion of legacy format to items array format
             if (!activeSession.items && activeSession.item) {
@@ -2715,6 +2718,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const saved = localStorage.getItem('wms_active_outbound_session');
         if (saved) {
             activeOutboundSession = JSON.parse(saved);
+            if (activeOutboundSession && !activeOutboundSession.items) {
+                activeOutboundSession.items = [];
+            }
             
             // Sanitize activeOutboundSession items
             if (activeOutboundSession.items) {
@@ -3518,7 +3524,8 @@ document.addEventListener('DOMContentLoaded', () => {
             container.innerHTML = '';
             const weights = getProductWeights();
             
-            activeOutboundSession.items.forEach(item => {
+            const items = activeOutboundSession.items || [];
+            items.forEach(item => {
                 const itemSerials = activeOutboundSession.serials.filter(s => s.itemName === item.name);
                 const scannedCount = itemSerials.length;
                 
@@ -4941,11 +4948,203 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- Real-time Connection Status feedback ---
+    function updateConnectionStatus(connected) {
+        const dot = document.getElementById('systemStatusDot');
+        const text = document.getElementById('systemStatusText');
+        if (!dot || !text) return;
+        
+        if (connected) {
+            dot.style.backgroundColor = 'var(--accent-emerald)';
+            dot.style.boxShadow = '0 0 8px var(--accent-emerald)';
+            text.textContent = 'System Connected';
+        } else {
+            dot.style.backgroundColor = 'var(--accent-rose)';
+            dot.style.boxShadow = '0 0 8px var(--accent-rose)';
+            text.textContent = 'System Offline';
+        }
+    }
+
+    if (isFirebaseConnected && db) {
+        db.ref('.info/connected').on('value', (snap) => {
+            if (snap.val() === true) {
+                updateConnectionStatus(true);
+            } else {
+                updateConnectionStatus(false);
+            }
+        });
+    } else {
+        updateConnectionStatus(false);
+    }
+
+    // --- Device Access Authorization Control ---
+    let deviceId = localStorage.getItem('wms_device_id');
+    if (!deviceId) {
+        deviceId = 'DEV-' + Math.floor(1000 + Math.random() * 9000);
+        localStorage.setItem('wms_device_id', deviceId);
+    }
+
+    const accessLockOverlay = document.getElementById('accessLockOverlay');
+    const accessOverlayDeviceId = document.getElementById('accessOverlayDeviceId');
+    const btnUnlockOverlayWithPass = document.getElementById('btnUnlockOverlayWithPass');
+    
+    if (accessOverlayDeviceId) {
+        accessOverlayDeviceId.textContent = deviceId;
+    }
+
+    function checkDeviceApprovalStatus() {
+        if (!isFirebaseConnected || !db) {
+            // Offline fallback: allow access for local testing if offline
+            if (accessLockOverlay) accessLockOverlay.style.display = 'none';
+            return;
+        }
+
+        db.ref('wms_data/devices/' + deviceId).on('value', (snapshot) => {
+            const device = snapshot.val();
+            if (!device) {
+                // Register device as pending approval in Firebase
+                const deviceRecord = {
+                    id: deviceId,
+                    status: 'pending',
+                    requestedAt: new Date().toLocaleString(),
+                    userAgent: navigator.userAgent
+                };
+                db.ref('wms_data/devices/' + deviceId).set(deviceRecord);
+                if (accessLockOverlay) accessLockOverlay.style.display = 'flex';
+            } else {
+                if (device.status === 'approved') {
+                    if (accessLockOverlay) accessLockOverlay.style.display = 'none';
+                } else {
+                    if (accessLockOverlay) accessLockOverlay.style.display = 'flex';
+                    const statusText = document.getElementById('accessOverlayStatus');
+                    if (statusText) {
+                        if (device.status === 'rejected') {
+                            statusText.style.color = 'var(--accent-rose)';
+                            statusText.innerHTML = '<span class="status-dot" style="background-color: var(--accent-rose); box-shadow: 0 0 8px var(--accent-rose); width: 6px; height: 6px;"></span>Access Denied/Rejected';
+                        } else {
+                            statusText.style.color = 'var(--accent-amber)';
+                            statusText.innerHTML = '<span class="status-dot" style="background-color: var(--accent-amber); box-shadow: 0 0 8px var(--accent-amber); width: 6px; height: 6px; animation: pulse 2s infinite;"></span>Waiting for admin approval...';
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    if (btnUnlockOverlayWithPass) {
+        btnUnlockOverlayWithPass.addEventListener('click', () => {
+            const pass = prompt("Enter Administrator Password to authorize this device:");
+            if (pass === '1998') {
+                if (isFirebaseConnected && db) {
+                    db.ref('wms_data/devices/' + deviceId + '/status').set('approved').then(() => {
+                        alert("Device authorized successfully!");
+                    });
+                } else {
+                    alert("Local authorization success (offline mode).");
+                    if (accessLockOverlay) accessLockOverlay.style.display = 'none';
+                }
+            } else if (pass !== null) {
+                alert("Incorrect password!");
+            }
+        });
+    }
+
+    // --- Device Manager Modal Controllers ---
+    const btnOpenDeviceManager = document.getElementById('btnOpenDeviceManager');
+    const deviceManagerModal = document.getElementById('deviceManagerModal');
+    const closeDeviceManagerModalBtn = document.getElementById('closeDeviceManagerModalBtn');
+    const closeDeviceManagerModalFooterBtn = document.getElementById('closeDeviceManagerModalFooterBtn');
+    const deviceManagerTableBody = document.getElementById('deviceManagerTableBody');
+
+    function openDeviceManager() {
+        if (!deviceManagerModal) return;
+        deviceManagerModal.classList.add('active');
+        loadDevicesInManager();
+    }
+
+    function closeDeviceManager() {
+        if (deviceManagerModal) {
+            deviceManagerModal.classList.remove('active');
+        }
+    }
+
+    if (btnOpenDeviceManager) {
+        btnOpenDeviceManager.addEventListener('click', openDeviceManager);
+    }
+    if (closeDeviceManagerModalBtn) {
+        closeDeviceManagerModalBtn.addEventListener('click', closeDeviceManager);
+    }
+    if (closeDeviceManagerModalFooterBtn) {
+        closeDeviceManagerModalFooterBtn.addEventListener('click', closeDeviceManager);
+    }
+
+    function loadDevicesInManager() {
+        if (!isFirebaseConnected || !db || !deviceManagerTableBody) return;
+        
+        db.ref('wms_data/devices').on('value', (snapshot) => {
+            deviceManagerTableBody.innerHTML = '';
+            const devices = snapshot.val();
+            if (!devices) {
+                deviceManagerTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 20px;">No device requests logged.</td></tr>';
+                return;
+            }
+
+            Object.values(devices).forEach(dev => {
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid rgba(255, 255, 255, 0.05)';
+                
+                let statusBadge = `<span style="font-size: 0.7rem; font-weight: 700; background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(245, 158, 11, 0.2); text-transform: uppercase;">Pending</span>`;
+                if (dev.status === 'approved') {
+                    statusBadge = `<span style="font-size: 0.7rem; font-weight: 700; background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.2); text-transform: uppercase;">Approved</span>`;
+                } else if (dev.status === 'rejected') {
+                    statusBadge = `<span style="font-size: 0.7rem; font-weight: 700; background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(244, 63, 94, 0.2); text-transform: uppercase;">Rejected</span>`;
+                }
+
+                let actionButton = '';
+                if (dev.status === 'pending') {
+                    actionButton = `
+                        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                            <button type="button" class="btn-primary" onclick="window.setDeviceStatus('${dev.id}', 'approved')" style="padding: 4px 8px; font-size: 0.7rem; font-weight: 700; cursor: pointer; border-radius: var(--radius-sm);">Approve</button>
+                            <button type="button" class="btn-danger" onclick="window.setDeviceStatus('${dev.id}', 'rejected')" style="padding: 4px 8px; font-size: 0.7rem; font-weight: 700; cursor: pointer; border-radius: var(--radius-sm); background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose);">Reject</button>
+                        </div>
+                    `;
+                } else if (dev.status === 'approved') {
+                    actionButton = `
+                        <div style="display: flex; justify-content: flex-end;">
+                            <button type="button" class="btn-danger" onclick="window.setDeviceStatus('${dev.id}', 'rejected')" style="padding: 4px 8px; font-size: 0.7rem; font-weight: 700; cursor: pointer; border-radius: var(--radius-sm); background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose);">Revoke</button>
+                        </div>
+                    `;
+                } else {
+                    actionButton = `
+                        <div style="display: flex; justify-content: flex-end;">
+                            <button type="button" class="btn-primary" onclick="window.setDeviceStatus('${dev.id}', 'approved')" style="padding: 4px 8px; font-size: 0.7rem; font-weight: 700; cursor: pointer; border-radius: var(--radius-sm);">Approve</button>
+                        </div>
+                    `;
+                }
+
+                tr.innerHTML = `
+                    <td style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: 700; padding: 12px 8px;">${dev.id}</td>
+                    <td style="font-size: 0.8rem; color: var(--text-secondary); padding: 12px 8px;">${dev.requestedAt || 'N/A'}</td>
+                    <td style="padding: 12px 8px;">${statusBadge}</td>
+                    <td style="padding: 12px 8px;">${actionButton}</td>
+                `;
+                deviceManagerTableBody.appendChild(tr);
+            });
+        });
+    }
+
+    window.setDeviceStatus = function(devId, status) {
+        if (isFirebaseConnected && db) {
+            db.ref('wms_data/devices/' + devId + '/status').set(status);
+        }
+    };
+
     // Initial load: Restore states on page load/reload
     restoreSessionState();
     restoreOutboundSessionState();
     renderInventoryPanel();
     renderDeletedSerialsPanel();
     populateMisProductsDropdown();
+    checkDeviceApprovalStatus();
 });
 
