@@ -730,9 +730,9 @@
                         }
                     </style>
                     <div style="display: flex; flex-direction: column; gap: 24px; width: 100%;">
-                        <div class="inventory-grid" style="display: flex; gap: 24px; width: 100%; min-height: 500px; align-items: stretch;">
-                            <!-- Expanded Column: Tall Scrollable Barcodes List + Search (Full Width) -->
-                            <div class="dashboard-card" style="flex: 1; padding: 24px; display: flex; flex-direction: column; gap: 16px; height: 680px; overflow: hidden;">
+                        <div class="inventory-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; width: 100%; min-height: 500px;">
+                            <!-- Left Column: Stock Serials List -->
+                            <div class="dashboard-card" style="padding: 24px; display: flex; flex-direction: column; gap: 16px; height: 680px; overflow: hidden;">
                                 <div style="display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px;">
                                     <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin: 0;">Stock Serials List</h3>
                                     
@@ -748,6 +748,24 @@
                                 <!-- Scrollable Container for Serial Cards -->
                                 <div id="inventorySerialsListContainer" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px;">
                                     <div style="color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">No serials loaded yet.</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Right Column: Deleted Serials (Trash Bin) -->
+                            <div class="dashboard-card" style="padding: 24px; display: flex; flex-direction: column; gap: 16px; height: 680px; overflow: hidden; border: 1px dashed rgba(244, 63, 94, 0.35); background: rgba(244, 63, 94, 0.01);">
+                                <div style="display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px;">
+                                    <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--accent-rose); margin: 0; display: flex; align-items: center; gap: 8px;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px;">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                        <span>Deleted Serials (Trash Bin)</span>
+                                    </h3>
+                                    <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Soft-deleted serials are subtracted from active stocks. Delete permanently or restore here.</p>
+                                </div>
+
+                                <!-- Scrollable Container for Trash Cards -->
+                                <div id="deletedSerialsListContainer" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px;">
+                                    <div style="color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">Trash is empty.</div>
                                 </div>
                             </div>
                         </div>

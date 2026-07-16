@@ -169,6 +169,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
+
+        // 8. Sync Deleted Serials (Trash Bin)
+        db.ref('wms_data/deleted_serials').on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val === null) {
+                const localDeleted = getDeletedSerials();
+                if (localDeleted.length > 0) firebaseSet('deleted_serials', localDeleted);
+            } else {
+                if (syncCloudDataToLocal('wms_deleted_serials', val)) {
+                    renderDeletedSerialsPanel();
+                    console.log("Deleted Serials synchronized.");
+                }
+            }
+        });
     }
 
     // 1. Time Widget / Local Clock
@@ -381,6 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     localStorage.removeItem('wms_wos_items');
                     localStorage.removeItem('wms_active_inbound_session');
                     localStorage.removeItem('wms_active_outbound_session');
+                    localStorage.removeItem('wms_deleted_serials');
                     localStorage.clear(); // Complete browser clear fallback
 
                     if (isFirebaseConnected && db) {
@@ -391,7 +406,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             outbound_history: null,
                             product_weights: null,
                             wos_items: null,
-                            inbound_items: null
+                            inbound_items: null,
+                            deleted_serials: null
                         };
 
                         db.ref('wms_data').update(resetPayload).then(() => {
@@ -4020,12 +4036,286 @@ document.addEventListener('DOMContentLoaded', () => {
             card.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 10px;">
                     <span style="font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: ${theme.text}; opacity: 0.85; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${s.itemName}">${s.itemName}</span>
-                    <span style="font-size: 0.65rem; font-weight: 700; background: ${badgeBg}; color: ${badgeColor}; padding: 2px 6px; border-radius: 4px; border: 1px solid ${badgeColor}33; text-transform: uppercase; flex-shrink: 0;">${s.status}</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 0.65rem; font-weight: 700; background: ${badgeBg}; color: ${badgeColor}; padding: 2px 6px; border-radius: 4px; border: 1px solid ${badgeColor}33; text-transform: uppercase; flex-shrink: 0;">${s.status}</span>
+                        <button type="button" class="btn-delete-inventory-serial" data-serial="${s.serial}" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose); width: 22px; height: 22px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; transition: var(--transition-smooth);" title="Delete Serial">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 <div ${isBlinkingClass} style="font-family: var(--font-mono); font-size: 0.95rem; font-weight: 700; word-break: break-all; margin-top: 2px; color: ${s.status === 'Dispatched' ? 'var(--text-muted)' : theme.text};">${s.serial}</div>
                 <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; font-family: var(--font-mono); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${s.details}">${s.details}</div>
             `;
             listContainer.appendChild(card);
+        });
+    }
+
+    function getDeletedSerials() {
+        const saved = localStorage.getItem('wms_deleted_serials');
+        if (saved) return JSON.parse(saved);
+        return [];
+    }
+
+    function saveDeletedSerials(data) {
+        localStorage.setItem('wms_deleted_serials', JSON.stringify(data));
+        firebaseSet('deleted_serials', data);
+    }
+
+    function renderDeletedSerialsPanel() {
+        const container = document.getElementById('deletedSerialsListContainer');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        const deletedList = getDeletedSerials();
+        
+        if (deletedList.length === 0) {
+            container.innerHTML = `
+                <div style="color: var(--text-muted); font-style: italic; text-align: center; padding: 32px 16px;">
+                    Trash is empty.
+                </div>
+            `;
+            return;
+        }
+
+        deletedList.forEach(s => {
+            const card = document.createElement('div');
+            card.className = 'inventory-serial-card';
+            card.style.cssText = 'border: 1px dashed rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.02); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px; transition: var(--transition-smooth);';
+
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 10px;">
+                    <span style="font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--accent-rose); opacity: 0.85; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${s.itemName}">${s.itemName}</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button type="button" class="btn-restore-serial" data-serial="${s.serial}" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--accent-emerald); padding: 2px 8px; border-radius: var(--radius-sm); font-size: 0.65rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: var(--transition-smooth);" title="Restore Serial">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 10px; height: 10px; stroke-width: 3;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                            </svg>
+                            <span>Restore</span>
+                        </button>
+                        <button type="button" class="btn-permanent-delete-serial" data-serial="${s.serial}" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose); padding: 2px 8px; border-radius: var(--radius-sm); font-size: 0.65rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: var(--transition-smooth);" title="Delete Permanently">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 10px; height: 10px; stroke-width: 3;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            <span>Delete</span>
+                        </button>
+                    </div>
+                </div>
+                <div style="font-family: var(--font-mono); font-size: 0.95rem; font-weight: 700; word-break: break-all; margin-top: 2px; color: var(--text-muted); text-decoration: line-through;">${s.serial}</div>
+                <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; font-family: var(--font-mono); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">Deleted: ${s.deletedAt}</div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    function deleteSerialFromInventory(serial) {
+        if (!confirm(`Are you sure you want to delete serial "${serial}"? It will be subtracted from all records and moved to the Trash Bin.`)) {
+            return;
+        }
+
+        // 1. Update Inbound History and find details
+        const inboundHistory = getHistory();
+        let inboundUpdated = false;
+        let sourceInboundLogId = null;
+        let sourceBoxNo = 1;
+        let itemName = '';
+
+        inboundHistory.forEach(log => {
+            if (log.serials) {
+                const found = log.serials.find(s => s.serial === serial);
+                if (found) {
+                    sourceInboundLogId = log.id;
+                    sourceBoxNo = found.boxNo || 1;
+                    itemName = found.itemName || log.item;
+                    
+                    // Filter out the serial
+                    log.serials = log.serials.filter(s => s.serial !== serial);
+                    inboundUpdated = true;
+                    // Recalculate count
+                    log.count = log.serials.length;
+                    
+                    // If multi-item format exists, update matching item's scannedCount
+                    if (log.items) {
+                        log.items.forEach(item => {
+                            item.scannedCount = log.serials.filter(s => s.itemName === item.name).length;
+                        });
+                    }
+                }
+            }
+        });
+
+        if (inboundUpdated) {
+            saveHistory(inboundHistory);
+        }
+
+        // 2. Update Outbound History
+        const outboundHistory = getOutboundHistory();
+        let outboundUpdated = false;
+        let sourceOutboundLogId = null;
+
+        outboundHistory.forEach(log => {
+            if (log.serials) {
+                const found = log.serials.find(s => s.serial === serial);
+                if (found) {
+                    sourceOutboundLogId = log.id;
+                    
+                    // Filter out
+                    log.serials = log.serials.filter(s => s.serial !== serial);
+                    outboundUpdated = true;
+                    
+                    // Update items scannedCount
+                    if (log.items) {
+                        log.items.forEach(item => {
+                            item.scannedCount = log.serials.filter(s => s.itemName === item.name).length;
+                        });
+                    }
+                }
+            }
+        });
+
+        if (outboundUpdated) {
+            saveOutboundHistory(outboundHistory);
+        }
+
+        // 3. Add to Deleted Serials state
+        if (itemName) {
+            const deletedList = getDeletedSerials();
+            // Avoid duplicates
+            if (!deletedList.some(s => s.serial === serial)) {
+                deletedList.push({
+                    serial: serial,
+                    itemName: itemName,
+                    boxNo: sourceBoxNo,
+                    inboundLogId: sourceInboundLogId,
+                    outboundLogId: sourceOutboundLogId,
+                    deletedAt: new Date().toLocaleString()
+                });
+                saveDeletedSerials(deletedList);
+            }
+        }
+
+        // 4. Refresh all related views
+        renderInventoryPanel();
+        renderHistoryTable();
+        renderOutboundHistoryTable();
+        renderDeletedSerialsPanel();
+    }
+
+    function restoreDeletedSerial(serial) {
+        if (!confirm(`Are you sure you want to restore serial "${serial}" back to active stock records?`)) {
+            return;
+        }
+
+        const deletedList = getDeletedSerials();
+        const record = deletedList.find(s => s.serial === serial);
+        if (!record) return;
+
+        // 1. Restore to original Inbound Log row
+        const inboundHistory = getHistory();
+        let inboundRestored = false;
+
+        inboundHistory.forEach(log => {
+            if (log.id === record.inboundLogId) {
+                if (!log.serials) log.serials = [];
+                // Avoid duplicates
+                if (!log.serials.some(s => s.serial === serial)) {
+                    log.serials.push({
+                        serial: record.serial,
+                        boxNo: record.boxNo || 1,
+                        itemName: record.itemName
+                    });
+                    log.count = log.serials.length;
+                    if (log.items) {
+                        log.items.forEach(item => {
+                            item.scannedCount = log.serials.filter(s => s.itemName === item.name).length;
+                        });
+                    }
+                    inboundRestored = true;
+                }
+            }
+        });
+
+        if (inboundRestored) {
+            saveHistory(inboundHistory);
+        }
+
+        // 2. Restore to original Outbound Log row if applicable
+        if (record.outboundLogId) {
+            const outboundHistory = getOutboundHistory();
+            let outboundRestored = false;
+
+            outboundHistory.forEach(log => {
+                if (log.id === record.outboundLogId) {
+                    if (!log.serials) log.serials = [];
+                    if (!log.serials.some(s => s.serial === serial)) {
+                        log.serials.push({
+                            serial: record.serial,
+                            itemName: record.itemName
+                        });
+                        if (log.items) {
+                            log.items.forEach(item => {
+                                item.scannedCount = log.serials.filter(s => s.itemName === item.name).length;
+                            });
+                        }
+                        outboundRestored = true;
+                    }
+                }
+            });
+
+            if (outboundRestored) {
+                saveOutboundHistory(outboundHistory);
+            }
+        }
+
+        // 3. Remove from Deleted Serials
+        const updatedDeletedList = deletedList.filter(s => s.serial !== serial);
+        saveDeletedSerials(updatedDeletedList);
+
+        // 4. Refresh all related views
+        renderInventoryPanel();
+        renderHistoryTable();
+        renderOutboundHistoryTable();
+        renderDeletedSerialsPanel();
+    }
+
+    function permanentlyDeleteSerial(serial) {
+        if (!confirm(`Are you sure you want to permanently delete serial "${serial}"? This action cannot be undone.`)) {
+            return;
+        }
+
+        const deletedList = getDeletedSerials();
+        const updatedDeletedList = deletedList.filter(s => s.serial !== serial);
+        saveDeletedSerials(updatedDeletedList);
+        renderDeletedSerialsPanel();
+    }
+
+    const inventorySerialsListContainer = document.getElementById('inventorySerialsListContainer');
+    if (inventorySerialsListContainer) {
+        inventorySerialsListContainer.addEventListener('click', (e) => {
+            const btn = e.target.closest('.btn-delete-inventory-serial');
+            if (btn) {
+                const serial = btn.getAttribute('data-serial');
+                deleteSerialFromInventory(serial);
+            }
+        });
+    }
+
+    const deletedSerialsListContainer = document.getElementById('deletedSerialsListContainer');
+    if (deletedSerialsListContainer) {
+        deletedSerialsListContainer.addEventListener('click', (e) => {
+            // Restore btn
+            const restoreBtn = e.target.closest('.btn-restore-serial');
+            if (restoreBtn) {
+                const serial = restoreBtn.getAttribute('data-serial');
+                restoreDeletedSerial(serial);
+            }
+            // Permanent delete btn
+            const permanentDeleteBtn = e.target.closest('.btn-permanent-delete-serial');
+            if (permanentDeleteBtn) {
+                const serial = permanentDeleteBtn.getAttribute('data-serial');
+                permanentlyDeleteSerial(serial);
+            }
         });
     }
 
@@ -4655,6 +4945,7 @@ document.addEventListener('DOMContentLoaded', () => {
     restoreSessionState();
     restoreOutboundSessionState();
     renderInventoryPanel();
+    renderDeletedSerialsPanel();
     populateMisProductsDropdown();
 });
 
