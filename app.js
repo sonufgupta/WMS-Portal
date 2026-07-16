@@ -45,9 +45,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function firebaseSet(node, data) {
         if (isFirebaseConnected && db) {
-            db.ref('wms_data/' + node).set(data).catch(err => {
-                console.error("Firebase write error for node '" + node + "':", err);
-            });
+            try {
+                db.ref('wms_data/' + node).set(data).catch(err => {
+                    console.error("Firebase write error for node '" + node + "':", err);
+                });
+            } catch (err) {
+                console.error("Firebase synchronous write error for node '" + node + "':", err);
+            }
         }
     }
 
@@ -1235,21 +1239,23 @@ document.addEventListener('DOMContentLoaded', () => {
             // Sanitize activeSession.items properties to prevent undefined/NaN errors
             if (activeSession.items) {
                 activeSession.items.forEach(item => {
-                    item.expectedQty = 0;
-                    if (item.skuAlphabetPattern && !item.allowedPatterns) {
-                        item.allowedPatterns = [{
-                            pattern: item.skuAlphabetPattern,
-                            length: item.lockedLength || 15
-                        }];
-                    }
-                    if (item.allowedPatterns) {
-                        item.allowedPatterns = item.allowedPatterns.filter(cfg => cfg && cfg.length <= 50);
-                    }
-                    if (item.lockedLength > 50) {
-                        item.lockedLength = null;
-                        item.skuAlphabetPattern = null;
+                    if (item) {
+                        item.expectedQty = parseInt(item.expectedQty) || 0;
+                        if (item.skuAlphabetPattern && !item.allowedPatterns) {
+                            item.allowedPatterns = [{
+                                pattern: item.skuAlphabetPattern,
+                                length: item.lockedLength || 15
+                            }];
+                        }
                         if (item.allowedPatterns) {
                             item.allowedPatterns = item.allowedPatterns.filter(cfg => cfg && cfg.length <= 50);
+                        }
+                        if (item.lockedLength > 50) {
+                            item.lockedLength = null;
+                            item.skuAlphabetPattern = null;
+                            if (item.allowedPatterns) {
+                                item.allowedPatterns = item.allowedPatterns.filter(cfg => cfg && cfg.length <= 50);
+                            }
                         }
                     }
                 });
@@ -1536,7 +1542,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!activeSession.items && activeSession.item) {
             activeSession.items = [{
                 name: activeSession.item,
-                expectedQty: 0,
+                expectedQty: activeSession.expectedQty || 10,
                 skuAlphabetPattern: activeSession.skuAlphabetPattern || null,
                 lockedLength: activeSession.lockedLength || null,
                 scannedCount: 0
@@ -2687,14 +2693,16 @@ document.addEventListener('DOMContentLoaded', () => {
             // Sanitize activeOutboundSession items
             if (activeOutboundSession.items) {
                 activeOutboundSession.items.forEach(item => {
-                    if (item.allowedPatterns) {
-                        item.allowedPatterns = item.allowedPatterns.filter(cfg => cfg && cfg.length <= 50);
-                    }
-                    if (item.lockedLength > 50) {
-                        item.lockedLength = null;
-                        item.skuAlphabetPattern = null;
+                    if (item) {
                         if (item.allowedPatterns) {
                             item.allowedPatterns = item.allowedPatterns.filter(cfg => cfg && cfg.length <= 50);
+                        }
+                        if (item.lockedLength > 50) {
+                            item.lockedLength = null;
+                            item.skuAlphabetPattern = null;
+                            if (item.allowedPatterns) {
+                                item.allowedPatterns = item.allowedPatterns.filter(cfg => cfg && cfg.length <= 50);
+                            }
                         }
                     }
                 });
