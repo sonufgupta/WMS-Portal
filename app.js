@@ -191,6 +191,16 @@ document.addEventListener('DOMContentLoaded', () => {
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
+
+            if (link.id === 'navMisReport') {
+                const pwd = prompt("Enter password to access MIS Reports:");
+                if (pwd === '1998') {
+                    window.open('https://geonix-desk.vercel.app/', '_blank');
+                } else if (pwd !== null) {
+                    alert("Incorrect password! Access denied.");
+                }
+                return;
+            }
             
             // Remove active class from all navigation links
             navLinks.forEach(item => item.classList.remove('active'));
