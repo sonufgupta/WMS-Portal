@@ -910,14 +910,54 @@ document.addEventListener('DOMContentLoaded', () => {
                     warningModalConfirmInput.focus();
                 }, 50);
 
+                let scanConfirmationsCount = 1; // 1st scan was the initial rejection that opened the modal
+
                 warningModalConfirmInput.onkeydown = (evt) => {
                     if (evt.key === 'Enter') {
                         evt.preventDefault();
                         const val = warningModalConfirmInput.value.trim();
                         if (!val) return;
                         
-                        if (val === lastRejectedSerial) {
-                            if (warningAddProductBtn) warningAddProductBtn.click();
+                        // Check if it matches an existing product in the active outbound session
+                        let matchedOutboundProduct = null;
+                        if (activeOutboundSession) {
+                            let testProduct = lookupProductBySerial(val);
+                            if (!testProduct) {
+                                testProduct = lookupProductBySkuPattern(val);
+                            }
+                            if (testProduct && activeOutboundSession.items.some(i => i.name === testProduct)) {
+                                matchedOutboundProduct = testProduct;
+                            }
+                        }
+                        
+                        if (matchedOutboundProduct) {
+                            // Close popup and process scan immediately
+                            skuWarningModal.classList.remove('active');
+                            warningModalConfirmInput.onkeydown = null;
+                            if (outboundSequenceToggle && outboundSequenceToggle.checked) {
+                                generateOutboundSequenceSerials(val, 5);
+                            } else {
+                                addOutboundSerialToSession(val);
+                            }
+                        } else if (val === lastRejectedSerial) {
+                            scanConfirmationsCount++;
+                            if (scanConfirmationsCount >= 3) {
+                                if (warningAddProductBtn) warningAddProductBtn.click();
+                            } else {
+                                // Clear input and ask for scan again
+                                warningModalConfirmInput.value = '';
+                                const remaining = 3 - scanConfirmationsCount;
+                                if (warningDescText) {
+                                    if (!warningDescText.innerHTML.includes("Scan same barcode")) {
+                                        warningDescText.innerHTML += `<br><strong style="color: var(--accent-amber); display: block; margin-top: 10px;">Scan same barcode ${remaining} more time(s) to add product...</strong>`;
+                                    } else {
+                                        warningDescText.innerHTML = warningDescText.innerHTML.replace(
+                                            /Scan same barcode \d+ more time\(s\)/,
+                                            `Scan same barcode ${remaining} more time(s)`
+                                        );
+                                    }
+                                }
+                            }
                         } else {
                             skuWarningModal.classList.remove('active');
                             warningModalConfirmInput.onkeydown = null;
@@ -3525,6 +3565,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         </svg>
                         Excel
                     </button>
+                    <button type="button" class="btn-restore-outbound-log" data-id="${row.id}" title="Restore Outbound Session" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: var(--accent-blue); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: var(--transition-smooth); border-style: solid; margin-left: 6px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        </svg>
+                        Restore
+                    </button>
                 </td>
             `;
             body.appendChild(tr);
@@ -3882,6 +3928,52 @@ document.addEventListener('DOMContentLoaded', () => {
                 const logItem = historyData.find(item => item.id === logId);
                 if (logItem) {
                     downloadOutboundLogExcel(logItem);
+                } else {
+                    alert('Log record not found.');
+                }
+            }
+
+            const restoreBtn = e.target.closest('.btn-restore-outbound-log');
+            if (restoreBtn) {
+                e.stopPropagation();
+                const logId = restoreBtn.getAttribute('data-id');
+                
+                const pass = prompt("Enter Admin Password to restore this Outbound Session:");
+                if (pass === null) return;
+                if (pass !== '1998') {
+                    alert("Incorrect password!");
+                    return;
+                }
+                
+                if (activeOutboundSession) {
+                    alert("Cannot restore! An active Outbound session is already running. Please cancel or save the current session first.");
+                    return;
+                }
+                
+                const historyData = getOutboundHistory();
+                const logIndex = historyData.findIndex(item => item.id === logId);
+                if (logIndex !== -1) {
+                    const restoredLog = historyData[logIndex];
+                    
+                    // Populate activeOutboundSession
+                    activeOutboundSession = {
+                        id: restoredLog.id,
+                        shopName: restoredLog.shopName,
+                        invoiceNo: restoredLog.invoiceNo,
+                        items: restoredLog.items || [],
+                        serials: restoredLog.serials || []
+                    };
+                    
+                    // Remove from history
+                    historyData.splice(logIndex, 1);
+                    
+                    // Save & reload
+                    saveActiveOutboundSession();
+                    saveOutboundHistory(historyData);
+                    restoreOutboundSessionState();
+                    renderInventoryPanel();
+                    
+                    alert("Outbound session successfully restored to workstation!");
                 } else {
                     alert('Log record not found.');
                 }
