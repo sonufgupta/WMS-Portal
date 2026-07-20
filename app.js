@@ -150,8 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const val = snapshot.val();
             if (val === null) {
                 localStorage.setItem('wms_inbound_items', '[]');
+                renderDropdownItems();
             } else {
                 if (syncCloudDataToLocal('wms_inbound_items', val)) {
+                    renderDropdownItems();
                     console.log("Inbound Items synchronized.");
                 }
             }
@@ -933,6 +935,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!inboundHistoryBody) return;
         inboundHistoryBody.innerHTML = '';
         const historyData = getHistory();
+        let needsUpdate = false;
         
         historyData.forEach((row, idx) => {
             const tr = document.createElement('tr');
@@ -943,6 +946,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 row.id = `log_${idx}_${Date.now()}`;
                 row.items = [{ name: row.item, expectedQty: row.expected }];
                 row.serials = [];
+                needsUpdate = true;
                 // generate dummy serials for default rows
                 for (let i = 1; i <= row.count; i++) {
                     row.serials.push({
@@ -1009,8 +1013,10 @@ document.addEventListener('DOMContentLoaded', () => {
             inboundHistoryBody.appendChild(tr);
         });
 
-        // Save updated mock logs back to storage
-        saveHistory(historyData);
+        // Save updated mock logs back to storage only if we modified them
+        if (needsUpdate) {
+            saveHistory(historyData);
+        }
     }
 
     // --- Excel Report Download (SheetJS Multiple Tabs integration) ---
