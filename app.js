@@ -355,7 +355,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         "S.No.": rowIdx++,
                         "Product Name": item.name,
                         "Piece Quantity (PCs)": currentPcQty,
-                        "Box Quantity (Boxes)": currentBoxQty,
                         "Total Weight (kg)": totalWeight > 0 ? parseFloat(totalWeight.toFixed(3)) : 0
                     });
 
@@ -375,7 +374,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 "S.No.": "",
                 "Product Name": "",
                 "Piece Quantity (PCs)": "",
-                "Box Quantity (Boxes)": "",
                 "Total Weight (kg)": ""
             });
 
@@ -383,7 +381,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 "S.No.": "",
                 "Product Name": "TOTAL",
                 "Piece Quantity (PCs)": sumPcs,
-                "Box Quantity (Boxes)": sumBoxes,
                 "Total Weight (kg)": parseFloat(sumWeight.toFixed(3))
             });
 
@@ -584,7 +581,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Product Weight Storage Helpers ---
     function getProductWeights() {
         const saved = localStorage.getItem('wms_product_weights');
-        return saved ? JSON.parse(saved) : {};
+        if (!saved) return {};
+        try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) {
+                const dict = {};
+                parsed.forEach(w => {
+                    if (w && w.name) {
+                        dict[w.name] = parseFloat(w.weight) || 0;
+                    }
+                });
+                return dict;
+            }
+            return parsed; // Fallback to old object structure
+        } catch (e) {
+            return {};
+        }
     }
 
     function saveProductWeight(itemName, weight) {
@@ -595,8 +607,15 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             weights[itemName] = parsed;
         }
-        localStorage.setItem('wms_product_weights', JSON.stringify(weights));
-        firebaseSet('product_weights', weights);
+        
+        // Convert dictionary to array of objects to bypass Firebase path segment key restrictions
+        const weightsArray = Object.keys(weights).map(name => ({
+            name: name,
+            weight: weights[name]
+        }));
+        
+        localStorage.setItem('wms_product_weights', JSON.stringify(weightsArray));
+        firebaseSet('product_weights', weightsArray);
     }
 
     // --- Auto-SKU Alphabet Pattern Extraction and Matching Helpers ---
@@ -2227,24 +2246,28 @@ document.addEventListener('DOMContentLoaded', () => {
             length: firstSerialOfBatch.length
         }];
 
+        // Pre-build sets for O(1) duplicate checks
+        const existingSerialsSet = new Set(activeSession.serials.map(s => s.serial));
+        const batchSerialsSet = new Set();
+
         // Pre-validate all items in allTempSerials
         for (let i = 0; i < allTempSerials.length; i++) {
             const checkSerial = allTempSerials[i].serial;
             const targetBoxNo = allTempSerials[i].boxNo;
 
             // Check duplicate across existing serials in session
-            const foundItem = activeSession.serials.find(item => item.serial === checkSerial);
-            if (foundItem) {
-                showScanWarning('duplicate-seq', foundItem.boxNo, checkSerial);
+            if (existingSerialsSet.has(checkSerial)) {
+                const foundItem = activeSession.serials.find(item => item.serial === checkSerial);
+                showScanWarning('duplicate-seq', foundItem ? foundItem.boxNo : 'N/A', checkSerial);
                 return;
             }
 
             // Check duplicate in same batch
-            const batchIndex = allTempSerials.findIndex(item => item.serial === checkSerial);
-            if (batchIndex !== i) {
+            if (batchSerialsSet.has(checkSerial)) {
                 showScanWarning('duplicate-batch', targetBoxNo, checkSerial);
                 return;
             }
+            batchSerialsSet.add(checkSerial);
 
             // Validate strictly against the active pattern layout configuration
             const isStrictMatch = activeAllowedPatterns.some(cfg => {
@@ -3295,16 +3318,22 @@ document.addEventListener('DOMContentLoaded', () => {
             generatedBatch.push(serial);
         }
 
+        // Pre-build O(1) lookup structures outside the loop to prevent browser freeze
+        const outboundHistory = getOutboundHistory();
+        const dispatchedSerialsMap = {};
+        outboundHistory.forEach(log => {
+            if (log.serials) {
+                log.serials.forEach(s => {
+                    dispatchedSerialsMap[s.serial] = log;
+                });
+            }
+        });
+        
+        const activeSerialsSet = new Set(activeOutboundSession.serials.map(s => s.serial));
+
         for (const code of generatedBatch) {
             // Check if already dispatched in history
-            const outboundHistory = getOutboundHistory();
-            let alreadyDispatchedLog = null;
-            for (const log of outboundHistory) {
-                if (log.serials && log.serials.some(s => s.serial === code)) {
-                    alreadyDispatchedLog = log;
-                    break;
-                }
-            }
+            const alreadyDispatchedLog = dispatchedSerialsMap[code];
             if (alreadyDispatchedLog) {
                 showSkuWarningModal(
                     'Already Dispatched Alert!',
@@ -3320,7 +3349,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const isDup = activeOutboundSession.serials.some(s => s.serial === code);
+            const isDup = activeSerialsSet.has(code);
             if (isDup) {
                 showSkuWarningModal(
                     'Duplicate Outbound Sequence Scan!',
@@ -3333,6 +3362,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 );
                 return;
             }
+            activeSerialsSet.add(code);
 
             let isMatched = false;
             if (targetItem.allowedPatterns && targetItem.allowedPatterns.length > 0) {
@@ -4013,7 +4043,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td style="padding: 10px 8px; font-weight: 700; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 185px;" title="${item.name}">
                             <span style="border-left: 3px solid ${theme.text}; padding-left: 6px;">${item.name}</span>
                         </td>
-                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: var(--text-secondary);">${item.boxNumbers.size}</td>
                         <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: var(--text-secondary);">${item.serialsCount}</td>
                         <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: var(--accent-emerald);">${totalWeight.toFixed(3)} kg</td>
                     </tr>
@@ -4023,7 +4052,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (registerRowsHtml) {
                 registerBody.innerHTML = registerRowsHtml;
             } else {
-                registerBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 20px;">No active stock registered.</td></tr>`;
+                registerBody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 20px;">No active stock registered.</td></tr>`;
             }
         }
 
@@ -5131,6 +5160,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (closeDeviceManagerModalFooterBtn) {
         closeDeviceManagerModalFooterBtn.addEventListener('click', closeDeviceManager);
+    }
+
+    const btnClearAllDevicesBtn = document.getElementById('btnClearAllDevicesBtn');
+    if (btnClearAllDevicesBtn) {
+        btnClearAllDevicesBtn.addEventListener('click', () => {
+            const msg = "Are you sure you want to clear all device authorization records?\n\nThis will instantly lock all other devices. If your own device is locked, you can unlock it using the Admin Password '1998'.";
+            if (!confirm(msg)) return;
+            
+            if (isFirebaseConnected && db) {
+                db.ref('wms_data/devices').set(null).then(() => {
+                    alert("All device records cleared successfully.");
+                }).catch(err => {
+                    alert("Failed to clear device records: " + err.message);
+                });
+            } else {
+                alert("Database offline. Cannot clear records.");
+            }
+        });
     }
 
     function loadDevicesInManager() {
