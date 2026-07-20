@@ -87,8 +87,9 @@ document.addEventListener('DOMContentLoaded', () => {
         db.ref('wms_data/active_inbound_session').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                const localActive = localStorage.getItem('wms_active_inbound_session');
-                if (localActive) firebaseSet('active_inbound_session', JSON.parse(localActive));
+                localStorage.removeItem('wms_active_inbound_session');
+                activeSession = null;
+                restoreSessionState();
             } else {
                 if (syncCloudDataToLocal('wms_active_inbound_session', val)) {
                     restoreSessionState();
@@ -101,8 +102,9 @@ document.addEventListener('DOMContentLoaded', () => {
         db.ref('wms_data/active_outbound_session').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                const localActiveOut = localStorage.getItem('wms_active_outbound_session');
-                if (localActiveOut) firebaseSet('active_outbound_session', JSON.parse(localActiveOut));
+                localStorage.removeItem('wms_active_outbound_session');
+                activeOutboundSession = null;
+                restoreOutboundSessionState();
             } else {
                 if (syncCloudDataToLocal('wms_active_outbound_session', val)) {
                     restoreOutboundSessionState();
@@ -115,8 +117,10 @@ document.addEventListener('DOMContentLoaded', () => {
         db.ref('wms_data/product_weights').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                const localWeights = getProductWeights();
-                if (Object.keys(localWeights).length > 0) firebaseSet('product_weights', localWeights);
+                localStorage.setItem('wms_product_weights', '{}');
+                renderHistoryTable();
+                renderInventoryPanel();
+                renderOutboundHistoryTable();
             } else {
                 if (syncCloudDataToLocal('wms_product_weights', val)) {
                     renderHistoryTable();
@@ -131,8 +135,8 @@ document.addEventListener('DOMContentLoaded', () => {
         db.ref('wms_data/wos_items').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                const localWos = getWosItems();
-                if (localWos.length > 0) firebaseSet('wos_items', localWos);
+                localStorage.setItem('wms_wos_items', '[]');
+                renderWosDropdownItems();
             } else {
                 if (syncCloudDataToLocal('wms_wos_items', val)) {
                     renderWosDropdownItems();
@@ -145,8 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
         db.ref('wms_data/inbound_items').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                const localItems = getInboundItems();
-                if (localItems.length > 0) firebaseSet('inbound_items', localItems);
+                localStorage.setItem('wms_inbound_items', '[]');
             } else {
                 if (syncCloudDataToLocal('wms_inbound_items', val)) {
                     console.log("Inbound Items synchronized.");
@@ -158,8 +161,9 @@ document.addEventListener('DOMContentLoaded', () => {
         db.ref('wms_data/inbound_history').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                const localHist = getHistory();
-                if (localHist.length > 0) firebaseSet('inbound_history', localHist);
+                localStorage.setItem('wms_inbound_history', '[]');
+                renderHistoryTable();
+                renderInventoryPanel();
             } else {
                 if (syncCloudDataToLocal('wms_inbound_history', val)) {
                     renderHistoryTable();
@@ -173,8 +177,9 @@ document.addEventListener('DOMContentLoaded', () => {
         db.ref('wms_data/outbound_history').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                const localOutHist = getOutboundHistory();
-                if (localOutHist.length > 0) firebaseSet('outbound_history', localOutHist);
+                localStorage.setItem('wms_outbound_history', '[]');
+                renderOutboundHistoryTable();
+                renderInventoryPanel();
             } else {
                 if (syncCloudDataToLocal('wms_outbound_history', val)) {
                     renderOutboundHistoryTable();
@@ -188,8 +193,8 @@ document.addEventListener('DOMContentLoaded', () => {
         db.ref('wms_data/deleted_serials').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                const localDeleted = getDeletedSerials();
-                if (localDeleted.length > 0) firebaseSet('deleted_serials', localDeleted);
+                localStorage.setItem('wms_deleted_serials', '[]');
+                renderDeletedSerialsPanel();
             } else {
                 if (syncCloudDataToLocal('wms_deleted_serials', val)) {
                     renderDeletedSerialsPanel();
