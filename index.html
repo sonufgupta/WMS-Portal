@@ -181,63 +181,50 @@
                 </section>
 
                 <!-- 2. INBOUND SECTION -->
-                <section class="content-section" id="sectionInbound" style="display: none;">
+                <section class="content-section" id="sectionInbound" style="display: none; padding: 24px; height: 100%; width: 100%; box-sizing: border-box; overflow-y: auto;">
                     
                     <!-- State A: Inbound Session Inactive -->
-                    <div id="inboundInactiveState" style="width: 100%;">
-                        <div class="welcome-container" style="min-height: 320px; margin-bottom: 24px;">
-                            <div class="welcome-icon">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                </svg>
+                    <div id="inboundInactiveState" style="width: 100%; display: flex; flex-direction: column; gap: 24px;">
+                        
+                        <!-- Dynamic working session banner container -->
+                        <div id="inboundAlreadyWorkingBanner" style="display: none; background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.25); padding: 24px; border-radius: var(--radius-xl); align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <div style="background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); width: 48px; height: 48px; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 24px; height: 24px; stroke-width: 2.5;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                </div>
+                                <div style="text-align: left;">
+                                    <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin: 0;">Already Working Session</h3>
+                                    <p style="color: var(--text-muted); font-size: 0.9rem; margin: 4px 0 0 0;">An active Inbound scanning session is currently running on another device.</p>
+                                </div>
                             </div>
-                            <h2>Start Inbound Shipment Scanning</h2>
-                            <p>Shipment details register karne aur box/item serial numbers scan karne ke liye niche click karne.</p>
-                            <button type="button" class="btn-primary" id="startInboundSessionBtn">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
+                            <button type="button" class="btn-primary" id="btnJoinInboundSession" style="background-color: var(--accent-amber); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2); padding: 10px 20px; font-weight: 700; border-radius: var(--radius-md); cursor: pointer; border: none; font-size: 0.9rem; color: #fff; height: auto;">
+                                Join Session
+                            </button>
+                        </div>
+
+                        <div class="welcome-container" id="inboundWelcomeContainer" style="padding: 30px; display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl);">
+                            <div style="display: flex; align-items: center; gap: 20px;">
+                                <div class="welcome-icon" style="background-color: var(--accent-emerald-glow); color: var(--accent-emerald); width: 56px; height: 56px; min-width: 56px; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 28px; height: 28px; stroke-width: 2.5;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <div style="text-align: left;">
+                                    <h1 style="font-size: 1.8rem; font-weight: 800; color: var(--text-primary); margin: 0;">Inbound Logistics</h1>
+                                    <p style="color: var(--text-muted); margin: 4px 0 0 0;">Create a new session to begin scanning incoming stock.</p>
+                                </div>
+                            </div>
+                            <button type="button" id="startInboundSessionBtn" class="btn-primary" style="padding: 12px 24px; font-size: 0.95rem; font-weight: 700;">
                                 <span>Start Inbound Session</span>
                             </button>
                         </div>
-                        
-                        <!-- History Log list -->
-                        <div class="dashboard-card table-card">
-                            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                                <div style="display: flex; align-items: center; gap: 16px;">
-                                    <div class="card-icon emerald">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" />
-                                        </svg>
-                                    </div>
-                                    <div class="card-title-group">
-                                        <h2>Completed Inbound Logs</h2>
-                                        <p>History of previously closed scanning sessions</p>
-                                    </div>
-                                </div>
-                                
-                                <div class="inbound-dropdown-container" style="position: relative; display: inline-block;">
-                                    <button type="button" class="btn-secondary" id="inboundActionsDropdownBtn" style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; height: auto;">
-                                        <span>More Actions</span>
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-                                        </svg>
-                                    </button>
-                                    <div class="custom-dropdown-menu" id="inboundActionsDropdownMenu" style="position: absolute; top: 100%; right: 0; margin-top: 6px; z-index: 100; min-width: 260px; display: none; box-shadow: var(--shadow-lg);">
-                                        <ul class="custom-dropdown-list" style="list-style: none; padding: 0; margin: 0;">
-                                            <li class="custom-dropdown-item" id="btnOpenWithoutSerialInward" style="padding: 12px; cursor: pointer; transition: var(--transition-smooth); font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 10px;">
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; color: var(--accent-amber); stroke-width: 2.5;">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                                </svg>
-                                                <span>Without Serial Number Inward</span>
-                                            </li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                            
+
+                        <div class="dashboard-card table-card" style="padding: 24px;">
+                            <h3 style="margin-bottom: 20px; text-align: left;">Recent Inbound Logs</h3>
                             <div class="table-container">
-                                <table class="portal-table" id="inboundHistoryTable">
+                                <table class="portal-table">
                                     <thead>
                                         <tr>
                                             <th>Timestamp</th>
@@ -249,18 +236,6 @@
                                     </thead>
                                     <tbody id="inboundHistoryBody">
                                         <!-- History items will be logged here -->
-                                        <tr>
-                                            <td class="font-mono">19:42:10</td>
-                                            <td>MH-04-GP-1234</td>
-                                            <td>LED Monitor 19.5" (Geonix)</td>
-                                            <td class="font-mono">25 / 25</td>
-                                        </tr>
-                                        <tr>
-                                            <td class="font-mono">18:15:33</td>
-                                            <td class="text-muted">Not Specified</td>
-                                            <td>Bubble Wrap Roll</td>
-                                            <td class="font-mono">10 / 10</td>
-                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -422,33 +397,50 @@
                     </div>
                 </section>
 
-
                 <!-- 3. OUTBOUND SECTION -->
                 <section class="content-section" id="sectionOutbound" style="display: none; padding: 24px; height: 100%; width: 100%; box-sizing: border-box; overflow-y: auto;">
                     
                     <!-- State A: Outbound Session Inactive -->
                     <div id="outboundInactiveState" style="width: 100%; display: flex; flex-direction: column; gap: 24px;">
-                        <div class="welcome-container" style="padding: 30px; display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl);">
+                        
+                        <!-- Dynamic working session banner container -->
+                        <div id="outboundAlreadyWorkingBanner" style="display: none; background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.25); padding: 24px; border-radius: var(--radius-xl); align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <div style="background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); width: 48px; height: 48px; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 24px; height: 24px; stroke-width: 2.5;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                </div>
+                                <div style="text-align: left;">
+                                    <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin: 0;">Already Working Session</h3>
+                                    <p style="color: var(--text-muted); font-size: 0.9rem; margin: 4px 0 0 0;">An active Outbound scanning session is currently running on another device.</p>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-primary" id="btnJoinOutboundSession" style="background-color: var(--accent-amber); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2); padding: 10px 20px; font-weight: 700; border-radius: var(--radius-md); cursor: pointer; border: none; font-size: 0.9rem; color: #fff; height: auto;">
+                                Join Session
+                            </button>
+                        </div>
+
+                        <div class="welcome-container" id="outboundWelcomeContainer" style="padding: 30px; display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl);">
                             <div style="display: flex; align-items: center; gap: 20px;">
                                 <div class="welcome-icon" style="background-color: var(--accent-blue-glow); color: var(--accent-blue); width: 56px; height: 56px; min-width: 56px; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 28px; height: 28px; stroke-width: 2.5;">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                 </div>
-                                <div>
-                                    <h1 style="font-size: 1.8rem; font-weight: 800; color: var(--text-primary); margin: 0;">Outbound Dispatch Workspace</h1>
-                                    <p style="color: var(--text-muted); font-size: 0.95rem; margin: 4px 0 0 0;">Create outbound scans and ship products to customers</p>
+                                <div style="text-align: left;">
+                                    <h1 style="font-size: 1.8rem; font-weight: 800; color: var(--text-primary); margin: 0;">Outbound Logistics</h1>
+                                    <p style="color: var(--text-muted); margin: 4px 0 0 0;">Create a new session to begin dispatching stock.</p>
                                 </div>
                             </div>
-                            <button type="button" class="btn-primary" id="startOutboundSessionBtn" style="padding: 12px 24px; font-weight: 700; display: flex; align-items: center; gap: 8px; border-radius: var(--radius-md); box-shadow: 0 4px 12px var(--accent-blue-glow); cursor: pointer;">
+                            <button type="button" id="startOutboundSessionBtn" class="btn-primary" style="padding: 12px 24px; font-size: 0.95rem; font-weight: 700; border-radius: var(--radius-md); display: flex; align-items: center; gap: 8px;">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 <span>New Outbound Session</span>
                             </button>
                         </div>
-                        
-                        <!-- History Log list -->
+
                         <div class="dashboard-card table-card">
                             <div class="card-header">
                                 <div class="card-icon emerald">

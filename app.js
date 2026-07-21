@@ -211,7 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateClock() {
         const now = new Date();
         const timeString = now.toLocaleTimeString('en-US', {
-            hour12: false,
+            hour12: true,
             hour: '2-digit',
             minute: '2-digit',
             second: '2-digit'
@@ -240,15 +240,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 return;
             }
-            
+            const targetSectionId = link.id.replace('nav', 'section');
+            if (targetSectionId === 'sectionInventory') {
+                const isUnlocked = localStorage.getItem('wms_inventory_unlocked') === 'true';
+                if (!isUnlocked) {
+                    const pwd = prompt("Enter passcode to access Inventory:");
+                    if (pwd === '2026' || pwd === '1998') {
+                        localStorage.setItem('wms_inventory_unlocked', 'true');
+                    } else {
+                        if (pwd !== null) alert("Incorrect passcode! Access denied.");
+                        return;
+                    }
+                }
+            }
+
             // Remove active class from all navigation links
             navLinks.forEach(item => item.classList.remove('active'));
             // Add to currently clicked navigation link
             link.classList.add('active');
-            
-            // Get target section id by mapping 'nav' to 'section'
-            const targetSectionId = link.id.replace('nav', 'section');
-            
             // Deactivate and hide all sections
             sections.forEach(sec => {
                 sec.classList.remove('active');
@@ -690,6 +699,7 @@ document.addEventListener('DOMContentLoaded', () => {
             firebaseSet('active_inbound_session', activeSession);
         } else {
             localStorage.removeItem('wms_active_inbound_session');
+            localStorage.removeItem('wms_inbound_joined');
             firebaseSet('active_inbound_session', null);
         }
     }
@@ -852,8 +862,63 @@ document.addEventListener('DOMContentLoaded', () => {
             rejectBtn.textContent = btnText;
         }
 
+        // Make modal card wider if adding another product to outbound session
+        if (showAddBtn) {
+            if (modalContainer) {
+                modalContainer.style.maxWidth = '620px';
+            }
+            
+            // Raw detected serial is passed in extraVal
+            const detectedSerial = extraVal || scannedVal;
+            let detectedProduct = lookupProductBySerial(detectedSerial) || lookupProductBySkuPattern(detectedSerial) || 'Unknown Product';
+            
+            // Find box number of the detected serial from Inbound history
+            let detectedBoxNo = 'N/A';
+            const inboundHistory = getHistory();
+            for (const log of inboundHistory) {
+                if (log.serials) {
+                    const match = log.serials.find(s => s.serial === detectedSerial);
+                    if (match) {
+                        detectedBoxNo = match.boxNo || 'N/A';
+                        break;
+                    }
+                }
+            }
+
+            // Find last scan details of the active outbound session
+            const lastSerialObj = (activeOutboundSession && activeOutboundSession.serials.length > 0)
+                ? activeOutboundSession.serials[activeOutboundSession.serials.length - 1]
+                : null;
+            
+            desc = `
+                <div style="font-size: 0.9rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 12px;">
+                    Warning: Scanned serial barcode does not belong to any of the products currently in this outbound dispatch.
+                </div>
+                <div style="display: flex; gap: 16px; margin: 12px 0; width: 100%; text-align: left;">
+                    <!-- Last Scan Card -->
+                    <div style="flex: 1; background: rgba(59, 130, 246, 0.04); border: 1px solid rgba(59, 130, 246, 0.15); padding: 12px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 6px;">
+                        <span style="font-size: 0.72rem; color: var(--accent-blue); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">Last Session Scan</span>
+                        <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); word-break: break-all; font-family: var(--font-mono);">${lastSerialObj ? lastSerialObj.serial : 'N/A'}</div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">${lastSerialObj ? lastSerialObj.itemName : 'No items scanned yet'}</div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted);">Box Number: <strong style="color: var(--text-secondary);">${lastSerialObj ? lastSerialObj.boxNo : 'N/A'}</strong></div>
+                    </div>
+                    <!-- Detected Scan Card -->
+                    <div style="flex: 1; background: rgba(244, 63, 94, 0.04); border: 1px solid rgba(244, 63, 94, 0.15); padding: 12px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 6px;">
+                        <span style="font-size: 0.72rem; color: var(--accent-rose); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">Detected Scan</span>
+                        <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); word-break: break-all; font-family: var(--font-mono);">${detectedSerial}</div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">${detectedProduct}</div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted);">Box Number: <strong style="color: var(--text-secondary);">${detectedBoxNo}</strong></div>
+                    </div>
+                </div>
+            `;
+        } else {
+            if (modalContainer) {
+                modalContainer.style.maxWidth = '460px';
+            }
+        }
+
         if (warningTitleText) warningTitleText.textContent = title;
-        if (warningDescText) warningDescText.textContent = desc;
+        if (warningDescText) warningDescText.innerHTML = desc;
         if (warningExpectedLabel) warningExpectedLabel.textContent = expectedLabel;
         if (warningExpectedSku) warningExpectedSku.textContent = expectedVal;
         if (warningScannedLabel) warningScannedLabel.textContent = scannedLabel;
@@ -910,7 +975,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     warningModalConfirmInput.focus();
                 }, 50);
 
-                let scanConfirmationsCount = 1; // 1st scan was the initial rejection that opened the modal
+                let sequenceStep = 1; 
+                const lastSessionSerial = (activeOutboundSession && activeOutboundSession.serials.length > 0)
+                    ? activeOutboundSession.serials[activeOutboundSession.serials.length - 1].serial
+                    : null;
+                const detectedSerial = extraVal || scannedVal;
+
+                // Configure guidance label
+                const guidanceLabel = document.querySelector('label[for="warningModalConfirmInput"]');
+                if (guidanceLabel) {
+                    if (lastSessionSerial) {
+                        guidanceLabel.innerHTML = `To confirm add, scan <strong>Last Session Serial (${lastSessionSerial})</strong> first:`;
+                        sequenceStep = 1;
+                    } else {
+                        guidanceLabel.innerHTML = `To confirm add, scan <strong>Detected Serial (${detectedSerial})</strong> to complete:`;
+                        sequenceStep = 2; // skip to step 2 if no last scanned item exists
+                    }
+                }
 
                 warningModalConfirmInput.onkeydown = (evt) => {
                     if (evt.key === 'Enter') {
@@ -918,7 +999,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const val = warningModalConfirmInput.value.trim();
                         if (!val) return;
                         
-                        // Check if it matches an existing product in the active outbound session
+                        // Check if it matches an existing product in the active outbound session (Bypass)
                         let matchedOutboundProduct = null;
                         if (activeOutboundSession) {
                             let testProduct = lookupProductBySerial(val);
@@ -939,34 +1020,31 @@ document.addEventListener('DOMContentLoaded', () => {
                             } else {
                                 addOutboundSerialToSession(val);
                             }
-                        } else if (val === lastRejectedSerial) {
-                            scanConfirmationsCount++;
-                            if (scanConfirmationsCount >= 3) {
+                            return;
+                        }
+
+                        // Sequence verification
+                        if (sequenceStep === 1) {
+                            if (val === lastSessionSerial) {
+                                sequenceStep = 2;
+                                warningModalConfirmInput.value = '';
+                                if (guidanceLabel) {
+                                    guidanceLabel.innerHTML = `<span style="color: var(--accent-emerald); font-weight: 700;">Step 1 Confirmed!</span> Now scan <strong>Detected Serial (${detectedSerial})</strong> to complete:`;
+                                }
+                                if (warningDescText) {
+                                    warningDescText.innerHTML += `<br><strong style="color: var(--accent-emerald); display: block; margin-top: 10px;">Step 1 Verified! Please scan detected serial next...</strong>`;
+                                }
+                            } else {
+                                warningModalConfirmInput.value = '';
+                                alert(`Incorrect scan. Please scan Last Session Serial: ${lastSessionSerial}`);
+                            }
+                        } else if (sequenceStep === 2) {
+                            if (val === detectedSerial) {
+                                // Add product!
                                 if (warningAddProductBtn) warningAddProductBtn.click();
                             } else {
-                                // Clear input and ask for scan again
                                 warningModalConfirmInput.value = '';
-                                const remaining = 3 - scanConfirmationsCount;
-                                if (warningDescText) {
-                                    if (!warningDescText.innerHTML.includes("Scan same barcode")) {
-                                        warningDescText.innerHTML += `<br><strong style="color: var(--accent-amber); display: block; margin-top: 10px;">Scan same barcode ${remaining} more time(s) to add product...</strong>`;
-                                    } else {
-                                        warningDescText.innerHTML = warningDescText.innerHTML.replace(
-                                            /Scan same barcode \d+ more time\(s\)/,
-                                            `Scan same barcode ${remaining} more time(s)`
-                                        );
-                                    }
-                                }
-                            }
-                        } else {
-                            skuWarningModal.classList.remove('active');
-                            warningModalConfirmInput.onkeydown = null;
-                            if (activeOutboundSession) {
-                                if (outboundSequenceToggle && outboundSequenceToggle.checked) {
-                                    generateOutboundSequenceSerials(val, 5);
-                                } else {
-                                    addOutboundSerialToSession(val);
-                                }
+                                alert(`Incorrect scan. Please scan Detected Serial: ${detectedSerial}`);
                             }
                         }
                     }
@@ -1427,27 +1505,64 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Render restored cards
             renderBoxCards();
-
-            // Show active scan workstation UI
-            inboundInactiveState.style.display = 'none';
-            inboundActiveState.style.display = 'flex';
+            // Check join authorization
+            const isJoined = localStorage.getItem('wms_inbound_joined') === 'true';
+            if (isJoined) {
+                inboundInactiveState.style.display = 'none';
+                inboundActiveState.style.display = 'flex';
+            } else {
+                inboundActiveState.style.display = 'none';
+                inboundInactiveState.style.display = 'block';
+                // Show warning banner and hide start button/welcome
+                const banner = document.getElementById('inboundAlreadyWorkingBanner');
+                const welcome = document.getElementById('inboundWelcomeContainer');
+                if (banner) banner.style.display = 'flex';
+                if (welcome) welcome.style.display = 'none';
+            }
         } else {
+            localStorage.removeItem('wms_inbound_joined');
             inboundActiveState.style.display = 'none';
             inboundInactiveState.style.display = 'block';
+            const banner = document.getElementById('inboundAlreadyWorkingBanner');
+            const welcome = document.getElementById('inboundWelcomeContainer');
+            if (banner) banner.style.display = 'none';
+            if (welcome) welcome.style.display = 'flex';
         }
-
         renderHistoryTable();
     }
 
     // --- Modal Configuration Handlers ---
-    
-    // Open Inbound Configuration Modal
+    // Open Inbound Configuration Modal or block if active session exists on another device
     if (startInboundSessionBtn && inboundConfigModal) {
         startInboundSessionBtn.addEventListener('click', () => {
-            inboundConfigModal.classList.add('active');
+            if (activeSession) {
+                // If there's an active session on another device, click acts as Join Session prompt
+                const pwd = prompt('Enter passcode (2026) to join the active Inbound session:');
+                if (pwd === '2026') {
+                    localStorage.setItem('wms_inbound_joined', 'true');
+                    restoreSessionState();
+                } else {
+                    alert('Incorrect passcode.');
+                }
+            } else {
+                inboundConfigModal.classList.add('active');
+            }
         });
     }
 
+    // Join Inbound Session Event Listener
+    const btnJoinInboundSession = document.getElementById('btnJoinInboundSession');
+    if (btnJoinInboundSession) {
+        btnJoinInboundSession.addEventListener('click', () => {
+            const pwd = prompt('Enter passcode (2026) to join the active Inbound session:');
+            if (pwd === '2026') {
+                localStorage.setItem('wms_inbound_joined', 'true');
+                restoreSessionState();
+            } else {
+                alert('Incorrect passcode.');
+            }
+        });
+    }
     // --- Custom Dropdown Item List Logic ---
     let inboundItems = [];
 
@@ -1661,14 +1776,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Render empty box cards container
             renderBoxCards();
-
-            // Toggle dashboard states
+            // Toggle dashboard states & set joined status
+            localStorage.setItem('wms_inbound_joined', 'true');
             inboundInactiveState.style.display = 'none';
             inboundActiveState.style.display = 'flex';
             
             // Save state to localStorage
             saveActiveSession();
-
             // Cleanup modals & autofocus unified scan input
             closeConfigModal();
             setTimeout(() => {
@@ -2395,9 +2509,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Add to completed inbound history table
                 const now = new Date();
                 const timeStr = now.toLocaleTimeString('en-US', {
-                    hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
+                    hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit'
                 });
- 
                 // Add to history array & save to localStorage
                 const historyData = getHistory();
                 const uniqueBoxes = new Set(activeSession.serials.map(s => s.boxNo));
@@ -2828,6 +2941,7 @@ document.addEventListener('DOMContentLoaded', () => {
             firebaseSet('active_outbound_session', activeOutboundSession);
         } else {
             localStorage.removeItem('wms_active_outbound_session');
+            localStorage.removeItem('wms_outbound_joined');
             firebaseSet('active_outbound_session', null);
         }
     }
@@ -2872,23 +2986,61 @@ document.addEventListener('DOMContentLoaded', () => {
             compactOutboundBoxNumbers();
             updateOutboundSessionProgress();
             renderOutboundBoxCards();
-
-            if (outboundInactiveState) outboundInactiveState.style.display = 'none';
-            if (outboundActiveState) outboundActiveState.style.display = 'flex';
+            const isJoined = localStorage.getItem('wms_outbound_joined') === 'true';
+            if (isJoined) {
+                if (outboundInactiveState) outboundInactiveState.style.display = 'none';
+                if (outboundActiveState) outboundActiveState.style.display = 'flex';
+            } else {
+                if (outboundActiveState) outboundActiveState.style.display = 'none';
+                if (outboundInactiveState) outboundInactiveState.style.display = 'block';
+                const banner = document.getElementById('outboundAlreadyWorkingBanner');
+                const welcome = document.getElementById('outboundWelcomeContainer');
+                if (banner) banner.style.display = 'flex';
+                if (welcome) welcome.style.display = 'none';
+            }
         } else {
+            localStorage.removeItem('wms_outbound_joined');
             if (outboundActiveState) outboundActiveState.style.display = 'none';
             if (outboundInactiveState) outboundInactiveState.style.display = 'block';
+            const banner = document.getElementById('outboundAlreadyWorkingBanner');
+            const welcome = document.getElementById('outboundWelcomeContainer');
+            if (banner) banner.style.display = 'none';
+            if (welcome) welcome.style.display = 'flex';
         }
         renderOutboundHistoryTable();
     }
 
-    // Modal Control triggers
+    // Modal Control triggers or block if active session exists on another device
     if (startOutboundSessionBtn && outboundConfigModal) {
         startOutboundSessionBtn.addEventListener('click', () => {
-            outboundConfigModal.classList.add('active');
+            if (activeOutboundSession) {
+                // Click acts as Join Session prompt
+                const pwd = prompt('Enter passcode (2026) to join the active Outbound session:');
+                if (pwd === '2026') {
+                    localStorage.setItem('wms_outbound_joined', 'true');
+                    restoreOutboundSessionState();
+                } else {
+                    alert('Incorrect passcode.');
+                }
+            } else {
+                outboundConfigModal.classList.add('active');
+            }
         });
     }
 
+    // Join Outbound Session Event Listener
+    const btnJoinOutboundSession = document.getElementById('btnJoinOutboundSession');
+    if (btnJoinOutboundSession) {
+        btnJoinOutboundSession.addEventListener('click', () => {
+            const pwd = prompt('Enter passcode (2026) to join the active Outbound session:');
+            if (pwd === '2026') {
+                localStorage.setItem('wms_outbound_joined', 'true');
+                restoreOutboundSessionState();
+            } else {
+                alert('Incorrect passcode.');
+            }
+        });
+    }
     function closeOutboundConfigModal() {
         if (outboundConfigModal) {
             outboundConfigModal.classList.remove('active');
@@ -2916,7 +3068,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 items: [],
                 serials: []
             };
-
+            localStorage.setItem('wms_outbound_joined', 'true');
             saveActiveOutboundSession();
             closeOutboundConfigModal();
             restoreOutboundSessionState();
@@ -3176,7 +3328,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 'SCANNED BARCODE:',
                 `${productName} (${serial})`,
                 false, // showAllowLengthBtn
-                true  // showAddBtn (enables Add Product button and double-scan gesture input!)
+                true,  // showAddBtn (enables Add Product button and double-scan gesture input!)
+                serial // Raw serial passed as extraVal
             );
             return false;
         }
@@ -3325,7 +3478,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 'SCANNED BARCODE:',
                 `${productName} (${baseCode})`,
                 false, // showAllowLengthBtn
-                true  // showAddBtn (enables Add Product button and double-scan gesture input!)
+                true,  // showAddBtn (enables Add Product button and double-scan gesture input!)
+                baseCode // Raw base code passed as extraVal
             );
             return;
         }
@@ -3880,9 +4034,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (confirm(confirmMsg)) {
                 const now = new Date();
                 const timeStr = now.toLocaleTimeString('en-US', {
-                    hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
+                    hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit'
                 });
-
                 const logObj = {
                     id: Date.now().toString(),
                     timestamp: timeStr,
@@ -4184,7 +4337,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Render Cards
         listContainer.innerHTML = '';
         if (filteredList.length === 0) {
             listContainer.innerHTML = `
@@ -4195,10 +4347,18 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        filteredList.forEach(s => {
-            const theme = productColorsMap[s.itemName] || colorThemes[0];
+        if (filteredList.length > 100) {
+            const warningBanner = document.createElement('div');
+            warningBanner.style.cssText = 'grid-column: 1 / -1; padding: 12px 16px; background: rgba(59, 130, 246, 0.06); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: var(--radius-md); color: var(--accent-blue); font-size: 0.85rem; font-weight: 600; text-align: center; margin-bottom: 8px;';
+            warningBanner.textContent = `Showing top 100 of ${filteredList.length} items. Please use the search bar above to narrow down results.`;
+            listContainer.appendChild(warningBanner);
+        }
+
+        const displayList = filteredList.slice(0, 100);
+        displayList.forEach(s => {
             const card = document.createElement('div');
             card.className = 'inventory-serial-card';
+            const theme = productColorsMap[s.itemName] || colorThemes[0];
             
             let borderStyle = `border: 1px solid ${theme.border};`;
             let badgeBg = 'rgba(16, 185, 129, 0.15)';
@@ -4665,7 +4825,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const now = new Date();
             const logEntry = {
                 id: "in_wos_" + Date.now(),
-                timestamp: now.toLocaleTimeString('en-US', { hour12: false }),
+                timestamp: now.toLocaleTimeString('en-US', { hour12: true }),
                 date: now.toISOString().slice(0, 10),
                 vehicle: vehicleVal || 'N/A',
                 item: itemVal,
