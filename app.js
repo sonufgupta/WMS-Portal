@@ -533,8 +533,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const warningAddProductBtn = document.getElementById('warningAddProductBtn');
     const warningModalConfirmInput = document.getElementById('warningModalConfirmInput');
     const configSkuPatternInput = document.getElementById('configSkuPattern');
+    let deletedSerialDismissTimer = null;
 
-    // Product Weight Configuration Modal elements
     const productWeightModal = document.getElementById('productWeightModal');
     const weightModalProductDesc = document.getElementById('weightModalProductDesc');
     const weightInputVal = document.getElementById('weightInputVal');
@@ -825,6 +825,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Generic SKU Warning Modal for Outbound Workstation
     function showSkuWarningModal(title, desc, expectedLabel, expectedVal, scannedLabel, scannedVal, showAllowLengthBtn, showAddBtn, extraVal) {
         if (!skuWarningModal) return;
+        if (!title.includes('Deleted') && deletedSerialDismissTimer) {
+            clearTimeout(deletedSerialDismissTimer);
+            deletedSerialDismissTimer = null;
+        }
 
         const modalContainer = skuWarningModal.querySelector('.modal-card');
         const modalHeader = skuWarningModal.querySelector('.modal-header');
@@ -834,7 +838,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let themeColor = 'var(--accent-rose)';
         let themeGlow = 'rgba(244, 63, 94, 0.15)';
         let btnText = 'Reject & Dismiss Scan';
-
         if (title.includes('Duplicate')) {
             themeColor = 'var(--accent-purple)';
             themeGlow = 'rgba(139, 92, 246, 0.15)';
@@ -843,12 +846,15 @@ document.addEventListener('DOMContentLoaded', () => {
             themeColor = 'var(--accent-amber)';
             themeGlow = 'rgba(245, 158, 11, 0.15)';
             btnText = 'Dismiss & Re-scan';
+        } else if (title.includes('Deleted')) {
+            themeColor = 'var(--accent-rose)';
+            themeGlow = 'rgba(244, 63, 94, 0.15)';
+            btnText = 'Reject';
         } else if (showAddBtn) {
             themeColor = 'var(--accent-rose)';
             themeGlow = 'rgba(244, 63, 94, 0.15)';
             btnText = 'Reject Scan';
         }
-
         if (modalContainer) {
             modalContainer.style.borderColor = themeColor;
             modalContainer.style.boxShadow = `0 20px 50px ${themeGlow}`;
@@ -889,7 +895,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const lastSerialObj = (activeOutboundSession && activeOutboundSession.serials.length > 0)
                 ? activeOutboundSession.serials[activeOutboundSession.serials.length - 1]
                 : null;
-            
             desc = `
                 <div style="font-size: 0.9rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 12px;">
                     Warning: Scanned serial barcode does not belong to any of the products currently in this outbound dispatch.
@@ -901,13 +906,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); word-break: break-all; font-family: var(--font-mono);">${lastSerialObj ? lastSerialObj.serial : 'N/A'}</div>
                         <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">${lastSerialObj ? lastSerialObj.itemName : 'No items scanned yet'}</div>
                         <div style="font-size: 0.8rem; color: var(--text-muted);">Box Number: <strong style="color: var(--text-secondary);">${lastSerialObj ? lastSerialObj.boxNo : 'N/A'}</strong></div>
-                    </div>
-                    <!-- Detected Scan Card -->
-                    <div style="flex: 1; background: rgba(244, 63, 94, 0.04); border: 1px solid rgba(244, 63, 94, 0.15); padding: 12px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 6px;">
-                        <span style="font-size: 0.72rem; color: var(--accent-rose); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">Detected Scan</span>
-                        <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); word-break: break-all; font-family: var(--font-mono);">${detectedSerial}</div>
-                        <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">${detectedProduct}</div>
-                        <div style="font-size: 0.8rem; color: var(--text-muted);">Box Number: <strong style="color: var(--text-secondary);">${detectedBoxNo}</strong></div>
                     </div>
                 </div>
             `;
@@ -999,6 +997,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         const val = warningModalConfirmInput.value.trim();
                         if (!val) return;
                         
+                        // Check for reject scan gesture (scanning the same detected serial while in Step 1)
+                        if (sequenceStep === 1 && val === detectedSerial) {
+                            // Reject scan
+                            skuWarningModal.classList.remove('active');
+                            if (deletedSerialDismissTimer) {
+                                clearTimeout(deletedSerialDismissTimer);
+                                deletedSerialDismissTimer = null;
+                            }
+                            refocusOutboundInput();
+                            return;
+                        }
+                        
                         // Check if it matches an existing product in the active outbound session (Bypass)
                         let matchedOutboundProduct = null;
                         if (activeOutboundSession) {
@@ -1036,7 +1046,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
                             } else {
                                 warningModalConfirmInput.value = '';
-                                alert(`Incorrect scan. Please scan Last Session Serial: ${lastSessionSerial}`);
+                                alert(`Incorrect scan. Please scan Last Session Serial: ${lastSessionSerial} or same Detected Serial to Reject.`);
                             }
                         } else if (sequenceStep === 2) {
                             if (val === detectedSerial) {
@@ -2716,7 +2726,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (rejectScanBtn && skuWarningModal) {
         rejectScanBtn.addEventListener('click', () => {
             skuWarningModal.classList.remove('active');
-            
+            if (deletedSerialDismissTimer) {
+                clearTimeout(deletedSerialDismissTimer);
+                deletedSerialDismissTimer = null;
+            }
             // Clear incorrect scan and refocus correct input
             if (activeOutboundSession) {
                 refocusOutboundInput();
@@ -2724,8 +2737,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 unifiedSerialInput.value = '';
                 unifiedSerialInput.focus();
             }
-        });
-    }
+        });    }
 
     if (allowLengthBtn && skuWarningModal) {
         allowLengthBtn.addEventListener('click', () => {
@@ -3219,6 +3231,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!activeOutboundSession) return false;
 
         const cleanSerial = serial.trim();
+        const deletedSerialsList = getDeletedSerials();
+        const foundDeleted = deletedSerialsList.find(x => x.serial === cleanSerial);
+        if (foundDeleted) {
+            if (deletedSerialDismissTimer) {
+                clearTimeout(deletedSerialDismissTimer);
+            }
+            showSkuWarningModal(
+                'Deleted Serial Alert!',
+                `ye number delet ho chuka hai`,
+                'DELETED AT:',
+                foundDeleted.deletedAt || 'N/A',
+                'SCANNED BARCODE:',
+                cleanSerial,
+                false,
+                false
+            );
+            
+            deletedSerialDismissTimer = setTimeout(() => {
+                skuWarningModal.classList.remove('active');
+                deletedSerialDismissTimer = null;
+                if (activeOutboundSession) {
+                    refocusOutboundInput();
+                }
+            }, 5000);
+            return false;
+        }
+
         if (cleanSerial.length > 50) {
             showSkuWarningModal(
                 'Invalid Serial Number!',
@@ -3711,7 +3750,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${itemNames}</td>
                 <td class="font-mono">${totalWeight.toFixed(3)} kg</td>
                 <td class="font-mono" style="font-weight: 700;">${totalPcs}</td>
-                <td class="font-mono" style="font-weight: 700; color: var(--accent-blue);">${totalBoxes}</td>
+                <td class="font-mono">
+                    <button type="button" class="btn-show-outbound-box-details" data-id="${row.id}" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.4); color: var(--accent-blue); padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth);">
+                        ${totalBoxes}
+                    </button>
+                </td>
                 <td>
                     <button type="button" class="btn-download-outbound-excel" data-id="${row.id}" title="Download Outbound Excel" style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: var(--transition-smooth); border-style: solid;">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
@@ -4073,6 +4116,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const outboundHistoryBody = document.getElementById('outboundHistoryBody');
     if (outboundHistoryBody) {
         outboundHistoryBody.addEventListener('click', (e) => {
+            const boxDetailsBtn = e.target.closest('.btn-show-outbound-box-details');
+            if (boxDetailsBtn) {
+                e.stopPropagation();
+                const logId = boxDetailsBtn.getAttribute('data-id');
+                const historyData = getOutboundHistory();
+                const logItem = historyData.find(item => item.id === logId);
+                if (logItem) {
+                    showOutboundFirstSerialsModal(logItem);
+                } else {
+                    alert('Log record not found.');
+                }
+            }
+
             const btn = e.target.closest('.btn-download-outbound-excel');
             if (btn) {
                 e.stopPropagation();
@@ -5492,6 +5548,96 @@ document.addEventListener('DOMContentLoaded', () => {
             db.ref('wms_data/devices/' + devId + '/status').set(status);
         }
     };
+
+    // --- Outbound First Serials Modal Controllers ---
+    const outboundFirstSerialsModal = document.getElementById('outboundFirstSerialsModal');
+    const closeOutboundFirstSerialsModalBtn = document.getElementById('closeOutboundFirstSerialsModalBtn');
+    const closeOutboundFirstSerialsModalFooterBtn = document.getElementById('closeOutboundFirstSerialsModalFooterBtn');
+
+    function showOutboundFirstSerialsModal(row) {
+        const body = document.getElementById('outboundFirstSerialsModalBody');
+        if (!outboundFirstSerialsModal || !body) return;
+
+        body.innerHTML = '';
+
+        if (!row || !row.serials || row.serials.length === 0) {
+            body.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px;">No serials found for this dispatch session.</div>`;
+            outboundFirstSerialsModal.classList.add('active');
+            return;
+        }
+
+        // Group serials by itemName, and find the first serial for each boxNo
+        const grouped = {};
+        row.serials.forEach(s => {
+            if (!s || !s.itemName || s.boxNo === undefined || s.boxNo === null) return;
+            const pName = s.itemName;
+            const box = parseInt(s.boxNo);
+            if (!grouped[pName]) {
+                grouped[pName] = {};
+            }
+            if (grouped[pName][box] === undefined) {
+                grouped[pName][box] = s.serial;
+            }
+        });
+
+        // Build HTML
+        Object.keys(grouped).forEach(pName => {
+            const productHeader = document.createElement('div');
+            productHeader.style.margin = '8px 0 4px 0';
+            productHeader.innerHTML = `
+                <h4 style="margin: 12px 0 6px 0; color: var(--accent-blue); font-size: 0.95rem; font-weight: 700; border-left: 3px solid var(--accent-blue); padding-left: 8px; text-transform: uppercase; letter-spacing: 0.03em;">
+                    ${pName}
+                </h4>
+            `;
+            body.appendChild(productHeader);
+
+            const grid = document.createElement('div');
+            grid.style.display = 'grid';
+            grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(220px, 1fr))';
+            grid.style.gap = '8px';
+            grid.style.marginBottom = '16px';
+
+            const boxMap = grouped[pName];
+            // Sort boxes numerically
+            const sortedBoxes = Object.keys(boxMap).map(Number).sort((a, b) => a - b);
+
+            sortedBoxes.forEach(box => {
+                const card = document.createElement('div');
+                card.style.background = 'rgba(255, 255, 255, 0.02)';
+                card.style.border = '1px solid var(--border-color)';
+                card.style.padding = '8px 12px';
+                card.style.borderRadius = 'var(--radius-sm)';
+                card.style.display = 'flex';
+                card.style.justifyContent = 'space-between';
+                card.style.alignItems = 'center';
+                card.style.fontSize = '0.85rem';
+                card.style.fontFamily = 'var(--font-mono)';
+
+                card.innerHTML = `
+                    <span style="color: var(--text-muted); font-weight: 600;">Box ${box}:</span>
+                    <span style="color: var(--text-primary); font-weight: 700; word-break: break-all;">${boxMap[box]}</span>
+                `;
+                grid.appendChild(card);
+            });
+
+            body.appendChild(grid);
+        });
+
+        outboundFirstSerialsModal.classList.add('active');
+    }
+
+    function closeOutboundFirstSerialsModal() {
+        if (outboundFirstSerialsModal) {
+            outboundFirstSerialsModal.classList.remove('active');
+        }
+    }
+
+    if (closeOutboundFirstSerialsModalBtn) {
+        closeOutboundFirstSerialsModalBtn.addEventListener('click', closeOutboundFirstSerialsModal);
+    }
+    if (closeOutboundFirstSerialsModalFooterBtn) {
+        closeOutboundFirstSerialsModalFooterBtn.addEventListener('click', closeOutboundFirstSerialsModal);
+    }
 
     // Initial load: Restore states on page load/reload
     restoreSessionState();
