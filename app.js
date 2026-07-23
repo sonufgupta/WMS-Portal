@@ -1029,39 +1029,18 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                         
-                        // 3. Bypass check (if they scan another valid serial of an existing product in the session)
-                        let matchedOutboundProduct = null;
-                        if (activeOutboundSession) {
-                            let testProduct = lookupProductBySerial(val);
-                            if (!testProduct) {
-                                testProduct = lookupProductBySkuPattern(val);
-                            }
-                            if (testProduct && activeOutboundSession.items.some(i => i.name === testProduct)) {
-                                matchedOutboundProduct = testProduct;
-                            }
-                        }
-                        
-                        if (matchedOutboundProduct) {
-                            // Close popup and process scan immediately
-                            skuWarningModal.classList.remove('active');
-                            warningModalConfirmInput.onkeydown = null;
-                            if (outboundSequenceToggle && outboundSequenceToggle.checked) {
-                                generateOutboundSequenceSerials(val, 5);
-                            } else {
-                                addOutboundSerialToSession(val);
-                            }
-                            return;
-                        }
-
-                        // 4. Incorrect scan alerts for sequence steps
+                        // 3. Incorrect scan alerts for sequence steps (non-blocking)
                         if (sequenceStep === 1) {
                             warningModalConfirmInput.value = '';
-                            alert(`Incorrect scan. Please scan Last Session Serial: ${lastSessionSerial} or same Detected Serial to Reject.`);
+                            if (guidanceLabel) {
+                                guidanceLabel.innerHTML = `To confirm add, scan <strong>Last Session Serial (${lastSessionSerial})</strong> first:<br><span style="color: var(--accent-rose); font-size: 0.8rem; font-weight: 700; display: block; margin-top: 4px;">Incorrect scan! Please scan Last Session Serial or same Detected Serial to Reject.</span>`;
+                            }
                         } else if (sequenceStep === 2) {
                             warningModalConfirmInput.value = '';
-                            alert(`Incorrect scan. Please scan Detected Serial: ${detectedSerial}`);
-                        }
-                    }
+                            if (guidanceLabel) {
+                                guidanceLabel.innerHTML = `<span style="color: var(--accent-emerald); font-weight: 700;">Step 1 Confirmed!</span> Now scan <strong>Detected Serial (${detectedSerial})</strong> to complete:<br><span style="color: var(--accent-rose); font-size: 0.8rem; font-weight: 700; display: block; margin-top: 4px;">Incorrect scan! Please scan Detected Serial.</span>`;
+                            }
+                        }                    }
                 };
             }
         }
