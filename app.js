@@ -460,13 +460,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 3. Responsive Menu Toggle for Mobile Views
+    // 3. Responsive & Collapse Menu Toggle
     const menuToggleButton = document.getElementById('menuToggleButton');
     const appSidebar = document.getElementById('appSidebar');
+    const btnCollapseSidebar = document.getElementById('btnCollapseSidebar');
 
     if (menuToggleButton && appSidebar) {
         menuToggleButton.addEventListener('click', () => {
-            appSidebar.classList.toggle('active');
+            const appContainer = document.querySelector('.app-container');
+            if (appContainer && appContainer.classList.contains('sidebar-collapsed')) {
+                appContainer.classList.remove('sidebar-collapsed');
+            } else {
+                appSidebar.classList.toggle('active');
+            }
         });
 
         // Close sidebar if user clicks outside on mobile view
@@ -475,6 +481,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!appSidebar.contains(e.target) && !menuToggleButton.contains(e.target)) {
                     appSidebar.classList.remove('active');
                 }
+            }
+        });
+    }
+
+    if (btnCollapseSidebar && appSidebar) {
+        btnCollapseSidebar.addEventListener('click', () => {
+            const appContainer = document.querySelector('.app-container');
+            if (window.innerWidth <= 768) {
+                appSidebar.classList.remove('active');
+            } else if (appContainer) {
+                appContainer.classList.add('sidebar-collapsed');
             }
         });
     }
