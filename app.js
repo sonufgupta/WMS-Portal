@@ -5537,76 +5537,238 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeOutboundFirstSerialsModalBtn = document.getElementById('closeOutboundFirstSerialsModalBtn');
     const closeOutboundFirstSerialsModalFooterBtn = document.getElementById('closeOutboundFirstSerialsModalFooterBtn');
 
-    function showOutboundFirstSerialsModal(row) {
+    let firstSerialsViewMode = 'list'; // 'list' or 'barcode'
+    let currentOutboundHistoryRow = null;
+
+    function renderFirstSerialsModalContent() {
         const body = document.getElementById('outboundFirstSerialsModalBody');
-        if (!outboundFirstSerialsModal || !body) return;
+        const toggleBtnText = document.getElementById('btnToggleFirstSerialsViewText');
+        if (!outboundFirstSerialsModal || !body || !currentOutboundHistoryRow) return;
 
         body.innerHTML = '';
+        const row = currentOutboundHistoryRow;
 
-        if (!row || !row.serials || row.serials.length === 0) {
+        if (!row.serials || row.serials.length === 0) {
             body.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px;">No serials found for this dispatch session.</div>`;
-            outboundFirstSerialsModal.classList.add('active');
             return;
         }
 
-        // Group serials by itemName, and find the first serial for each boxNo
-        const grouped = {};
-        row.serials.forEach(s => {
-            if (!s || !s.itemName || s.boxNo === undefined || s.boxNo === null) return;
-            const pName = s.itemName;
-            const box = parseInt(s.boxNo);
-            if (!grouped[pName]) {
-                grouped[pName] = {};
-            }
-            if (grouped[pName][box] === undefined) {
-                grouped[pName][box] = s.serial;
-            }
-        });
+        // Configure toggle button display
+        if (toggleBtnText) {
+            toggleBtnText.textContent = firstSerialsViewMode === 'list' ? 'Barcode View' : 'Box List View';
+        }
 
-        // Build HTML
-        Object.keys(grouped).forEach(pName => {
-            const productHeader = document.createElement('div');
-            productHeader.style.margin = '8px 0 4px 0';
-            productHeader.innerHTML = `
-                <h4 style="margin: 12px 0 6px 0; color: var(--accent-blue); font-size: 0.95rem; font-weight: 700; border-left: 3px solid var(--accent-blue); padding-left: 8px; text-transform: uppercase; letter-spacing: 0.03em;">
-                    ${pName}
-                </h4>
-            `;
-            body.appendChild(productHeader);
-
-            const grid = document.createElement('div');
-            grid.style.display = 'grid';
-            grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(220px, 1fr))';
-            grid.style.gap = '8px';
-            grid.style.marginBottom = '16px';
-
-            const boxMap = grouped[pName];
-            // Sort boxes numerically
-            const sortedBoxes = Object.keys(boxMap).map(Number).sort((a, b) => a - b);
-
-            sortedBoxes.forEach(box => {
-                const card = document.createElement('div');
-                card.style.background = 'rgba(255, 255, 255, 0.02)';
-                card.style.border = '1px solid var(--border-color)';
-                card.style.padding = '8px 12px';
-                card.style.borderRadius = 'var(--radius-sm)';
-                card.style.display = 'flex';
-                card.style.justifyContent = 'space-between';
-                card.style.alignItems = 'center';
-                card.style.fontSize = '0.85rem';
-                card.style.fontFamily = 'var(--font-mono)';
-
-                card.innerHTML = `
-                    <span style="color: var(--text-muted); font-weight: 600;">Box ${box}:</span>
-                    <span style="color: var(--text-primary); font-weight: 700; word-break: break-all;">${boxMap[box]}</span>
-                `;
-                grid.appendChild(card);
+        if (firstSerialsViewMode === 'list') {
+            // Group serials by itemName, and find the first serial for each boxNo
+            const grouped = {};
+            row.serials.forEach(s => {
+                if (!s || !s.itemName || s.boxNo === undefined || s.boxNo === null) return;
+                const pName = s.itemName;
+                const box = parseInt(s.boxNo);
+                if (!grouped[pName]) {
+                    grouped[pName] = {};
+                }
+                if (grouped[pName][box] === undefined) {
+                    grouped[pName][box] = s.serial;
+                }
             });
 
-            body.appendChild(grid);
-        });
+            // Build HTML
+            Object.keys(grouped).forEach(pName => {
+                const productHeader = document.createElement('div');
+                productHeader.style.margin = '8px 0 4px 0';
+                productHeader.innerHTML = `
+                    <h4 style="margin: 12px 0 6px 0; color: var(--accent-blue); font-size: 0.95rem; font-weight: 700; border-left: 3px solid var(--accent-blue); padding-left: 8px; text-transform: uppercase; letter-spacing: 0.03em;">
+                        ${pName}
+                    </h4>
+                `;
+                body.appendChild(productHeader);
 
-        outboundFirstSerialsModal.classList.add('active');
+                const grid = document.createElement('div');
+                grid.style.display = 'grid';
+                grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(220px, 1fr))';
+                grid.style.gap = '8px';
+                grid.style.marginBottom = '16px';
+
+                const boxMap = grouped[pName];
+                // Sort boxes numerically
+                const sortedBoxes = Object.keys(boxMap).map(Number).sort((a, b) => a - b);
+
+                sortedBoxes.forEach(box => {
+                    const card = document.createElement('div');
+                    card.style.background = 'rgba(255, 255, 255, 0.02)';
+                    card.style.border = '1px solid var(--border-color)';
+                    card.style.padding = '8px 12px';
+                    card.style.borderRadius = 'var(--radius-sm)';
+                    card.style.display = 'flex';
+                    card.style.justifyContent = 'space-between';
+                    card.style.alignItems = 'center';
+                    card.style.fontSize = '0.85rem';
+                    card.style.fontFamily = 'var(--font-mono)';
+
+                    card.innerHTML = `
+                        <span style="color: var(--text-muted); font-weight: 600;">Box ${box}:</span>
+                        <span style="color: var(--text-primary); font-weight: 700; word-break: break-all;">${boxMap[box]}</span>
+                    `;
+                    grid.appendChild(card);
+                });
+
+                body.appendChild(grid);
+            });
+        } else {
+            // Mode is 'barcode': Group serials by product, then sort numerically and group sequences!
+            const barcodeTasks = [];
+            const productNames = Array.from(new Set(row.serials.map(s => s.itemName).filter(Boolean)));
+            
+            productNames.forEach((pName, pIdx) => {
+                const productHeader = document.createElement('div');
+                productHeader.style.margin = '8px 0 4px 0';
+                productHeader.innerHTML = `
+                    <h4 style="margin: 12px 0 6px 0; color: var(--accent-blue); font-size: 0.95rem; font-weight: 700; border-left: 3px solid var(--accent-blue); padding-left: 8px; text-transform: uppercase; letter-spacing: 0.03em;">
+                        ${pName}
+                    </h4>
+                `;
+                body.appendChild(productHeader);
+
+                const container = document.createElement('div');
+                container.style.display = 'flex';
+                container.style.flexDirection = 'column';
+                container.style.gap = '12px';
+                container.style.marginBottom = '20px';
+
+                // Filter serials for this product
+                const productSerials = row.serials.filter(s => s.itemName === pName);
+
+                // Group by prefix to support mixed model serial formats
+                const prefixGroups = {};
+                productSerials.forEach(s => {
+                    const match = s.serial.match(/^(.*?)(\d+)$/);
+                    let prefix = s.serial;
+                    let numVal = 0;
+                    if (match) {
+                        prefix = match[1];
+                        numVal = parseInt(match[2], 10);
+                    }
+                    if (!prefixGroups[prefix]) {
+                        prefixGroups[prefix] = [];
+                    }
+                    prefixGroups[prefix].push({ num: numVal, serial: s.serial, boxNo: s.boxNo });
+                });
+
+                // For each prefix, sort and find consecutive sequences
+                Object.keys(prefixGroups).forEach((prefix, prefIdx) => {
+                    const items = prefixGroups[prefix];
+                    items.sort((a, b) => a.num - b.num);
+
+                    const sequences = [];
+                    let currentSeq = null;
+
+                    items.forEach(item => {
+                        if (!currentSeq) {
+                            currentSeq = {
+                                startSerial: item.serial,
+                                startNum: item.num,
+                                count: 1,
+                                startBox: item.boxNo,
+                                endBox: item.boxNo
+                            };
+                        } else {
+                            if (item.num === currentSeq.startNum + currentSeq.count) {
+                                currentSeq.count++;
+                                currentSeq.endBox = item.boxNo;
+                            } else {
+                                sequences.push(currentSeq);
+                                currentSeq = {
+                                    startSerial: item.serial,
+                                    startNum: item.num,
+                                    count: 1,
+                                    startBox: item.boxNo,
+                                    endBox: item.boxNo
+                                };
+                            }
+                        }
+                    });
+                    if (currentSeq) {
+                        sequences.push(currentSeq);
+                    }
+
+                    // Render sequence elements
+                    sequences.forEach((seq, seqIdx) => {
+                        const uniqueId = `bc_${pIdx}_${prefIdx}_${seqIdx}`;
+                        const card = document.createElement('div');
+                        card.style.background = 'rgba(255, 255, 255, 0.02)';
+                        card.style.border = '1px solid var(--border-color)';
+                        card.style.padding = '12px 16px';
+                        card.style.borderRadius = 'var(--radius-md)';
+                        card.style.display = 'flex';
+                        card.style.flexDirection = 'column';
+                        card.style.gap = '8px';
+
+                        // Display range text
+                        const boxText = seq.startBox === seq.endBox ? `Box ${seq.startBox}` : `Boxes ${seq.startBox} - ${seq.endBox}`;
+                        const countText = seq.count > 1 ? `+ ${seq.count - 1} PCs` : `1 PC`;
+                        
+                        card.innerHTML = `
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                    <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); font-family: var(--font-mono); word-break: break-all;">
+                                        ${seq.startSerial}
+                                    </div>
+                                    <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;">
+                                        ${boxText}
+                                    </div>
+                                </div>
+                                <div style="text-align: right; min-width: 120px;">
+                                    <span style="font-size: 0.85rem; font-weight: 700; background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); padding: 4px 8px; border-radius: 4px; display: inline-block;">
+                                        ${countText}
+                                    </span>
+                                    <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; font-weight: 600;">
+                                        Total: ${seq.count} PCs
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: center; background: white; padding: 12px; border-radius: var(--radius-sm); margin-top: 4px;">
+                                <svg id="${uniqueId}"></svg>
+                            </div>
+                        `;
+                        container.appendChild(card);
+                        barcodeTasks.push({ id: uniqueId, text: seq.startSerial });
+                    });
+                });
+
+                body.appendChild(container);
+            });
+
+            // Initialize barcodes using JsBarcode
+            if (window.JsBarcode) {
+                barcodeTasks.forEach(task => {
+                    try {
+                        JsBarcode(`#${task.id}`, task.text, {
+                            format: "CODE128",
+                            width: 1.5,
+                            height: 45,
+                            displayValue: false,
+                            margin: 0
+                        });
+                    } catch (err) {
+                        console.error("Failed to render barcode for serial: ", task.text, err);
+                    }
+                });
+            } else {
+                console.error("JsBarcode library is not loaded.");
+            }
+        }
+    }
+
+    function showOutboundFirstSerialsModal(row) {
+        currentOutboundHistoryRow = row;
+        firstSerialsViewMode = 'list'; // Reset view mode to default List view when opened
+        
+        renderFirstSerialsModalContent();
+        
+        if (outboundFirstSerialsModal) {
+            outboundFirstSerialsModal.classList.add('active');
+        }
     }
 
     function closeOutboundFirstSerialsModal() {
@@ -5620,6 +5782,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (closeOutboundFirstSerialsModalFooterBtn) {
         closeOutboundFirstSerialsModalFooterBtn.addEventListener('click', closeOutboundFirstSerialsModal);
+    }
+
+    const btnToggleFirstSerialsView = document.getElementById('btnToggleFirstSerialsView');
+    if (btnToggleFirstSerialsView) {
+        btnToggleFirstSerialsView.addEventListener('click', () => {
+            firstSerialsViewMode = firstSerialsViewMode === 'list' ? 'barcode' : 'list';
+            renderFirstSerialsModalContent();
+        });
     }
 
     // Initial load: Restore states on page load/reload
