@@ -5539,6 +5539,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let firstSerialsViewMode = 'list'; // 'list' or 'barcode'
     let currentOutboundHistoryRow = null;
+    let archivedSequenceKeys = new Set();
+
+    // Inject custom animation styles for barcode pulsing border
+    if (!document.getElementById('barcode-animation-style')) {
+        const style = document.createElement('style');
+        style.id = 'barcode-animation-style';
+        style.textContent = `
+            @keyframes barcodeGlowPulse {
+                0% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.3); }
+                50% { box-shadow: 0 0 16px rgba(59, 130, 246, 0.6); border-color: var(--accent-blue); }
+                100% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.3); }
+            }
+            .active-barcode-card {
+                animation: barcodeGlowPulse 1.8s infinite ease-in-out;
+                border: 1.5px solid var(--accent-blue) !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
 
     function renderFirstSerialsModalContent() {
         const body = document.getElementById('outboundFirstSerialsModalBody');
@@ -5616,27 +5635,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 body.appendChild(grid);
             });
         } else {
-            // Mode is 'barcode': Group serials by product, then sort numerically and group sequences!
-            const barcodeTasks = [];
+            // Mode is 'barcode': Gather and group all sequences flats
+            const allSequences = [];
             const productNames = Array.from(new Set(row.serials.map(s => s.itemName).filter(Boolean)));
             
             productNames.forEach((pName, pIdx) => {
-                const productHeader = document.createElement('div');
-                productHeader.style.margin = '8px 0 4px 0';
-                productHeader.innerHTML = `
-                    <h4 style="margin: 12px 0 6px 0; color: var(--accent-blue); font-size: 0.95rem; font-weight: 700; border-left: 3px solid var(--accent-blue); padding-left: 8px; text-transform: uppercase; letter-spacing: 0.03em;">
-                        ${pName}
-                    </h4>
-                `;
-                body.appendChild(productHeader);
-
-                const container = document.createElement('div');
-                container.style.display = 'flex';
-                container.style.flexDirection = 'column';
-                container.style.gap = '12px';
-                container.style.marginBottom = '20px';
-
-                // Filter serials for this product
                 const productSerials = row.serials.filter(s => s.itemName === pName);
 
                 // Group by prefix to support mixed model serial formats
@@ -5660,9 +5663,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const items = prefixGroups[prefix];
                     items.sort((a, b) => a.num - b.num);
 
-                    const sequences = [];
                     let currentSeq = null;
-
                     items.forEach(item => {
                         if (!currentSeq) {
                             currentSeq = {
@@ -5677,7 +5678,15 @@ document.addEventListener('DOMContentLoaded', () => {
                                 currentSeq.count++;
                                 currentSeq.endBox = item.boxNo;
                             } else {
-                                sequences.push(currentSeq);
+                                allSequences.push({
+                                    key: `${pIdx}_${prefIdx}_${allSequences.length}`,
+                                    pName: pName,
+                                    startSerial: currentSeq.startSerial,
+                                    startNum: currentSeq.startNum,
+                                    count: currentSeq.count,
+                                    startBox: currentSeq.startBox,
+                                    endBox: currentSeq.endBox
+                                });
                                 currentSeq = {
                                     startSerial: item.serial,
                                     startNum: item.num,
@@ -5689,73 +5698,107 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
                     if (currentSeq) {
-                        sequences.push(currentSeq);
+                        allSequences.push({
+                            key: `${pIdx}_${prefIdx}_${allSequences.length}`,
+                            pName: pName,
+                            startSerial: currentSeq.startSerial,
+                            startNum: currentSeq.startNum,
+                            count: currentSeq.count,
+                            startBox: currentSeq.startBox,
+                            endBox: currentSeq.endBox
+                        });
                     }
-
-                    // Render sequence elements
-                    sequences.forEach((seq, seqIdx) => {
-                        const uniqueId = `bc_${pIdx}_${prefIdx}_${seqIdx}`;
-                        const card = document.createElement('div');
-                        card.style.background = 'rgba(255, 255, 255, 0.02)';
-                        card.style.border = '1px solid var(--border-color)';
-                        card.style.padding = '12px 16px';
-                        card.style.borderRadius = 'var(--radius-md)';
-                        card.style.display = 'flex';
-                        card.style.flexDirection = 'column';
-                        card.style.gap = '8px';
-
-                        // Display range text
-                        const boxText = seq.startBox === seq.endBox ? `Box ${seq.startBox}` : `Boxes ${seq.startBox} - ${seq.endBox}`;
-                        const countText = seq.count > 1 ? `+ ${seq.count - 1} PCs` : `1 PC`;
-                        
-                        card.innerHTML = `
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
-                                <div style="display: flex; flex-direction: column; gap: 4px;">
-                                    <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); font-family: var(--font-mono); word-break: break-all;">
-                                        ${seq.startSerial}
-                                    </div>
-                                    <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;">
-                                        ${boxText}
-                                    </div>
-                                </div>
-                                <div style="text-align: right; min-width: 120px;">
-                                    <span style="font-size: 0.85rem; font-weight: 700; background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); padding: 4px 8px; border-radius: 4px; display: inline-block;">
-                                        ${countText}
-                                    </span>
-                                    <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; font-weight: 600;">
-                                        Total: ${seq.count} PCs
-                                    </div>
-                                </div>
-                            </div>
-                            <div style="display: flex; justify-content: center; background: white; padding: 12px; border-radius: var(--radius-sm); margin-top: 4px;">
-                                <svg id="${uniqueId}"></svg>
-                            </div>
-                        `;
-                        container.appendChild(card);
-                        barcodeTasks.push({ id: uniqueId, text: seq.startSerial });
-                    });
                 });
-
-                body.appendChild(container);
             });
 
-            // Initialize barcodes using JsBarcode
-            if (window.JsBarcode) {
-                barcodeTasks.forEach(task => {
+            // Filter unarchived sequences
+            const unarchived = allSequences.filter(seq => !archivedSequenceKeys.has(seq.key));
+
+            if (unarchived.length > 0) {
+                // Show ONLY the first unarchived sequence
+                const seq = unarchived[0];
+                const currentIndex = allSequences.length - unarchived.length + 1;
+
+                // Render active sequence details with blinking pulse border
+                const card = document.createElement('div');
+                card.className = 'active-barcode-card';
+                card.style.background = 'rgba(255, 255, 255, 0.02)';
+                card.style.padding = '20px';
+                card.style.borderRadius = 'var(--radius-md)';
+                card.style.display = 'flex';
+                card.style.flexDirection = 'column';
+                card.style.gap = '14px';
+                card.style.transition = 'all 0.3s ease';
+
+                // Display range text and large total count
+                const boxText = seq.startBox === seq.endBox ? `Box ${seq.startBox}` : `Boxes ${seq.startBox} - ${seq.endBox}`;
+                
+                card.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <span style="font-size: 0.72rem; color: var(--accent-blue); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">
+                                ${seq.pName}
+                            </span>
+                            <div style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary); font-family: var(--font-mono); word-break: break-all; margin-top: 4px;">
+                                ${seq.startSerial}
+                            </div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-top: 2px;">
+                                ${boxText} &bull; <span style="color: var(--accent-emerald);">Barcode ${currentIndex} of ${allSequences.length}</span>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 2.2rem; font-weight: 900; color: var(--accent-blue); line-height: 1;">
+                                ${seq.count}
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px;">
+                                Total PCs
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: center; background: white; padding: 16px; border-radius: var(--radius-sm); margin: 4px 0;">
+                        <svg id="activeBarcodeSvg"></svg>
+                    </div>
+
+                    <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="width: 100%; padding: 14px; background: var(--accent-blue); border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                        Archive Barcode
+                    </button>
+                `;
+                body.appendChild(card);
+
+                // Render vector barcode
+                if (window.JsBarcode) {
                     try {
-                        JsBarcode(`#${task.id}`, task.text, {
+                        JsBarcode("#activeBarcodeSvg", seq.startSerial, {
                             format: "CODE128",
-                            width: 1.5,
-                            height: 45,
+                            width: 1.8,
+                            height: 60,
                             displayValue: false,
                             margin: 0
                         });
                     } catch (err) {
-                        console.error("Failed to render barcode for serial: ", task.text, err);
+                        console.error("JsBarcode failed for serial: ", seq.startSerial, err);
                     }
-                });
+                }
             } else {
-                console.error("JsBarcode library is not loaded.");
+                // Show completion card
+                body.innerHTML = `
+                    <div style="text-align: center; padding: 36px 16px; background: rgba(16, 185, 129, 0.03); border: 1px solid rgba(16, 185, 129, 0.15); border-radius: var(--radius-md); display: flex; flex-direction: column; align-items: center; gap: 12px;">
+                        <div style="font-size: 3.2rem; line-height: 1;">🎉</div>
+                        <h4 style="margin: 0; color: var(--accent-emerald); font-weight: 800; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 8px;">
+                            All Barcodes Archived!
+                        </h4>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0; line-height: 1.4; max-width: 320px;">
+                            You have successfully archived all sequence barcode cards for this dispatch session.
+                        </p>
+                        <button type="button" id="btnResetBarcodeArchives" style="background: rgba(59, 130, 246, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 10px 20px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth); margin-top: 8px;">
+                            Reset & View All
+                        </button>
+                    </div>
+                `;
             }
         }
     }
@@ -5763,6 +5806,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function showOutboundFirstSerialsModal(row) {
         currentOutboundHistoryRow = row;
         firstSerialsViewMode = 'list'; // Reset view mode to default List view when opened
+        archivedSequenceKeys.clear(); // Clear any cached archives
         
         renderFirstSerialsModalContent();
         
@@ -5789,6 +5833,26 @@ document.addEventListener('DOMContentLoaded', () => {
         btnToggleFirstSerialsView.addEventListener('click', () => {
             firstSerialsViewMode = firstSerialsViewMode === 'list' ? 'barcode' : 'list';
             renderFirstSerialsModalContent();
+        });
+    }
+
+    const outboundFirstSerialsModalBody = document.getElementById('outboundFirstSerialsModalBody');
+    if (outboundFirstSerialsModalBody) {
+        outboundFirstSerialsModalBody.addEventListener('click', (e) => {
+            const archiveBtn = e.target.closest('.btn-archive-seq-barcode');
+            if (archiveBtn) {
+                const key = archiveBtn.getAttribute('data-key');
+                archivedSequenceKeys.add(key);
+                renderFirstSerialsModalContent();
+                return;
+            }
+            
+            const resetBtn = e.target.closest('#btnResetBarcodeArchives');
+            if (resetBtn) {
+                archivedSequenceKeys.clear();
+                renderFirstSerialsModalContent();
+                return;
+            }
         });
     }
 
