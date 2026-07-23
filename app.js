@@ -997,9 +997,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         const val = warningModalConfirmInput.value.trim();
                         if (!val) return;
                         
-                        // Check for reject scan gesture (scanning the same detected serial while in Step 1)
+                        // 1. Check for reject scan gesture (scanning the same detected serial while in Step 1)
                         if (sequenceStep === 1 && val === detectedSerial) {
-                            // Reject scan
                             skuWarningModal.classList.remove('active');
                             if (deletedSerialDismissTimer) {
                                 clearTimeout(deletedSerialDismissTimer);
@@ -1008,8 +1007,29 @@ document.addEventListener('DOMContentLoaded', () => {
                             refocusOutboundInput();
                             return;
                         }
+
+                        // 2. Sequence verification (Step 1 or Step 2)
+                        if (sequenceStep === 1) {
+                            if (val === lastSessionSerial) {
+                                sequenceStep = 2;
+                                warningModalConfirmInput.value = '';
+                                if (guidanceLabel) {
+                                    guidanceLabel.innerHTML = `<span style="color: var(--accent-emerald); font-weight: 700;">Step 1 Confirmed!</span> Now scan <strong>Detected Serial (${detectedSerial})</strong> to complete:`;
+                                }
+                                if (warningDescText) {
+                                    warningDescText.innerHTML += `<br><strong style="color: var(--accent-emerald); display: block; margin-top: 10px;">Step 1 Verified! Please scan detected serial next...</strong>`;
+                                }
+                                return;
+                            }
+                        } else if (sequenceStep === 2) {
+                            if (val === detectedSerial) {
+                                // Add product!
+                                if (warningAddProductBtn) warningAddProductBtn.click();
+                                return;
+                            }
+                        }
                         
-                        // Check if it matches an existing product in the active outbound session (Bypass)
+                        // 3. Bypass check (if they scan another valid serial of an existing product in the session)
                         let matchedOutboundProduct = null;
                         if (activeOutboundSession) {
                             let testProduct = lookupProductBySerial(val);
@@ -1033,29 +1053,13 @@ document.addEventListener('DOMContentLoaded', () => {
                             return;
                         }
 
-                        // Sequence verification
+                        // 4. Incorrect scan alerts for sequence steps
                         if (sequenceStep === 1) {
-                            if (val === lastSessionSerial) {
-                                sequenceStep = 2;
-                                warningModalConfirmInput.value = '';
-                                if (guidanceLabel) {
-                                    guidanceLabel.innerHTML = `<span style="color: var(--accent-emerald); font-weight: 700;">Step 1 Confirmed!</span> Now scan <strong>Detected Serial (${detectedSerial})</strong> to complete:`;
-                                }
-                                if (warningDescText) {
-                                    warningDescText.innerHTML += `<br><strong style="color: var(--accent-emerald); display: block; margin-top: 10px;">Step 1 Verified! Please scan detected serial next...</strong>`;
-                                }
-                            } else {
-                                warningModalConfirmInput.value = '';
-                                alert(`Incorrect scan. Please scan Last Session Serial: ${lastSessionSerial} or same Detected Serial to Reject.`);
-                            }
+                            warningModalConfirmInput.value = '';
+                            alert(`Incorrect scan. Please scan Last Session Serial: ${lastSessionSerial} or same Detected Serial to Reject.`);
                         } else if (sequenceStep === 2) {
-                            if (val === detectedSerial) {
-                                // Add product!
-                                if (warningAddProductBtn) warningAddProductBtn.click();
-                            } else {
-                                warningModalConfirmInput.value = '';
-                                alert(`Incorrect scan. Please scan Detected Serial: ${detectedSerial}`);
-                            }
+                            warningModalConfirmInput.value = '';
+                            alert(`Incorrect scan. Please scan Detected Serial: ${detectedSerial}`);
                         }
                     }
                 };
