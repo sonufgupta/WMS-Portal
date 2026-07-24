@@ -3,6 +3,18 @@
  * Basic structure controls (clock, sidebar, navigation, theme toggle)
  */
 
+function extractAlphabetPattern(serial) {
+    const pattern = {};
+    for (let i = 0; i < serial.length; i++) {
+        const char = serial[i];
+        // Check if it is a letter (A-Z, a-z)
+        if (/[a-zA-Z]/.test(char)) {
+            pattern[i] = char.toUpperCase();
+        }
+    }
+    return pattern;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // Cache upgrade check for mock data
     const existingHist = localStorage.getItem('wms_inbound_history');
@@ -645,18 +657,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Auto-SKU Alphabet Pattern Extraction and Matching Helpers ---
-    function extractAlphabetPattern(serial) {
-        const pattern = {};
-        for (let i = 0; i < serial.length; i++) {
-            const char = serial[i];
-            // Check if it is a letter (A-Z, a-z)
-            if (/[a-zA-Z]/.test(char)) {
-                pattern[i] = char.toUpperCase();
-            }
-        }
-        return pattern;
-    }
-
     function matchesAlphabetPattern(serial, pattern) {
         if (!pattern) return false;
         for (const index in pattern) {
@@ -5921,3 +5921,10 @@ document.addEventListener('DOMContentLoaded', () => {
     populateMisProductsDropdown();
     checkDeviceApprovalStatus();
 });
+
+// Export for Node.js environments (tests)
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        extractAlphabetPattern
+    };
+}
