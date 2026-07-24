@@ -1070,10 +1070,17 @@ document.addEventListener('DOMContentLoaded', () => {
         firebaseSet('inbound_history', historyData);
     }
 
+    let _cachedHistoryStr = null;
+    let _cachedHistoryObj = null;
     function getHistory() {
         const saved = localStorage.getItem('wms_inbound_history');
         if (saved) {
-            return JSON.parse(saved);
+            if (saved === _cachedHistoryStr) {
+                return _cachedHistoryObj;
+            }
+            _cachedHistoryStr = saved;
+            _cachedHistoryObj = JSON.parse(saved);
+            return _cachedHistoryObj;
         }
         return [];
     }
