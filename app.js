@@ -321,7 +321,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 2. Map inbound arrivals and box counts with FIFO weights
             const productStock = {};
-            const weights = getProductWeights();
             const remainingOutbound = {};
             Object.keys(outboundCountsByProduct).forEach(key => {
                 remainingOutbound[key] = outboundCountsByProduct[key];
