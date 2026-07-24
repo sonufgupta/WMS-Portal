@@ -3982,6 +3982,143 @@ document.addEventListener('DOMContentLoaded', () => {
 
     }
 
+    function createOutboundSerialListItem(s, item) {
+        const li = document.createElement('li');
+        li.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 4px; font-size:0.85rem; font-family:var(--font-mono); border: 1px solid rgba(255,255,255,0.04);';
+
+        const displayVal = s.serial.startsWith('WOS-OUT-')
+            ? `<span style="color: var(--accent-amber); font-weight: 700; font-style: italic; font-family: var(--font-sans);">[Non-Serial Item]</span>`
+            : s.serial;
+
+        li.innerHTML = `
+            <span style="color:var(--text-secondary); word-break:break-all;">${displayVal}</span>
+            <button type="button" class="btn-outbound-delete-serial" data-serial="${s.serial}" title="Remove Serial" style="background:none; border:none; color:var(--text-muted); cursor:pointer; padding:2px; display:flex; align-items:center; justify-content:center; transition: var(--transition-smooth); border-radius:4px;">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:14px; height:14px;">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+            </button>
+        `;
+
+        const delBtn = li.querySelector('.btn-outbound-delete-serial');
+        if (delBtn) {
+            delBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm(`Remove serial "${s.serial}" from this outbound session?`)) {
+                    activeOutboundSession.serials = activeOutboundSession.serials.filter(x => x.serial !== s.serial);
+
+                    const remainingForProduct = activeOutboundSession.serials.some(x => x.itemName === item.name);
+                    if (!remainingForProduct) {
+                        activeOutboundSession.items = activeOutboundSession.items.filter(x => x.name !== item.name);
+                    }
+
+                    compactOutboundBoxNumbers();
+                    saveActiveOutboundSession();
+                    updateOutboundSessionProgress();
+                    renderOutboundBoxCards();
+                }
+            });
+        }
+        return li;
+    }
+
+    function createOutboundBoxCard(boxNo, boxItems, item) {
+        const boxCard = document.createElement('div');
+        boxCard.className = 'box-card';
+        boxCard.style.cssText = 'margin-bottom: 0;';
+
+        boxCard.innerHTML = `
+            <div class="box-card-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px; margin-bottom: 8px;">
+                <span class="box-number-badge" style="font-size: 0.8rem; font-weight:700; color: var(--accent-blue);">Box #${boxNo}</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted);" class="font-mono">${boxItems.length} Pcs</span>
+            </div>
+        `;
+
+        const serialsUl = document.createElement('ul');
+        serialsUl.style.cssText = 'list-style: none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px;';
+
+        boxItems.forEach(s => {
+            const li = createOutboundSerialListItem(s, item);
+            serialsUl.appendChild(li);
+        });
+        boxCard.appendChild(serialsUl);
+        return boxCard;
+    }
+
+    function createOutboundItemColumn(item, itemSerials) {
+        const itemPieces = itemSerials.length;
+        const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
+
+        const col = document.createElement('div');
+        col.className = 'product-scan-column';
+        col.style.cssText = 'display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--border-color); padding: 16px; border-radius: var(--radius-md); background: rgba(255,255,255,0.01); min-width: 300px; flex: 1 1 0px; height: 100%; overflow: hidden;';
+
+        col.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; width: 100%;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%;">
+                    <div style="font-weight: 700; color: var(--text-primary); font-size: 0.9rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex: 1;" title="${item.name}">
+                        ${item.name}
+                    </div>
+                    <button type="button" class="btn-clear-product-serials" data-name="${item.name}" title="Clear all serials of this product" style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2); color: var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 10px; height: 10px; stroke-width: 2.5;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        <span>Clear</span>
+                    </button>
+                </div>
+                <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                    <span class="count-badge-pcs" style="font-size: 0.7rem; font-weight: 700; background: rgba(59,130,246,0.1); color: var(--accent-blue); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(59,130,246,0.2);">
+                        PCs: ${itemPieces}
+                    </span>
+                    <span class="count-badge-boxes" style="font-size: 0.7rem; font-weight: 700; background: rgba(16,185,129,0.1); color: var(--accent-emerald); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.2);">
+                        BOXes: ${itemBoxes}
+                    </span>
+                </div>
+            </div>
+        `;
+
+        const clearBtn = col.querySelector('.btn-clear-product-serials');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm(`Are you sure you want to clear all scanned serials for product "${item.name}" from this session?`)) {
+                    activeOutboundSession.serials = activeOutboundSession.serials.filter(s => s.itemName !== item.name);
+                    activeOutboundSession.items = activeOutboundSession.items.filter(i => i.name !== item.name);
+                    compactOutboundBoxNumbers();
+                    saveActiveOutboundSession();
+                    updateOutboundSessionProgress();
+                    renderOutboundBoxCards();
+                }
+            });
+        }
+
+        const boxListWrapper = document.createElement('div');
+        boxListWrapper.className = 'product-boxes-list';
+        boxListWrapper.style.cssText = 'flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-right: 4px; margin-top: 10px;';
+
+        if (itemSerials.length === 0) {
+            boxListWrapper.innerHTML = `
+                <div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 48px 12px;">
+                    No serials scanned for this item yet.
+                </div>
+            `;
+        } else {
+            const groups = {};
+            itemSerials.forEach(s => {
+                if (!groups[s.boxNo]) groups[s.boxNo] = [];
+                groups[s.boxNo].push(s);
+            });
+
+            const boxNumbers = Object.keys(groups).map(Number).sort((a,b)=>b-a);
+            boxNumbers.forEach(boxNo => {
+                const boxItems = groups[boxNo];
+                const boxCard = createOutboundBoxCard(boxNo, boxItems, item);
+                boxListWrapper.appendChild(boxCard);
+            });
+        }
+        col.appendChild(boxListWrapper);
+        return col;
+    }
+
     function renderOutboundBoxCards() {
         const container = document.getElementById('outboundSessionBoxesContainer');
         if (!container) return;
@@ -4010,130 +4147,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         activeOutboundSession.items.forEach(item => {
             const itemSerials = serialsByItem.get(item.name) || [];
-            const itemPieces = itemSerials.length;
-            const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
-
-            const col = document.createElement('div');
-            col.className = 'product-scan-column';
-            col.style.cssText = 'display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--border-color); padding: 16px; border-radius: var(--radius-md); background: rgba(255,255,255,0.01); min-width: 300px; flex: 1 1 0px; height: 100%; overflow: hidden;';
-
-            col.innerHTML = `
-                <div style="display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; width: 100%;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%;">
-                        <div style="font-weight: 700; color: var(--text-primary); font-size: 0.9rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex: 1;" title="${item.name}">
-                            ${item.name}
-                        </div>
-                        <button type="button" class="btn-clear-product-serials" data-name="${item.name}" title="Clear all serials of this product" style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2); color: var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 10px; height: 10px; stroke-width: 2.5;">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                            <span>Clear</span>
-                        </button>
-                    </div>
-                    <div style="display: flex; gap: 6px; flex-shrink: 0;">
-                        <span class="count-badge-pcs" style="font-size: 0.7rem; font-weight: 700; background: rgba(59,130,246,0.1); color: var(--accent-blue); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(59,130,246,0.2);">
-                            PCs: ${itemPieces}
-                        </span>
-                        <span class="count-badge-boxes" style="font-size: 0.7rem; font-weight: 700; background: rgba(16,185,129,0.1); color: var(--accent-emerald); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.2);">
-                            BOXes: ${itemBoxes}
-                        </span>
-                    </div>
-                </div>
-            `;
-
-            const clearBtn = col.querySelector('.btn-clear-product-serials');
-            if (clearBtn) {
-                clearBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (confirm(`Are you sure you want to clear all scanned serials for product "${item.name}" from this session?`)) {
-                        activeOutboundSession.serials = activeOutboundSession.serials.filter(s => s.itemName !== item.name);
-                        activeOutboundSession.items = activeOutboundSession.items.filter(i => i.name !== item.name);
-                        compactOutboundBoxNumbers();
-                        saveActiveOutboundSession();
-                        updateOutboundSessionProgress();
-                        renderOutboundBoxCards();
-                    }
-                });
-            }
-
-            const boxListWrapper = document.createElement('div');
-            boxListWrapper.className = 'product-boxes-list';
-            boxListWrapper.style.cssText = 'flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-right: 4px; margin-top: 10px;';
-
-            if (itemSerials.length === 0) {
-                boxListWrapper.innerHTML = `
-                    <div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 48px 12px;">
-                        No serials scanned for this item yet.
-                    </div>
-                `;
-            } else {
-                const groups = {};
-                itemSerials.forEach(s => {
-                    if (!groups[s.boxNo]) groups[s.boxNo] = [];
-                    groups[s.boxNo].push(s);
-                });
-
-                const boxNumbers = Object.keys(groups).map(Number).sort((a,b)=>b-a);
-                boxNumbers.forEach(boxNo => {
-                    const boxItems = groups[boxNo];
-                    const boxCard = document.createElement('div');
-                    boxCard.className = 'box-card';
-                    boxCard.style.cssText = 'margin-bottom: 0;';
-
-                    boxCard.innerHTML = `
-                        <div class="box-card-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px; margin-bottom: 8px;">
-                            <span class="box-number-badge" style="font-size: 0.8rem; font-weight:700; color: var(--accent-blue);">Box #${boxNo}</span>
-                            <span style="font-size: 0.75rem; color: var(--text-muted);" class="font-mono">${boxItems.length} Pcs</span>
-                        </div>
-                    `;
-
-                    const serialsUl = document.createElement('ul');
-                    serialsUl.style.cssText = 'list-style: none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px;';
-
-                    boxItems.forEach(s => {
-                        const li = document.createElement('li');
-                        li.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 4px; font-size:0.85rem; font-family:var(--font-mono); border: 1px solid rgba(255,255,255,0.04);';
-
-                        const displayVal = s.serial.startsWith('WOS-OUT-')
-                            ? `<span style="color: var(--accent-amber); font-weight: 700; font-style: italic; font-family: var(--font-sans);">[Non-Serial Item]</span>`
-                            : s.serial;
-
-                        li.innerHTML = `
-                            <span style="color:var(--text-secondary); word-break:break-all;">${displayVal}</span>
-                            <button type="button" class="btn-outbound-delete-serial" data-serial="${s.serial}" title="Remove Serial" style="background:none; border:none; color:var(--text-muted); cursor:pointer; padding:2px; display:flex; align-items:center; justify-content:center; transition: var(--transition-smooth); border-radius:4px;">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:14px; height:14px;">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                            </button>
-                        `;
-
-                        const delBtn = li.querySelector('.btn-outbound-delete-serial');
-                        if (delBtn) {
-                            delBtn.addEventListener('click', (e) => {
-                                e.stopPropagation();
-                                if (confirm(`Remove serial "${s.serial}" from this outbound session?`)) {
-                                    activeOutboundSession.serials = activeOutboundSession.serials.filter(x => x.serial !== s.serial);
-
-                                    const remainingForProduct = activeOutboundSession.serials.some(x => x.itemName === item.name);
-                                    if (!remainingForProduct) {
-                                        activeOutboundSession.items = activeOutboundSession.items.filter(x => x.name !== item.name);
-                                    }
-
-                                    compactOutboundBoxNumbers();
-                                    saveActiveOutboundSession();
-                                    updateOutboundSessionProgress();
-                                    renderOutboundBoxCards();
-                                }
-                            });
-                        }
-
-                        serialsUl.appendChild(li);
-                    });
-                    boxCard.appendChild(serialsUl);
-                    boxListWrapper.appendChild(boxCard);
-                });
-            }
-            col.appendChild(boxListWrapper);
+            const col = createOutboundItemColumn(item, itemSerials);
             container.appendChild(col);
         });
     }
