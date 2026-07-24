@@ -29,6 +29,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let isFirebaseConnected = false;
     let db = null;
+    let cachedInboundHistory = null;
+    let cachedOutboundHistory = null;
+    let cachedProductWeights = null;
 
     if (window.firebase) {
         try {
@@ -63,6 +66,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const newStr = JSON.stringify(value);
         if (currentLocal !== newStr) {
             localStorage.setItem(key, newStr);
+            if (key === 'wms_inbound_history') cachedInboundHistory = null;
+            if (key === 'wms_outbound_history') cachedOutboundHistory = null;
+            if (key === 'wms_product_weights') cachedProductWeights = null;
             return true;
         }
         return false;
@@ -688,8 +694,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getProductWeights() {
+        if (cachedProductWeights !== null) {
+            return cachedProductWeights;
+        }
         const saved = localStorage.getItem('wms_product_weights');
-        if (!saved) return {};
+        if (!saved) {
+            cachedProductWeights = {};
+            return cachedProductWeights;
+        }
         try {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) {
@@ -699,11 +711,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         dict[w.name] = parseFloat(w.weight) || 0;
                     }
                 });
-                return dict;
+                cachedProductWeights = dict;
+                return cachedProductWeights;
             }
-            return parsed; // Fallback to old object structure
+            cachedProductWeights = parsed;
+            return cachedProductWeights;
         } catch (e) {
-            return {};
+            cachedProductWeights = {};
+            return cachedProductWeights;
         }
     }
 
@@ -715,6 +730,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             weights[itemName] = parsed;
         }
+        
+        cachedProductWeights = weights;
         
         // Convert dictionary to array of objects to bypass Firebase path segment key restrictions
         const weightsArray = Object.keys(weights).map(name => ({
@@ -1148,16 +1165,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function saveHistory(historyData) {
+        cachedInboundHistory = historyData;
         localStorage.setItem('wms_inbound_history', JSON.stringify(historyData));
         firebaseSet('inbound_history', historyData);
     }
 
     function getHistory() {
+        if (cachedInboundHistory !== null) {
+            return cachedInboundHistory;
+        }
         const saved = localStorage.getItem('wms_inbound_history');
         if (saved) {
-            return JSON.parse(saved);
+            cachedInboundHistory = JSON.parse(saved);
+            return cachedInboundHistory;
         }
-        return [];
+        cachedInboundHistory = [];
+        return cachedInboundHistory;
     }
 
     function renderHistoryTable() {
@@ -1186,10 +1209,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             
-            const productWeights = getProductWeights();
             const itemsList = row.items || [{ name: row.item, expectedQty: row.expected }];
             const itemsHtml = itemsList.map(item => {
-                const weight = (row.weights && row.weights[item.name] !== undefined) ? row.weights[item.name] : productWeights[item.name];
+                const weight = (row.weights && row.weights[item.name] !== undefined) ? row.weights[item.name] : null;
                 const weightLabel = weight ? ` (${weight} kg)` : ' (Set Weight)';
                 const badgeStyle = weight 
                     ? 'background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--accent-emerald);' 
@@ -3893,12 +3915,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Outbound History database
     function getOutboundHistory() {
+        if (cachedOutboundHistory !== null) {
+            return cachedOutboundHistory;
+        }
         const saved = localStorage.getItem('wms_outbound_history');
-        if (saved) return JSON.parse(saved);
-        return [];
+        if (saved) {
+            cachedOutboundHistory = JSON.parse(saved);
+            return cachedOutboundHistory;
+        }
+        cachedOutboundHistory = [];
+        return cachedOutboundHistory;
     }
 
     function saveOutboundHistory(historyData) {
+        cachedOutboundHistory = historyData;
         localStorage.setItem('wms_outbound_history', JSON.stringify(historyData));
         firebaseSet('outbound_history', historyData);
     }
@@ -3949,7 +3979,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            if (rowIsToday) {
+            // Add details to today summary if created today OR if checked/marked
+            if (rowIsToday || row.isChecked) {
                 todayBoxesSum += totalBoxes;
                 todayWeightSum += totalWeight;
             }
@@ -3961,7 +3992,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 tr.style.background = "rgba(16, 185, 129, 0.015)";
             }
 
+            // Build checkbox indicator HTML
+            const isChecked = row.isChecked || false;
+            const checkedIcon = isChecked 
+                ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width: 20px; height: 20px; color: var(--accent-emerald); display: block; margin: 0 auto;"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd" /></svg>` 
+                : `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px; color: var(--text-muted); display: block; margin: 0 auto;"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
+
             tr.innerHTML = `
+                <td style="text-align: center; cursor: pointer; padding: 10px 8px;" class="btn-toggle-outbound-mark" data-id="${row.id}" title="Toggle Marked Summary Inclusion">
+                    ${checkedIcon}
+                </td>
                 <td class="font-mono">${timestampHtml}</td>
                 <td>${row.shopName}</td>
                 <td class="font-mono">${row.invoiceNo}</td>
@@ -4333,6 +4373,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const outboundHistoryBody = document.getElementById('outboundHistoryBody');
     if (outboundHistoryBody) {
         outboundHistoryBody.addEventListener('click', (e) => {
+            const toggleMarkBtn = e.target.closest('.btn-toggle-outbound-mark');
+            if (toggleMarkBtn) {
+                e.stopPropagation();
+                const logId = toggleMarkBtn.getAttribute('data-id');
+                const historyData = getOutboundHistory();
+                const logIndex = historyData.findIndex(item => item.id === logId);
+                if (logIndex !== -1) {
+                    historyData[logIndex].isChecked = !historyData[logIndex].isChecked;
+                    saveOutboundHistory(historyData);
+                    renderOutboundHistoryTable();
+                }
+                return;
+            }
+
             const boxDetailsBtn = e.target.closest('.btn-show-outbound-box-details');
             if (boxDetailsBtn) {
                 e.stopPropagation();
