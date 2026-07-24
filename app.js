@@ -658,15 +658,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function matchesAlphabetPattern(serial, pattern) {
-        if (!pattern) return false;
-        for (const index in pattern) {
-            const idx = parseInt(index);
-            if (idx >= serial.length) return false;
-            const expectedChar = pattern[index];
-            if (expectedChar !== null && expectedChar !== undefined && expectedChar !== '') {
-                if (serial[idx].toUpperCase() !== expectedChar) {
-                    return false;
-                }
+        if (!pattern || Object.keys(pattern).length === 0) return true;
+        for (const [index, char] of Object.entries(pattern)) {
+            if (serial[index] === undefined || serial[index].toUpperCase() !== char) {
+                return false;
             }
         }
         return true;
