@@ -1288,6 +1288,128 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function groupSerialsByItem(serials) {
+        const serialsByItem = new Map();
+        if (serials) {
+            serials.forEach(s => {
+                let list = serialsByItem.get(s.itemName);
+                if (!list) {
+                    list = [];
+                    serialsByItem.set(s.itemName, list);
+                }
+                list.push(s);
+            });
+        }
+        return serialsByItem;
+    }
+
+    function createSerialRow(serialObj) {
+        const row = document.createElement('div');
+        row.className = 'serial-item-row';
+        row.style.cssText = 'padding: 6px 8px; font-size: 0.85rem;';
+        row.innerHTML = `
+            <span class="serial-item-text font-mono">${serialObj.serial}</span>
+            <button type="button" class="btn-delete-serial" data-serial="${serialObj.serial}" title="Remove serial">&times;</button>
+        `;
+        return row;
+    }
+
+    function createBoxCard(boxNo, boxItems, activeItemName) {
+        const boxCard = document.createElement('div');
+        boxCard.className = 'box-card';
+        boxCard.style.cssText = 'margin-bottom: 0;';
+        boxCard.id = `box-card-${boxNo}-${activeItemName.replace(/\s+/g, '-')}`;
+
+        // Box Card Header
+        boxCard.innerHTML = `
+            <div class="box-card-header" style="padding-bottom: 8px; margin-bottom: 8px;">
+                <div class="box-card-title">
+                    <h3 style="font-size: 0.95rem;">Box ${boxNo}</h3>
+                    <span class="box-badge" style="font-size: 0.7rem; padding: 2px 6px;">${boxItems.length} ${boxItems.length === 1 ? 'Item' : 'Items'}</span>
+                </div>
+                <button type="button" class="btn-delete-box" data-box="${boxNo}" data-item-name="${escapeHtmlAttr(activeItemName)}" title="Delete items of this product from Box ${boxNo}" style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
+            </div>
+        `;
+
+        // Serials List
+        const listContainer = document.createElement('div');
+        listContainer.className = 'box-serials-list';
+
+        boxItems.forEach(s => {
+            listContainer.appendChild(createSerialRow(s));
+        });
+
+        boxCard.appendChild(listContainer);
+        return boxCard;
+    }
+
+    function createProductColumn(activeItem, itemSerials) {
+        // Calculate item-specific pieces and unique boxes count
+        const itemPieces = itemSerials.length;
+        const uniqueBoxesSet = new Set(itemSerials.map(s => s.boxNo));
+        const itemBoxes = uniqueBoxesSet.size;
+
+        // Create column container element
+        const col = document.createElement('div');
+        col.className = 'product-scan-column';
+        col.style.cssText = 'display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--border-color); padding: 16px; border-radius: var(--radius-md); background: rgba(255,255,255,0.01); min-width: 300px; flex: 1 1 0px; height: 100%; overflow: hidden;';
+
+        // Column Header
+        col.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                <div style="font-weight: 700; color: var(--text-primary); font-size: 0.9rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex: 1;" title="${activeItem.name}">
+                    ${activeItem.name}
+                </div>
+                <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                    <span class="count-badge-pcs" style="font-size: 0.7rem; font-weight: 700; background: rgba(59,130,246,0.1); color: var(--accent-blue); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(59,130,246,0.2);">
+                        PCs: ${itemPieces}
+                    </span>
+                    <span class="count-badge-boxes" style="font-size: 0.7rem; font-weight: 700; background: rgba(16,185,129,0.1); color: var(--accent-emerald); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.2);">
+                        BOXes: ${itemBoxes}
+                    </span>
+                </div>
+            </div>
+        `;
+
+        // Scrollable list container for Box cards of this product
+        const boxListWrapper = document.createElement('div');
+        boxListWrapper.className = 'product-boxes-list';
+        boxListWrapper.style.cssText = 'flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-right: 4px; margin-top: 10px;';
+
+        if (itemSerials.length === 0) {
+            boxListWrapper.innerHTML = `
+                <div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 48px 12px;">
+                    No serials scanned for this item yet.
+                </div>
+            `;
+        } else {
+            // Group itemSerials by boxNo: { boxNo: [item1, item2] }
+            const groups = {};
+            itemSerials.forEach(s => {
+                if (!groups[s.boxNo]) {
+                    groups[s.boxNo] = [];
+                }
+                groups[s.boxNo].push(s);
+            });
+
+            // Sort box numbers from highest to lowest (newest box on top)
+            const boxNumbers = Object.keys(groups).map(Number).sort((a, b) => b - a);
+
+            boxNumbers.forEach(boxNo => {
+                const boxItems = groups[boxNo];
+                const boxCard = createBoxCard(boxNo, boxItems, activeItem.name);
+                boxListWrapper.appendChild(boxCard);
+            });
+        }
+
+        col.appendChild(boxListWrapper);
+        return col;
+    }
+
     // Render scanned serials grouped by Box Card inside product columns
     function renderBoxCards() {
         if (!sessionBoxesContainer) return;
@@ -1303,117 +1425,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const itemsList = activeSession.items || [];
-
-        const serialsByItem = new Map();
-        if (activeSession.serials) {
-            activeSession.serials.forEach(s => {
-                let list = serialsByItem.get(s.itemName);
-                if (!list) {
-                    list = [];
-                    serialsByItem.set(s.itemName, list);
-                }
-                list.push(s);
-            });
-        }
+        const serialsByItem = groupSerialsByItem(activeSession.serials);
 
         itemsList.forEach(activeItem => {
-            // Find all scanned serials belonging to this item
             const itemSerials = serialsByItem.get(activeItem.name) || [];
-
-            // Calculate item-specific pieces and unique boxes count
-            const itemPieces = itemSerials.length;
-            const uniqueBoxesSet = new Set(itemSerials.map(s => s.boxNo));
-            const itemBoxes = uniqueBoxesSet.size;
-
-            // Create column container element
-            const col = document.createElement('div');
-            col.className = 'product-scan-column';
-            col.style.cssText = 'display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--border-color); padding: 16px; border-radius: var(--radius-md); background: rgba(255,255,255,0.01); min-width: 300px; flex: 1 1 0px; height: 100%; overflow: hidden;';
-
-            // Column Header
-            col.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
-                    <div style="font-weight: 700; color: var(--text-primary); font-size: 0.9rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex: 1;" title="${activeItem.name}">
-                        ${activeItem.name}
-                    </div>
-                    <div style="display: flex; gap: 6px; flex-shrink: 0;">
-                        <span class="count-badge-pcs" style="font-size: 0.7rem; font-weight: 700; background: rgba(59,130,246,0.1); color: var(--accent-blue); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(59,130,246,0.2);">
-                            PCs: ${itemPieces}
-                        </span>
-                        <span class="count-badge-boxes" style="font-size: 0.7rem; font-weight: 700; background: rgba(16,185,129,0.1); color: var(--accent-emerald); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.2);">
-                            BOXes: ${itemBoxes}
-                        </span>
-                    </div>
-                </div>
-            `;
-
-            // Scrollable list container for Box cards of this product
-            const boxListWrapper = document.createElement('div');
-            boxListWrapper.className = 'product-boxes-list';
-            boxListWrapper.style.cssText = 'flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-right: 4px; margin-top: 10px;';
-
-            if (itemSerials.length === 0) {
-                boxListWrapper.innerHTML = `
-                    <div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 48px 12px;">
-                        No serials scanned for this item yet.
-                    </div>
-                `;
-            } else {
-                // Group itemSerials by boxNo: { boxNo: [item1, item2] }
-                const groups = {};
-                itemSerials.forEach(s => {
-                    if (!groups[s.boxNo]) {
-                        groups[s.boxNo] = [];
-                    }
-                    groups[s.boxNo].push(s);
-                });
-
-                // Sort box numbers from highest to lowest (newest box on top)
-                const boxNumbers = Object.keys(groups).map(Number).sort((a, b) => b - a);
-
-                boxNumbers.forEach(boxNo => {
-                    const boxItems = groups[boxNo];
-                    const boxCard = document.createElement('div');
-                    boxCard.className = 'box-card';
-                    boxCard.style.cssText = 'margin-bottom: 0;';
-                    boxCard.id = `box-card-${boxNo}-${activeItem.name.replace(/\s+/g, '-')}`;
-
-                    // Box Card Header
-                    boxCard.innerHTML = `
-                        <div class="box-card-header" style="padding-bottom: 8px; margin-bottom: 8px;">
-                            <div class="box-card-title">
-                                <h3 style="font-size: 0.95rem;">Box ${boxNo}</h3>
-                                <span class="box-badge" style="font-size: 0.7rem; padding: 2px 6px;">${boxItems.length} ${boxItems.length === 1 ? 'Item' : 'Items'}</span>
-                            </div>
-                            <button type="button" class="btn-delete-box" data-box="${boxNo}" data-item-name="${escapeHtmlAttr(activeItem.name)}" title="Delete items of this product from Box ${boxNo}" style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px;">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px;">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                            </button>
-                        </div>
-                    `;
-
-                    // Serials List
-                    const listContainer = document.createElement('div');
-                    listContainer.className = 'box-serials-list';
-
-                    boxItems.forEach(s => {
-                        const row = document.createElement('div');
-                        row.className = 'serial-item-row';
-                        row.style.cssText = 'padding: 6px 8px; font-size: 0.85rem;';
-                        row.innerHTML = `
-                            <span class="serial-item-text font-mono">${s.serial}</span>
-                            <button type="button" class="btn-delete-serial" data-serial="${s.serial}" title="Remove serial">&times;</button>
-                        `;
-                        listContainer.appendChild(row);
-                    });
-
-                    boxCard.appendChild(listContainer);
-                    boxListWrapper.appendChild(boxCard);
-                });
-            }
-
-            col.appendChild(boxListWrapper);
+            const col = createProductColumn(activeItem, itemSerials);
             sessionBoxesContainer.appendChild(col);
         });
     }
