@@ -3,6 +3,70 @@
  * Basic structure controls (clock, sidebar, navigation, theme toggle)
  */
 
+// --- Auto-SKU Alphabet Pattern Extraction and Matching Helpers ---
+function extractAlphabetPattern(serial) {
+    const pattern = {};
+    for (let i = 0; i < serial.length; i++) {
+        const char = serial[i];
+        // Check if it is a letter (A-Z, a-z)
+        if (/[a-zA-Z]/.test(char)) {
+            pattern[i] = char.toUpperCase();
+        }
+    }
+    return pattern;
+}
+
+function matchesAlphabetPattern(serial, pattern) {
+    if (!pattern) return false;
+    for (const index in pattern) {
+        const idx = parseInt(index);
+        if (idx >= serial.length) return false;
+        const expectedChar = pattern[index];
+        if (expectedChar !== null && expectedChar !== undefined && expectedChar !== '') {
+            if (serial[idx].toUpperCase() !== expectedChar) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+function matchesAlphabetPatternPartial(serial, pattern) {
+    if (!pattern) return false;
+    let checkedCount = 0;
+    for (const index in pattern) {
+        const idx = parseInt(index);
+        // Only verify if index is within scanned serial range
+        if (idx < serial.length) {
+            const char = serial[idx];
+            const expectedChar = pattern[index];
+            if (expectedChar !== null && expectedChar !== undefined && expectedChar !== '') {
+                // Only verify if the scanned serial also has a letter at this position
+                if (/[a-zA-Z]/.test(char)) {
+                    checkedCount++;
+                    if (char.toUpperCase() !== expectedChar) {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    return checkedCount >= 3; // Ensure at least 3 letters match
+}
+
+function formatAlphabetPattern(pattern, length) {
+    if (!pattern || length === 0) return 'Not Locked Yet';
+    let str = '';
+    for (let i = 0; i < length; i++) {
+        if (pattern[i]) {
+            str += pattern[i];
+        } else {
+            str += '.';
+        }
+    }
+    return str;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // Cache upgrade check for mock data
     const existingHist = localStorage.getItem('wms_inbound_history');
@@ -642,70 +706,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         localStorage.setItem('wms_product_weights', JSON.stringify(weightsArray));
         firebaseSet('product_weights', weightsArray);
-    }
-
-    // --- Auto-SKU Alphabet Pattern Extraction and Matching Helpers ---
-    function extractAlphabetPattern(serial) {
-        const pattern = {};
-        for (let i = 0; i < serial.length; i++) {
-            const char = serial[i];
-            // Check if it is a letter (A-Z, a-z)
-            if (/[a-zA-Z]/.test(char)) {
-                pattern[i] = char.toUpperCase();
-            }
-        }
-        return pattern;
-    }
-
-    function matchesAlphabetPattern(serial, pattern) {
-        if (!pattern) return false;
-        for (const index in pattern) {
-            const idx = parseInt(index);
-            if (idx >= serial.length) return false;
-            const expectedChar = pattern[index];
-            if (expectedChar !== null && expectedChar !== undefined && expectedChar !== '') {
-                if (serial[idx].toUpperCase() !== expectedChar) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    function matchesAlphabetPatternPartial(serial, pattern) {
-        if (!pattern) return false;
-        let checkedCount = 0;
-        for (const index in pattern) {
-            const idx = parseInt(index);
-            // Only verify if index is within scanned serial range
-            if (idx < serial.length) {
-                const char = serial[idx];
-                const expectedChar = pattern[index];
-                if (expectedChar !== null && expectedChar !== undefined && expectedChar !== '') {
-                    // Only verify if the scanned serial also has a letter at this position
-                    if (/[a-zA-Z]/.test(char)) {
-                        checkedCount++;
-                        if (char.toUpperCase() !== expectedChar) {
-                            return false;
-                        }
-                    }
-                }
-            }
-        }
-        return checkedCount >= 3; // Ensure at least 3 letters match
-    }
-
-    function formatAlphabetPattern(pattern, length) {
-        if (!pattern || length === 0) return 'Not Locked Yet';
-        let str = '';
-        for (let i = 0; i < length; i++) {
-            if (pattern[i]) {
-                str += pattern[i];
-            } else {
-                str += '.';
-            }
-        }
-        return str;
     }
 
     // --- State Persistence & LocalStorage Helpers ---
@@ -5921,3 +5921,7 @@ document.addEventListener('DOMContentLoaded', () => {
     populateMisProductsDropdown();
     checkDeviceApprovalStatus();
 });
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { formatAlphabetPattern };
+}
