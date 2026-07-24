@@ -221,9 +221,17 @@
                                     <p style="color: var(--text-muted); margin: 4px 0 0 0;">Create a new session to begin scanning incoming stock.</p>
                                 </div>
                             </div>
-                            <button type="button" id="startInboundSessionBtn" class="btn-primary" style="padding: 12px 24px; font-size: 0.95rem; font-weight: 700;">
-                                <span>Start Inbound Session</span>
-                            </button>
+                            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                                <button type="button" id="btnOpenWithoutSerialInward" class="btn-secondary" style="border-color: var(--accent-amber); color: var(--accent-amber); background: rgba(245, 158, 11, 0.03); display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700; height: 46px; padding: 12px 20px; font-size: 0.95rem; border-radius: var(--radius-md); cursor: pointer; border-style: solid; transition: var(--transition-smooth);">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span>Inward Without Serial Number</span>
+                                </button>
+                                <button type="button" id="startInboundSessionBtn" class="btn-primary" style="padding: 12px 24px; font-size: 0.95rem; font-weight: 700; height: 46px; border-radius: var(--radius-md); display: flex; align-items: center;">
+                                    <span>Start Inbound Session</span>
+                                </button>
+                            </div>
                         </div>
 
                         <div class="dashboard-card table-card" style="padding: 24px;">
