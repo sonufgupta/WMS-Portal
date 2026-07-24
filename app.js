@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Firebase Configuration & Realtime Sync Integration ---
+    let cachedProductWeights = null;
     const firebaseConfig = {
         apiKey: "AIzaSyALpgMRgKEz93jKhmXRevHO0L87lDkeiCI",
         authDomain: "wms-portal-g.firebaseapp.com",
@@ -118,11 +119,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const val = snapshot.val();
             if (val === null) {
                 localStorage.setItem('wms_product_weights', '{}');
+                cachedProductWeights = null;
                 renderHistoryTable();
                 renderInventoryPanel();
                 renderOutboundHistoryTable();
             } else {
                 if (syncCloudDataToLocal('wms_product_weights', val)) {
+                    cachedProductWeights = null;
                     renderHistoryTable();
                     renderInventoryPanel();
                     renderOutboundHistoryTable();
@@ -418,6 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     localStorage.removeItem('wms_inbound_history');
                     localStorage.removeItem('wms_outbound_history');
                     localStorage.removeItem('wms_product_weights');
+                    cachedProductWeights = null;
                     localStorage.removeItem('wms_inbound_items');
                     localStorage.removeItem('wms_wos_items');
                     localStorage.removeItem('wms_active_inbound_session');
@@ -606,8 +610,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Product Weight Storage Helpers ---
     function getProductWeights() {
+        if (cachedProductWeights !== null) return {...cachedProductWeights};
         const saved = localStorage.getItem('wms_product_weights');
-        if (!saved) return {};
+        if (!saved) {
+            cachedProductWeights = {};
+            return cachedProductWeights;
+        }
         try {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) {
@@ -617,11 +625,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         dict[w.name] = parseFloat(w.weight) || 0;
                     }
                 });
-                return dict;
+                cachedProductWeights = dict;
+                return {...cachedProductWeights};
             }
-            return parsed; // Fallback to old object structure
+            cachedProductWeights = parsed; // Fallback to old object structure
+            return {...cachedProductWeights};
         } catch (e) {
-            return {};
+            cachedProductWeights = {};
+            return {...cachedProductWeights};
         }
     }
 
@@ -641,6 +652,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }));
 
         localStorage.setItem('wms_product_weights', JSON.stringify(weightsArray));
+        cachedProductWeights = null;
         firebaseSet('product_weights', weightsArray);
     }
 
