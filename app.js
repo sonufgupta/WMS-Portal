@@ -1594,21 +1594,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function syncInventoryItemsToInboundList() {
         const uniqueItems = new Set();
         
-        // Gather from Inbound History
+        // Gather from Inbound History (only from serialized logs)
         const inboundHistory = getHistory();
         inboundHistory.forEach(log => {
-            if (log.item) uniqueItems.add(log.item.trim());
-            if (log.serials) {
+            if (log.serials && log.serials.length > 0) {
                 log.serials.forEach(s => {
                     if (s.itemName) uniqueItems.add(s.itemName.trim());
                 });
             }
         });
 
-        // Gather from Outbound History
+        // Gather from Outbound History (only from serialized logs)
         const outboundHistory = getOutboundHistory();
         outboundHistory.forEach(log => {
-            if (log.serials) {
+            if (log.serials && log.serials.length > 0) {
                 log.serials.forEach(s => {
                     if (s.itemName) uniqueItems.add(s.itemName.trim());
                 });
