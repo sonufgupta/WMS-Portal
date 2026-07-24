@@ -3,16 +3,20 @@
  * Basic structure controls (clock, sidebar, navigation, theme toggle)
  */
 
+function escapeHtmlAttr(str) {
+    if (!str) return '';
+    return String(str).replace(/"/g, '&quot;');
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { escapeHtmlAttr };
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // Cache upgrade check for mock data
     const existingHist = localStorage.getItem('wms_inbound_history');
     if (existingHist && !existingHist.includes("inbound_mock_1")) {
         localStorage.removeItem('wms_inbound_history');
-    }
-
-    function escapeHtmlAttr(str) {
-        if (!str) return '';
-        return str.replace(/"/g, '&quot;');
     }
 
     // --- Firebase Configuration & Realtime Sync Integration ---
