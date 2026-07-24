@@ -1833,10 +1833,23 @@ document.addEventListener('DOMContentLoaded', () => {
         let totalExpected = 0;
         let totalScanned = 0;
 
+        const serialsByItem = new Map();
+        if (activeSession.serials) {
+            activeSession.serials.forEach(s => {
+                let list = serialsByItem.get(s.itemName);
+                if (!list) {
+                    list = [];
+                    serialsByItem.set(s.itemName, list);
+                }
+                list.push(s);
+            });
+        }
+
         items.forEach(item => {
             totalExpected += parseInt(item.expectedQty) || 0;
             // Count scanned serials for this product
-            const itemScans = activeSession.serials.filter(s => s.itemName === item.name).length;
+            const itemSerials = serialsByItem.get(item.name) || [];
+            const itemScans = itemSerials.length;
             item.scannedCount = itemScans;
             totalScanned += itemScans;
         });
@@ -1859,7 +1872,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sessionScannedBoxesCount) {
             let totalBoxesCount = 0;
             items.forEach(activeItem => {
-                const itemSerials = activeSession.serials.filter(s => s.itemName === activeItem.name);
+                const itemSerials = serialsByItem.get(activeItem.name) || [];
                 const uniqueBoxes = new Set(itemSerials.map(s => s.boxNo));
                 totalBoxesCount += uniqueBoxes.size;
             });
@@ -3723,11 +3736,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const historyData = getOutboundHistory();
         historyData.forEach(row => {
+            const serialsByItem = new Map();
+            if (row.serials) {
+                row.serials.forEach(s => {
+                    let list = serialsByItem.get(s.itemName);
+                    if (!list) {
+                        list = [];
+                        serialsByItem.set(s.itemName, list);
+                    }
+                    list.push(s);
+                });
+            }
+
             const tr = document.createElement('tr');
             const weights = getProductWeights();
             let totalWeight = 0;
             const itemNames = (row.items || []).map(i => {
-                const count = (row.serials || []).filter(s => s.itemName === i.name).length;
+                const itemSerials = serialsByItem.get(i.name) || [];
+                const count = itemSerials.length;
                 const itemWeight = parseFloat(weights[i.name]) || 0;
                 totalWeight += count * itemWeight;
                 return `${i.name} (${count})`;
@@ -3738,7 +3764,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let totalBoxes = 0;
             const rowItems = row.items || [];
             rowItems.forEach(i => {
-                const itemSerials = (row.serials || []).filter(s => s.itemName === i.name);
+                const itemSerials = serialsByItem.get(i.name) || [];
                 const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
                 totalBoxes += itemBoxes;
             });
@@ -3875,6 +3901,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateOutboundSessionProgress() {
         if (!activeOutboundSession) return;
 
+        const serialsByItem = new Map();
+        if (activeOutboundSession.serials) {
+            activeOutboundSession.serials.forEach(s => {
+                let list = serialsByItem.get(s.itemName);
+                if (!list) {
+                    list = [];
+                    serialsByItem.set(s.itemName, list);
+                }
+                list.push(s);
+            });
+        }
+
         const container = document.getElementById('outboundActiveRowsContainer');
         if (container) {
             container.innerHTML = '';
@@ -3882,7 +3920,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const items = activeOutboundSession.items || [];
             items.forEach(item => {
-                const itemSerials = activeOutboundSession.serials.filter(s => s.itemName === item.name);
+                const itemSerials = serialsByItem.get(item.name) || [];
                 const scannedCount = itemSerials.length;
 
                 const weightPerPc = weights[item.name] || 0;
@@ -3918,7 +3956,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const totalPcs = activeOutboundSession.serials.length;
         let uniqueBoxes = 0;
         activeOutboundSession.items.forEach(item => {
-            const itemSerials = activeOutboundSession.serials.filter(s => s.itemName === item.name);
+            const itemSerials = serialsByItem.get(item.name) || [];
             const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
             uniqueBoxes += itemBoxes;
         });
