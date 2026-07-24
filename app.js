@@ -232,27 +232,10 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
 
             if (link.id === 'navMisReport') {
-                const pwd = prompt("Enter password to access MIS Reports:");
-                if (pwd === '1998') {
-                    window.open('https://geonix-desk.vercel.app/', '_blank');
-                } else if (pwd !== null) {
-                    alert("Incorrect password! Access denied.");
-                }
+                window.open('https://geonix-desk.vercel.app/', '_blank');
                 return;
             }
             const targetSectionId = link.id.replace('nav', 'section');
-            if (targetSectionId === 'sectionInventory') {
-                const isUnlocked = localStorage.getItem('wms_inventory_unlocked') === 'true';
-                if (!isUnlocked) {
-                    const pwd = prompt("Enter passcode to access Inventory:");
-                    if (pwd === '2026' || pwd === '1998') {
-                        localStorage.setItem('wms_inventory_unlocked', 'true');
-                    } else {
-                        if (pwd !== null) alert("Incorrect passcode! Access denied.");
-                        return;
-                    }
-                }
-            }
 
             // Remove active class from all navigation links
             navLinks.forEach(item => item.classList.remove('active'));
