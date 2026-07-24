@@ -10,6 +10,19 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.removeItem('wms_inbound_history');
     }
 
+
+    // Secure hashing helper
+    async function hashPasscode(pass) {
+        if (!pass) return '';
+        const msgUint8 = new TextEncoder().encode(pass);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    const HASH_USER = '158a323a7ba44870f23d96f1516dd70aa48e9a72db4ebb026b0a89e212a208ab';
+    const HASH_ADMIN = 'd54123de468bd42ea00dafbd777f85fe5fa1ff6404d9838c007953c25c92a1c5';
+
     function escapeHtmlAttr(str) {
         if (!str) return '';
         return str.replace(/"/g, '&quot;');
@@ -228,12 +241,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const sections = document.querySelectorAll('.content-section');
 
     navLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
+        link.addEventListener('click', async (e) => {
             e.preventDefault();
 
             if (link.id === 'navMisReport') {
                 const pwd = prompt("Enter password to access MIS Reports:");
-                if (pwd === '1998') {
+                if (await hashPasscode(pwd) === HASH_ADMIN) {
                     window.open('https://geonix-desk.vercel.app/', '_blank');
                 } else if (pwd !== null) {
                     alert("Incorrect password! Access denied.");
@@ -245,7 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isUnlocked = localStorage.getItem('wms_inventory_unlocked') === 'true';
                 if (!isUnlocked) {
                     const pwd = prompt("Enter passcode to access Inventory:");
-                    if (pwd === '2026' || pwd === '1998') {
+                    if (await hashPasscode(pwd) === HASH_USER || await hashPasscode(pwd) === HASH_ADMIN) {
                         localStorage.setItem('wms_inventory_unlocked', 'true');
                     } else {
                         if (pwd !== null) alert("Incorrect passcode! Access denied.");
@@ -411,9 +424,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Administrative Workspace Factory Reset Handler
     const btnAdminResetPortal = document.getElementById('btnAdminResetPortal');
     if (btnAdminResetPortal) {
-        btnAdminResetPortal.addEventListener('click', () => {
+        btnAdminResetPortal.addEventListener('click', async () => {
             const pwd = prompt("Enter administrator password to factory reset and clear all workspace data:");
-            if (pwd === '1998') {
+            if (await hashPasscode(pwd) === HASH_ADMIN) {
                 if (confirm("Are you absolutely sure? This will delete all completed Inbound history, Outbound history, product weights, items configs, and active sessions. This action CANNOT be undone!")) {
                     localStorage.removeItem('wms_inbound_history');
                     localStorage.removeItem('wms_outbound_history');
@@ -1556,11 +1569,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Modal Configuration Handlers ---
     // Open Inbound Configuration Modal or block if active session exists on another device
     if (startInboundSessionBtn && inboundConfigModal) {
-        startInboundSessionBtn.addEventListener('click', () => {
+        startInboundSessionBtn.addEventListener('click', async () => {
             if (activeSession) {
                 // If there's an active session on another device, click acts as Join Session prompt
-                const pwd = prompt('Enter passcode (2026) to join the active Inbound session:');
-                if (pwd === '2026') {
+                const pwd = prompt('Enter passcode to join the active Inbound session:');
+                if (await hashPasscode(pwd) === HASH_USER) {
                     localStorage.setItem('wms_inbound_joined', 'true');
                     restoreSessionState();
                 } else {
@@ -1575,9 +1588,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Join Inbound Session Event Listener
     const btnJoinInboundSession = document.getElementById('btnJoinInboundSession');
     if (btnJoinInboundSession) {
-        btnJoinInboundSession.addEventListener('click', () => {
-            const pwd = prompt('Enter passcode (2026) to join the active Inbound session:');
-            if (pwd === '2026') {
+        btnJoinInboundSession.addEventListener('click', async () => {
+            const pwd = prompt('Enter passcode to join the active Inbound session:');
+            if (await hashPasscode(pwd) === HASH_USER) {
                 localStorage.setItem('wms_inbound_joined', 'true');
                 restoreSessionState();
             } else {
@@ -1633,11 +1646,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Secure deletion trigger on delete button click
             const deleteBtn = li.querySelector('.btn-delete-dropdown-item');
             if (deleteBtn) {
-                deleteBtn.addEventListener('click', (e) => {
+                deleteBtn.addEventListener('click', async (e) => {
                     e.stopPropagation(); // Avoid triggering trigger toggle or selection click
 
                     const pwd = prompt(`Enter password to delete item "${item}":`);
-                    if (pwd === '2026') {
+                    if (await hashPasscode(pwd) === HASH_USER) {
                         inboundItems = inboundItems.filter(i => i !== item);
                         saveInboundItems();
                         renderDropdownItems();
@@ -1939,11 +1952,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Bind add alternative SKU pattern button click
                 const addSkuBtn = tr.querySelector('.btn-add-alternative-sku');
                 if (addSkuBtn) {
-                    addSkuBtn.addEventListener('click', (e) => {
+                    addSkuBtn.addEventListener('click', async (e) => {
                         e.stopPropagation();
 
-                        const pwd = prompt(`Enter password to authorize adding a new SKU pattern structure (e.g. 2026):`);
-                        if (pwd === '2026') {
+                        const pwd = prompt(`Enter password to authorize adding a new SKU pattern structure:`);
+                        if (await hashPasscode(pwd) === HASH_USER) {
                             const refSerial = prompt(`Scan or enter a reference serial number representing the new SKU format for "${item.name}":`);
                             if (refSerial) {
                                 const cleanRef = refSerial.trim();
@@ -1986,7 +1999,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Bind active item deletion click listener
                 const deleteBtn = tr.querySelector('.btn-delete-active-item');
                 if (deleteBtn) {
-                    deleteBtn.addEventListener('click', (e) => {
+                    deleteBtn.addEventListener('click', async (e) => {
                         e.stopPropagation();
 
                         if (activeSession.items.length <= 1) {
@@ -1995,7 +2008,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
 
                         const pwd = prompt(`Enter password to delete "${item.name}" from active session:`);
-                        if (pwd === '2026') {
+                        if (await hashPasscode(pwd) === HASH_USER) {
                             // 1. Remove product item
                             activeSession.items = activeSession.items.filter(i => i.name !== item.name);
 
@@ -2661,10 +2674,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Secure deletion trigger
             const deleteBtn = li.querySelector('.btn-delete-dropdown-item');
             if (deleteBtn) {
-                deleteBtn.addEventListener('click', (e) => {
+                deleteBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     const pwd = prompt(`Enter password to delete item "${item}":`);
-                    if (pwd === '2026') {
+                    if (await hashPasscode(pwd) === HASH_USER) {
                         inboundItems = inboundItems.filter(i => i !== item);
                         saveInboundItems();
                         renderDropdownItems();
@@ -2768,9 +2781,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });    }
 
     if (allowLengthBtn && skuWarningModal) {
-        allowLengthBtn.addEventListener('click', () => {
-            const pwd = prompt("Enter password to authorize and register this new SKU pattern structure (e.g. 2026):");
-            if (pwd === '2026') {
+        allowLengthBtn.addEventListener('click', async () => {
+            const pwd = prompt("Enter password to authorize and register this new SKU pattern structure:");
+            if (await hashPasscode(pwd) === HASH_USER) {
                 skuWarningModal.classList.remove('active');
 
                 // Inbound recovery
@@ -3052,11 +3065,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Modal Control triggers or block if active session exists on another device
     if (startOutboundSessionBtn && outboundConfigModal) {
-        startOutboundSessionBtn.addEventListener('click', () => {
+        startOutboundSessionBtn.addEventListener('click', async () => {
             if (activeOutboundSession) {
                 // Click acts as Join Session prompt
-                const pwd = prompt('Enter passcode (2026) to join the active Outbound session:');
-                if (pwd === '2026') {
+                const pwd = prompt('Enter passcode to join the active Outbound session:');
+                if (await hashPasscode(pwd) === HASH_USER) {
                     localStorage.setItem('wms_outbound_joined', 'true');
                     restoreOutboundSessionState();
                 } else {
@@ -3071,9 +3084,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Join Outbound Session Event Listener
     const btnJoinOutboundSession = document.getElementById('btnJoinOutboundSession');
     if (btnJoinOutboundSession) {
-        btnJoinOutboundSession.addEventListener('click', () => {
-            const pwd = prompt('Enter passcode (2026) to join the active Outbound session:');
-            if (pwd === '2026') {
+        btnJoinOutboundSession.addEventListener('click', async () => {
+            const pwd = prompt('Enter passcode to join the active Outbound session:');
+            if (await hashPasscode(pwd) === HASH_USER) {
                 localStorage.setItem('wms_outbound_joined', 'true');
                 restoreOutboundSessionState();
             } else {
@@ -4155,7 +4168,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Bind Excel triggers in Outbound History body
     const outboundHistoryBody = document.getElementById('outboundHistoryBody');
     if (outboundHistoryBody) {
-        outboundHistoryBody.addEventListener('click', (e) => {
+        outboundHistoryBody.addEventListener('click', async (e) => {
             const boxDetailsBtn = e.target.closest('.btn-show-outbound-box-details');
             if (boxDetailsBtn) {
                 e.stopPropagation();
@@ -4189,7 +4202,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const pass = prompt("Enter Admin Password to restore this Outbound Session:");
                 if (pass === null) return;
-                if (pass !== '1998') {
+                if (await hashPasscode(pass) !== HASH_ADMIN) {
                     alert("Incorrect password!");
                     return;
                 }
@@ -5464,9 +5477,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (btnUnlockOverlayWithPass) {
-        btnUnlockOverlayWithPass.addEventListener('click', () => {
+        btnUnlockOverlayWithPass.addEventListener('click', async () => {
             const pass = prompt("Enter Administrator Password to authorize this device:");
-            if (pass === '1998') {
+            if (await hashPasscode(pass) === HASH_ADMIN) {
                 if (isFirebaseConnected && db) {
                     db.ref('wms_data/devices/' + deviceId + '/status').set('approved').then(() => {
                         alert("Device authorized successfully!");
@@ -5513,7 +5526,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnClearAllDevicesBtn = document.getElementById('btnClearAllDevicesBtn');
     if (btnClearAllDevicesBtn) {
         btnClearAllDevicesBtn.addEventListener('click', () => {
-            const msg = "Are you sure you want to clear all device authorization records?\n\nThis will instantly lock all other devices. If your own device is locked, you can unlock it using the Admin Password '1998'.";
+            const msg = "Are you sure you want to clear all device authorization records?\n\nThis will instantly lock all other devices. If your own device is locked, you can unlock it using the Admin Password.";
             if (!confirm(msg)) return;
 
             if (isFirebaseConnected && db) {
