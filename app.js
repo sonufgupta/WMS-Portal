@@ -933,7 +933,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (warningTitleText) warningTitleText.textContent = title;
-        if (warningDescText) warningDescText.innerHTML = desc;
+        if (warningDescText) warningDescText.innerHTML = DOMPurify.sanitize(desc);
         if (warningExpectedLabel) warningExpectedLabel.textContent = expectedLabel;
         if (warningExpectedSku) warningExpectedSku.textContent = expectedVal;
         if (warningScannedLabel) warningScannedLabel.textContent = scannedLabel;
