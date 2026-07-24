@@ -172,6 +172,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (syncCloudDataToLocal('wms_inbound_history', val)) {
                     renderHistoryTable();
                     renderInventoryPanel();
+                    loadInboundItems();
+                    renderDropdownItems();
+                    renderActiveDropdownItems();
                     console.log("Inbound History synchronized.");
                 }
             }
@@ -188,6 +191,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (syncCloudDataToLocal('wms_outbound_history', val)) {
                     renderOutboundHistoryTable();
                     renderInventoryPanel();
+                    loadInboundItems();
+                    renderDropdownItems();
+                    renderActiveDropdownItems();
                     console.log("Outbound History synchronized.");
                 }
             }
@@ -1585,14 +1591,52 @@ document.addEventListener('DOMContentLoaded', () => {
         firebaseSet('inbound_items', inboundItems);
     }
 
+    function syncInventoryItemsToInboundList() {
+        const uniqueItems = new Set();
+        
+        // Gather from Inbound History
+        const inboundHistory = getHistory();
+        inboundHistory.forEach(log => {
+            if (log.item) uniqueItems.add(log.item.trim());
+            if (log.serials) {
+                log.serials.forEach(s => {
+                    if (s.itemName) uniqueItems.add(s.itemName.trim());
+                });
+            }
+        });
+
+        // Gather from Outbound History
+        const outboundHistory = getOutboundHistory();
+        outboundHistory.forEach(log => {
+            if (log.serials) {
+                log.serials.forEach(s => {
+                    if (s.itemName) uniqueItems.add(s.itemName.trim());
+                });
+            }
+        });
+
+        // Add any missing items to inboundItems list
+        let updated = false;
+        uniqueItems.forEach(item => {
+            if (item && !inboundItems.includes(item)) {
+                inboundItems.push(item);
+                updated = true;
+            }
+        });
+
+        if (updated) {
+            saveInboundItems();
+        }
+    }
+
     function loadInboundItems() {
         const saved = localStorage.getItem('wms_inbound_items');
         if (saved) {
             inboundItems = JSON.parse(saved);
         } else {
             inboundItems = [];
-            saveInboundItems();
         }
+        syncInventoryItemsToInboundList();
     }
 
     function renderDropdownItems() {
