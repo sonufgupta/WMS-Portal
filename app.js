@@ -1603,7 +1603,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadInboundItems() {
         const saved = localStorage.getItem('wms_inbound_items');
         if (saved) {
-            inboundItems = JSON.parse(saved);
+            try {
+                inboundItems = JSON.parse(saved);
+            } catch (e) {
+                inboundItems = [];
+                saveInboundItems();
+            }
         } else {
             inboundItems = [];
             saveInboundItems();
