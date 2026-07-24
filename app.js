@@ -722,77 +722,59 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Custom Warning Modal triggers
-    function showScanWarning(type, expected, scanned, isSameProductLengthError) {
-        if (!skuWarningModal) return;
-
-        const modalContainer = skuWarningModal.querySelector('.modal-card');
-        const modalHeader = skuWarningModal.querySelector('.modal-header');
-        const rejectBtn = document.getElementById('rejectScanBtn');
-
-        // Hide allowLengthBtn and warningAddProductBtn by default
-        if (allowLengthBtn) {
-            allowLengthBtn.style.display = 'none';
-        }
-        if (warningAddProductBtn) {
-            warningAddProductBtn.style.display = 'none';
-        }
-
-        // Apply dynamic theme styling based on warning type
+    function getScanWarningTheme(type, isSameProductLengthError) {
         let themeColor = 'var(--accent-rose)';
         let themeGlow = 'rgba(244, 63, 94, 0.15)';
         let btnText = 'Reject & Dismiss Scan';
 
-        if (type === 'length') {
-            if (isSameProductLengthError) {
-                themeColor = 'var(--accent-amber)';
-                themeGlow = 'rgba(245, 158, 11, 0.15)';
-                btnText = 'Dismiss & Re-scan';
-
-                // Display allowLengthBtn and capture state
-                if (allowLengthBtn) {
-                    allowLengthBtn.style.display = 'block';
-                    allowLengthBtn.style.borderColor = 'var(--accent-emerald)';
-                    allowLengthBtn.style.color = 'var(--accent-emerald)';
-                    allowLengthBtn.style.backgroundColor = 'rgba(16, 185, 129, 0.05)';
-                    allowLengthBtn.textContent = 'Allow & Save SKU Pattern';
-                }
-
-                lastRejectedSerial = scanned;
-                const workstationProductSelect = document.getElementById('workstationProductSelect');
-                if (activeSession.items.length === 1) {
-                    lastRejectedItemName = activeSession.items[0].name;
-                } else if (workstationProductSelect) {
-                    lastRejectedItemName = workstationProductSelect.value;
-                }
-            } else {
-                themeColor = 'var(--accent-rose)';
-                themeGlow = 'rgba(244, 63, 94, 0.15)';
-                btnText = 'Reject & Dismiss Scan';
-            }
+        if (type === 'length' && isSameProductLengthError) {
+            themeColor = 'var(--accent-amber)';
+            themeGlow = 'rgba(245, 158, 11, 0.15)';
+            btnText = 'Dismiss & Re-scan';
         } else if (type === 'duplicate' || type === 'duplicate-seq' || type === 'duplicate-batch') {
             themeColor = 'var(--accent-purple)';
             themeGlow = 'rgba(139, 92, 246, 0.15)';
             btnText = 'Dismiss Duplicate Scan';
-        } else if (type === 'sku') {
-            themeColor = 'var(--accent-rose)';
-            themeGlow = 'rgba(244, 63, 94, 0.15)';
-            btnText = 'Reject & Dismiss Scan';
         }
 
-        // Apply styles to elements
+        return { themeColor, themeGlow, btnText };
+    }
+
+    function applyScanWarningTheme(theme, modalContainer, modalHeader, rejectBtn) {
         if (modalContainer) {
-            modalContainer.style.borderColor = themeColor;
-            modalContainer.style.boxShadow = `0 20px 50px ${themeGlow}`;
+            modalContainer.style.borderColor = theme.themeColor;
+            modalContainer.style.boxShadow = `0 20px 50px ${theme.themeGlow}`;
         }
         if (modalHeader) {
-            modalHeader.style.color = themeColor;
+            modalHeader.style.color = theme.themeColor;
         }
         if (rejectBtn) {
-            rejectBtn.style.backgroundColor = themeColor;
-            rejectBtn.style.borderColor = themeColor;
-            rejectBtn.textContent = btnText;
+            rejectBtn.style.backgroundColor = theme.themeColor;
+            rejectBtn.style.borderColor = theme.themeColor;
+            rejectBtn.textContent = theme.btnText;
+        }
+    }
+
+    function setupLengthWarningState(scanned) {
+        // Display allowLengthBtn and capture state
+        if (allowLengthBtn) {
+            allowLengthBtn.style.display = 'block';
+            allowLengthBtn.style.borderColor = 'var(--accent-emerald)';
+            allowLengthBtn.style.color = 'var(--accent-emerald)';
+            allowLengthBtn.style.backgroundColor = 'rgba(16, 185, 129, 0.05)';
+            allowLengthBtn.textContent = 'Allow & Save SKU Pattern';
         }
 
+        lastRejectedSerial = scanned;
+        const workstationProductSelect = document.getElementById('workstationProductSelect');
+        if (activeSession.items.length === 1) {
+            lastRejectedItemName = activeSession.items[0].name;
+        } else if (workstationProductSelect) {
+            lastRejectedItemName = workstationProductSelect.value;
+        }
+    }
+
+    function setScanWarningContent(type, expected, scanned, isSameProductLengthError) {
         if (type === 'sku') {
             warningTitleText.textContent = "Another Item Detected!";
             warningDescText.textContent = "Scanned serial barcode does not belong to this shipment item's SKU pattern.";
@@ -835,6 +817,31 @@ document.addEventListener('DOMContentLoaded', () => {
             warningScannedLabel.textContent = "DUPLICATE BARCODE:";
             warningScannedSerial.textContent = scanned;
         }
+    }
+
+    function showScanWarning(type, expected, scanned, isSameProductLengthError) {
+        if (!skuWarningModal) return;
+
+        const modalContainer = skuWarningModal.querySelector('.modal-card');
+        const modalHeader = skuWarningModal.querySelector('.modal-header');
+        const rejectBtn = document.getElementById('rejectScanBtn');
+
+        // Hide allowLengthBtn and warningAddProductBtn by default
+        if (allowLengthBtn) {
+            allowLengthBtn.style.display = 'none';
+        }
+        if (warningAddProductBtn) {
+            warningAddProductBtn.style.display = 'none';
+        }
+
+        const theme = getScanWarningTheme(type, isSameProductLengthError);
+
+        if (type === 'length' && isSameProductLengthError) {
+            setupLengthWarningState(scanned);
+        }
+
+        applyScanWarningTheme(theme, modalContainer, modalHeader, rejectBtn);
+        setScanWarningContent(type, expected, scanned, isSameProductLengthError);
 
         skuWarningModal.classList.add('active');
     }
