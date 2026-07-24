@@ -2055,40 +2055,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Add Scanned Serial Helper (with Length Locking & SKU Verification) ---
-    function addSerialToSession(serial, targetBoxNo) {
-        if (!activeSession) return false;
-
-        lastRejectedIsSequence = false;
-
-        // Clean serial number
-        const cleanSerial = serial.trim();
-        if (!cleanSerial) return false;
-
-        if (cleanSerial.length > 50) {
-            alert(`Scan rejected! Serial number is too long (${cleanSerial.length} characters). Max allowed length is 50 characters.`);
-            return false;
-        }
-
-        const items = activeSession.items || [];
-        if (items.length === 0) return false;
-
-        // Strictly route the scanned serial to the selected product in the workstation
-        let matchedItem = null;
+    function getTargetProductForScan(items) {
         if (items.length === 1) {
-            matchedItem = items[0];
+            return items[0];
         } else {
             const workstationProductSelect = document.getElementById('workstationProductSelect');
             if (workstationProductSelect && workstationProductSelect.value) {
                 const selectedVal = workstationProductSelect.value;
-                matchedItem = items.find(i => i.name === selectedVal);
+                return items.find(i => i.name === selectedVal);
             }
         }
+        return null;
+    }
 
-        if (!matchedItem) {
-            alert('No target product identified for scan validation.');
-            return false;
-        }
-
+    function initAndLockItemPattern(matchedItem, cleanSerial) {
         // Initialize allowedPatterns if missing (legacy recovery)
         if (!matchedItem.allowedPatterns) {
             matchedItem.allowedPatterns = matchedItem.skuAlphabetPattern ? [{
@@ -2109,16 +2089,15 @@ document.addEventListener('DOMContentLoaded', () => {
             matchedItem.lockedLength = cleanSerial.length;
             console.log(`Auto-locked SKU pattern for "${matchedItem.name}":`, pattern);
         }
+    }
 
+    function hasReachedQuantityLimit(matchedItem) {
         // Count current scans for this matched product
         const matchedItemScans = activeSession.serials.filter(s => s.itemName === matchedItem.name).length;
+        return matchedItem.expectedQty > 0 && matchedItemScans >= matchedItem.expectedQty;
+    }
 
-        // Check if this specific item has reached its expected quantity (only if expectedQty > 0)
-        if (matchedItem.expectedQty > 0 && matchedItemScans >= matchedItem.expectedQty) {
-            alert(`Cannot scan more pieces of "${matchedItem.name}"! You have already reached the expected quantity limit of ${matchedItem.expectedQty} for this product.`);
-            return false;
-        }
-
+    function validateSerialPattern(matchedItem, cleanSerial) {
         // Check if barcode matches any allowed pattern configuration strictly
         const isStrictMatch = matchedItem.allowedPatterns.some(cfg => {
             return cleanSerial.length === cfg.length && matchesAlphabetPattern(cleanSerial, cfg.pattern);
@@ -2140,24 +2119,67 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return false;
         }
+        return true;
+    }
 
+    function checkDuplicateSerial(cleanSerial) {
         // Check for duplicates across session
-        const serialsList = activeSession.serials.map(item => item.serial);
-        if (serialsList.includes(cleanSerial)) {
-            const foundItem = activeSession.serials.find(item => item.serial === cleanSerial);
+        const foundItem = activeSession.serials.find(item => item.serial === cleanSerial);
+        if (foundItem) {
             showScanWarning('duplicate', foundItem.boxNo, cleanSerial);
-            return false;
+            return true;
         }
+        return false;
+    }
 
+    function determineNextBoxNumber(matchedItem, targetBoxNo) {
         // Determine Box Number (Product-Specific)
-        let boxNo;
         if (targetBoxNo !== undefined) {
-            boxNo = targetBoxNo;
+            return targetBoxNo;
         } else {
             const itemSerials = activeSession.serials.filter(s => s.itemName === matchedItem.name);
             const maxBoxNo = itemSerials.reduce((max, item) => item.boxNo > max ? item.boxNo : max, 0);
-            boxNo = maxBoxNo + 1;
+            return maxBoxNo + 1;
         }
+    }
+
+    function addSerialToSession(serial, targetBoxNo) {
+        if (!activeSession) return false;
+
+        lastRejectedIsSequence = false;
+
+        // Clean serial number
+        const cleanSerial = serial.trim();
+        if (!cleanSerial) return false;
+
+        if (cleanSerial.length > 50) {
+            alert(`Scan rejected! Serial number is too long (${cleanSerial.length} characters). Max allowed length is 50 characters.`);
+            return false;
+        }
+
+        const items = activeSession.items || [];
+        if (items.length === 0) return false;
+
+        // Strictly route the scanned serial to the selected product in the workstation
+        const matchedItem = getTargetProductForScan(items);
+        if (!matchedItem) {
+            alert('No target product identified for scan validation.');
+            return false;
+        }
+
+        initAndLockItemPattern(matchedItem, cleanSerial);
+
+        // Check if this specific item has reached its expected quantity (only if expectedQty > 0)
+        if (hasReachedQuantityLimit(matchedItem)) {
+            alert(`Cannot scan more pieces of "${matchedItem.name}"! You have already reached the expected quantity limit of ${matchedItem.expectedQty} for this product.`);
+            return false;
+        }
+
+        if (!validateSerialPattern(matchedItem, cleanSerial)) return false;
+
+        if (checkDuplicateSerial(cleanSerial)) return false;
+
+        const boxNo = determineNextBoxNumber(matchedItem, targetBoxNo);
 
         // Push to active serial list
         activeSession.serials.push({ serial: cleanSerial, boxNo: boxNo, itemName: matchedItem.name });
