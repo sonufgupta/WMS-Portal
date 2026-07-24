@@ -3,25 +3,6 @@
  * Basic structure controls (clock, sidebar, navigation, theme toggle)
  */
 
-// --- Auto-SKU Alphabet Pattern Extraction and Matching Helpers ---
-function extractAlphabetPattern(serial) {
-    const pattern = {};
-    for (let i = 0; i < serial.length; i++) {
-        const char = serial[i];
-        // Check if it is a letter (A-Z, a-z)
-        if (/[a-zA-Z]/.test(char)) {
-            pattern[i] = char.toUpperCase();
-        }
-    }
-    return pattern;
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        extractAlphabetPattern
-    };
-}
-
 document.addEventListener('DOMContentLoaded', () => {
     // Cache upgrade check for mock data
     const existingHist = localStorage.getItem('wms_inbound_history');
@@ -170,9 +151,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (val === null) {
                 localStorage.setItem('wms_inbound_items', '[]');
                 renderDropdownItems();
+                renderActiveDropdownItems();
             } else {
                 if (syncCloudDataToLocal('wms_inbound_items', val)) {
                     renderDropdownItems();
+                    renderActiveDropdownItems();
                     console.log("Inbound Items synchronized.");
                 }
             }
@@ -251,10 +234,27 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
 
             if (link.id === 'navMisReport') {
-                window.open('https://geonix-desk.vercel.app/', '_blank');
+                const pwd = prompt("Enter password to access MIS Reports:");
+                if (pwd === '1998') {
+                    window.open('https://geonix-desk.vercel.app/', '_blank');
+                } else if (pwd !== null) {
+                    alert("Incorrect password! Access denied.");
+                }
                 return;
             }
             const targetSectionId = link.id.replace('nav', 'section');
+            if (targetSectionId === 'sectionInventory') {
+                const isUnlocked = localStorage.getItem('wms_inventory_unlocked') === 'true';
+                if (!isUnlocked) {
+                    const pwd = prompt("Enter passcode to access Inventory:");
+                    if (pwd === '2026' || pwd === '1998') {
+                        localStorage.setItem('wms_inventory_unlocked', 'true');
+                    } else {
+                        if (pwd !== null) alert("Incorrect passcode! Access denied.");
+                        return;
+                    }
+                }
+            }
 
             // Remove active class from all navigation links
             navLinks.forEach(item => item.classList.remove('active'));
@@ -265,7 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 sec.classList.remove('active');
                 sec.style.display = 'none';
             });
-
+            
             // Activate and show target section
             const targetSection = document.getElementById(targetSectionId);
             if (targetSection) {
@@ -281,7 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (targetSectionId === 'sectionMisReport') {
                 populateMisProductsDropdown();
             }
-
+            
             console.log(`Navigated to section: ${targetSectionId}`);
         });
     });
@@ -488,12 +488,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (btnCollapseSidebar && appSidebar) {
-        btnCollapseSidebar.addEventListener('click', () => {
+        btnCollapseSidebar.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             const appContainer = document.querySelector('.app-container');
             if (window.innerWidth <= 768) {
                 appSidebar.classList.remove('active');
             } else if (appContainer) {
-                appContainer.classList.add('sidebar-collapsed');
+                appContainer.classList.toggle('sidebar-collapsed');
             }
         });
     }
@@ -506,7 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
         themeTogglerButton.addEventListener('click', () => {
             const currentTheme = htmlElement.getAttribute('data-theme');
             const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-
+            
             htmlElement.setAttribute('data-theme', newTheme);
             console.log(`Theme toggled to: ${newTheme}`);
         });
@@ -518,18 +520,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelActiveInboundSessionBtn = document.getElementById('cancelActiveInboundSessionBtn');
     const inboundInactiveState = document.getElementById('inboundInactiveState');
     const inboundActiveState = document.getElementById('inboundActiveState');
-
+    
     // Modals & Controls
     const inboundConfigModal = document.getElementById('inboundConfigModal');
     const closeInboundConfigModalBtn = document.getElementById('closeInboundConfigModalBtn');
     const cancelInboundConfigModalBtn = document.getElementById('cancelInboundConfigModalBtn');
     const inboundConfigForm = document.getElementById('inboundConfigForm');
-
+    
     const addItemModal = document.getElementById('addItemModal');
     const openAddItemModalBtnInModal = document.getElementById('openAddItemModalBtnInModal');
     const closeAddItemModalBtn = document.getElementById('closeAddItemModalBtn');
     const cancelAddItemModalBtn = document.getElementById('cancelAddItemModalBtn');
-
+    
     const newItemForm = document.getElementById('newItemForm');
     const newItemNameInput = document.getElementById('newItemName');
     const configItemSelect = document.getElementById('configItemSelect');
@@ -538,7 +540,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const configItemDropdownSelectedText = document.getElementById('configItemDropdownSelectedText');
     const configItemDropdownMenu = document.getElementById('configItemDropdownMenu');
     const configItemDropdownList = document.getElementById('configItemDropdownList');
-
+    
     // SKU Warning Reject Modal elements
     const skuWarningModal = document.getElementById('skuWarningModal');
     const warningTitleText = document.getElementById('warningTitleText');
@@ -575,7 +577,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeAddProductToActiveSessionModalBtn = document.getElementById('closeAddProductToActiveSessionModalBtn');
     const cancelAddProductToActiveSessionModalBtn = document.getElementById('cancelAddProductToActiveSessionModalBtn');
     const addProductToActiveSessionForm = document.getElementById('addProductToActiveSessionForm');
-
+    
     // Add product custom dropdown select fields
     const activeConfigItemSelect = document.getElementById('activeConfigItemSelect');
     const activeConfigItemDropdownContainer = document.getElementById('activeConfigItemDropdownContainer');
@@ -635,15 +637,28 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             weights[itemName] = parsed;
         }
-
+        
         // Convert dictionary to array of objects to bypass Firebase path segment key restrictions
         const weightsArray = Object.keys(weights).map(name => ({
             name: name,
             weight: weights[name]
         }));
-
+        
         localStorage.setItem('wms_product_weights', JSON.stringify(weightsArray));
         firebaseSet('product_weights', weightsArray);
+    }
+
+    // --- Auto-SKU Alphabet Pattern Extraction and Matching Helpers ---
+    function extractAlphabetPattern(serial) {
+        const pattern = {};
+        for (let i = 0; i < serial.length; i++) {
+            const char = serial[i];
+            // Check if it is a letter (A-Z, a-z)
+            if (/[a-zA-Z]/.test(char)) {
+                pattern[i] = char.toUpperCase();
+            }
+        }
+        return pattern;
     }
 
     function matchesAlphabetPattern(serial, pattern) {
@@ -711,59 +726,77 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Custom Warning Modal triggers
-    function getScanWarningTheme(type, isSameProductLengthError) {
+    function showScanWarning(type, expected, scanned, isSameProductLengthError) {
+        if (!skuWarningModal) return;
+
+        const modalContainer = skuWarningModal.querySelector('.modal-card');
+        const modalHeader = skuWarningModal.querySelector('.modal-header');
+        const rejectBtn = document.getElementById('rejectScanBtn');
+
+        // Hide allowLengthBtn and warningAddProductBtn by default
+        if (allowLengthBtn) {
+            allowLengthBtn.style.display = 'none';
+        }
+        if (warningAddProductBtn) {
+            warningAddProductBtn.style.display = 'none';
+        }
+
+        // Apply dynamic theme styling based on warning type
         let themeColor = 'var(--accent-rose)';
         let themeGlow = 'rgba(244, 63, 94, 0.15)';
         let btnText = 'Reject & Dismiss Scan';
 
-        if (type === 'length' && isSameProductLengthError) {
-            themeColor = 'var(--accent-amber)';
-            themeGlow = 'rgba(245, 158, 11, 0.15)';
-            btnText = 'Dismiss & Re-scan';
+        if (type === 'length') {
+            if (isSameProductLengthError) {
+                themeColor = 'var(--accent-amber)';
+                themeGlow = 'rgba(245, 158, 11, 0.15)';
+                btnText = 'Dismiss & Re-scan';
+
+                // Display allowLengthBtn and capture state
+                if (allowLengthBtn) {
+                    allowLengthBtn.style.display = 'block';
+                    allowLengthBtn.style.borderColor = 'var(--accent-emerald)';
+                    allowLengthBtn.style.color = 'var(--accent-emerald)';
+                    allowLengthBtn.style.backgroundColor = 'rgba(16, 185, 129, 0.05)';
+                    allowLengthBtn.textContent = 'Allow & Save SKU Pattern';
+                }
+
+                lastRejectedSerial = scanned;
+                const workstationProductSelect = document.getElementById('workstationProductSelect');
+                if (activeSession.items.length === 1) {
+                    lastRejectedItemName = activeSession.items[0].name;
+                } else if (workstationProductSelect) {
+                    lastRejectedItemName = workstationProductSelect.value;
+                }
+            } else {
+                themeColor = 'var(--accent-rose)';
+                themeGlow = 'rgba(244, 63, 94, 0.15)';
+                btnText = 'Reject & Dismiss Scan';
+            }
         } else if (type === 'duplicate' || type === 'duplicate-seq' || type === 'duplicate-batch') {
             themeColor = 'var(--accent-purple)';
             themeGlow = 'rgba(139, 92, 246, 0.15)';
             btnText = 'Dismiss Duplicate Scan';
+        } else if (type === 'sku') {
+            themeColor = 'var(--accent-rose)';
+            themeGlow = 'rgba(244, 63, 94, 0.15)';
+            btnText = 'Reject & Dismiss Scan';
         }
 
-        return { themeColor, themeGlow, btnText };
-    }
-
-    function applyScanWarningTheme(theme, modalContainer, modalHeader, rejectBtn) {
+        // Apply styles to elements
         if (modalContainer) {
-            modalContainer.style.borderColor = theme.themeColor;
-            modalContainer.style.boxShadow = `0 20px 50px ${theme.themeGlow}`;
+            modalContainer.style.borderColor = themeColor;
+            modalContainer.style.boxShadow = `0 20px 50px ${themeGlow}`;
         }
         if (modalHeader) {
-            modalHeader.style.color = theme.themeColor;
+            modalHeader.style.color = themeColor;
         }
         if (rejectBtn) {
-            rejectBtn.style.backgroundColor = theme.themeColor;
-            rejectBtn.style.borderColor = theme.themeColor;
-            rejectBtn.textContent = theme.btnText;
-        }
-    }
-
-    function setupLengthWarningState(scanned) {
-        // Display allowLengthBtn and capture state
-        if (allowLengthBtn) {
-            allowLengthBtn.style.display = 'block';
-            allowLengthBtn.style.borderColor = 'var(--accent-emerald)';
-            allowLengthBtn.style.color = 'var(--accent-emerald)';
-            allowLengthBtn.style.backgroundColor = 'rgba(16, 185, 129, 0.05)';
-            allowLengthBtn.textContent = 'Allow & Save SKU Pattern';
+            rejectBtn.style.backgroundColor = themeColor;
+            rejectBtn.style.borderColor = themeColor;
+            rejectBtn.textContent = btnText;
         }
 
-        lastRejectedSerial = scanned;
-        const workstationProductSelect = document.getElementById('workstationProductSelect');
-        if (activeSession.items.length === 1) {
-            lastRejectedItemName = activeSession.items[0].name;
-        } else if (workstationProductSelect) {
-            lastRejectedItemName = workstationProductSelect.value;
-        }
-    }
-
-    function setScanWarningContent(type, expected, scanned, isSameProductLengthError) {
         if (type === 'sku') {
             warningTitleText.textContent = "Another Item Detected!";
             warningDescText.textContent = "Scanned serial barcode does not belong to this shipment item's SKU pattern.";
@@ -806,31 +839,6 @@ document.addEventListener('DOMContentLoaded', () => {
             warningScannedLabel.textContent = "DUPLICATE BARCODE:";
             warningScannedSerial.textContent = scanned;
         }
-    }
-
-    function showScanWarning(type, expected, scanned, isSameProductLengthError) {
-        if (!skuWarningModal) return;
-
-        const modalContainer = skuWarningModal.querySelector('.modal-card');
-        const modalHeader = skuWarningModal.querySelector('.modal-header');
-        const rejectBtn = document.getElementById('rejectScanBtn');
-
-        // Hide allowLengthBtn and warningAddProductBtn by default
-        if (allowLengthBtn) {
-            allowLengthBtn.style.display = 'none';
-        }
-        if (warningAddProductBtn) {
-            warningAddProductBtn.style.display = 'none';
-        }
-
-        const theme = getScanWarningTheme(type, isSameProductLengthError);
-
-        if (type === 'length' && isSameProductLengthError) {
-            setupLengthWarningState(scanned);
-        }
-
-        applyScanWarningTheme(theme, modalContainer, modalHeader, rejectBtn);
-        setScanWarningContent(type, expected, scanned, isSameProductLengthError);
 
         skuWarningModal.classList.add('active');
     }
@@ -886,11 +894,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (modalContainer) {
                 modalContainer.style.maxWidth = '620px';
             }
-
+            
             // Raw detected serial is passed in extraVal
             const detectedSerial = extraVal || scannedVal;
             let detectedProduct = lookupProductBySerial(detectedSerial) || lookupProductBySkuPattern(detectedSerial) || 'Unknown Product';
-
+            
             // Find box number of the detected serial from Inbound history
             let detectedBoxNo = 'N/A';
             const inboundHistory = getHistory();
@@ -986,7 +994,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     warningModalConfirmInput.focus();
                 }, 50);
 
-                let sequenceStep = 1;
+                let sequenceStep = 1; 
                 const lastSessionSerial = (activeOutboundSession && activeOutboundSession.serials.length > 0)
                     ? activeOutboundSession.serials[activeOutboundSession.serials.length - 1].serial
                     : null;
@@ -1009,7 +1017,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         evt.preventDefault();
                         const val = warningModalConfirmInput.value.trim();
                         if (!val) return;
-
+                        
                         // 1. Check for reject scan gesture (scanning the same detected serial while in Step 1)
                         if (sequenceStep === 1 && val === detectedSerial) {
                             skuWarningModal.classList.remove('active');
@@ -1041,7 +1049,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 return;
                             }
                         }
-
+                        
                         // 3. Incorrect scan alerts for sequence steps (non-blocking)
                         if (sequenceStep === 1) {
                             warningModalConfirmInput.value = '';
@@ -1066,17 +1074,10 @@ document.addEventListener('DOMContentLoaded', () => {
         firebaseSet('inbound_history', historyData);
     }
 
-    let _cachedHistoryStr = null;
-    let _cachedHistoryObj = null;
     function getHistory() {
         const saved = localStorage.getItem('wms_inbound_history');
         if (saved) {
-            if (saved === _cachedHistoryStr) {
-                return _cachedHistoryObj;
-            }
-            _cachedHistoryStr = saved;
-            _cachedHistoryObj = JSON.parse(saved);
-            return _cachedHistoryObj;
+            return JSON.parse(saved);
         }
         return [];
     }
@@ -1086,11 +1087,11 @@ document.addEventListener('DOMContentLoaded', () => {
         inboundHistoryBody.innerHTML = '';
         const historyData = getHistory();
         let needsUpdate = false;
-
+        
         historyData.forEach((row, idx) => {
             const tr = document.createElement('tr');
             const vehicleDisplay = row.vehicle === 'Not Specified' ? '<span class="text-muted">Not Specified</span>' : row.vehicle;
-
+            
             // Assign unique ID to legacy mock logs if missing
             if (!row.id) {
                 row.id = `log_${idx}_${Date.now()}`;
@@ -1106,16 +1107,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
             }
-
+            
             const productWeights = getProductWeights();
             const itemsList = row.items || [{ name: row.item, expectedQty: row.expected }];
             const itemsHtml = itemsList.map(item => {
                 const weight = productWeights[item.name];
                 const weightLabel = weight ? ` (${weight} kg)` : ' (Set Weight)';
-                const badgeStyle = weight
-                    ? 'background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--accent-emerald);'
+                const badgeStyle = weight 
+                    ? 'background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--accent-emerald);' 
                     : 'background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--accent-blue);';
-
+                
                 return `
                     <button type="button" class="btn-item-weight-trigger" data-item-name="${escapeHtmlAttr(item.name)}" style="${badgeStyle} padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; transition: var(--transition-smooth); gap: 4px; margin-right: 6px; margin-bottom: 4px; border-style: solid;">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
@@ -1178,14 +1179,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Create new Excel Workbook
         const wb = XLSX.utils.book_new();
-
+        
         const items = log.items || [{ name: log.item || 'Product', expectedQty: log.expected }];
         const serials = log.serials || [];
 
         items.forEach(item => {
             // Filter serials matching this item name
             const itemSerials = serials.filter(s => s.itemName === item.name);
-
+            
             // Map serial data to sheet rows
             let sheetRows = [];
             if (itemSerials.length > 0) {
@@ -1225,7 +1226,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const ws = XLSX.utils.json_to_sheet(sheetRows);
-
+            
             // Clean sheet name (SheetJS limits sheet tab names to max 31 characters)
             let sheetName = item.name.replace(/[\\\/\?\*\[\]\:]/g, "").substring(0, 30);
             if (!sheetName.trim()) {
@@ -1252,7 +1253,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const historyData = getHistory();
         const updated = historyData.filter(log => log.id !== logId);
-
+        
         saveHistory(updated);
         renderHistoryTable();
         renderInventoryPanel();
@@ -1267,7 +1268,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const logId = btn.getAttribute('data-id');
                 const historyData = getHistory();
                 const logItem = historyData.find(item => item.id === logId);
-
+                
                 if (logItem) {
                     downloadLogExcel(logItem);
                 } else {
@@ -1282,128 +1283,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 deleteInboundSessionFromHistory(logId);
             }
         });
-    }
-
-    function groupSerialsByItem(serials) {
-        const serialsByItem = new Map();
-        if (serials) {
-            serials.forEach(s => {
-                let list = serialsByItem.get(s.itemName);
-                if (!list) {
-                    list = [];
-                    serialsByItem.set(s.itemName, list);
-                }
-                list.push(s);
-            });
-        }
-        return serialsByItem;
-    }
-
-    function createSerialRow(serialObj) {
-        const row = document.createElement('div');
-        row.className = 'serial-item-row';
-        row.style.cssText = 'padding: 6px 8px; font-size: 0.85rem;';
-        row.innerHTML = `
-            <span class="serial-item-text font-mono">${serialObj.serial}</span>
-            <button type="button" class="btn-delete-serial" data-serial="${serialObj.serial}" title="Remove serial">&times;</button>
-        `;
-        return row;
-    }
-
-    function createBoxCard(boxNo, boxItems, activeItemName) {
-        const boxCard = document.createElement('div');
-        boxCard.className = 'box-card';
-        boxCard.style.cssText = 'margin-bottom: 0;';
-        boxCard.id = `box-card-${boxNo}-${activeItemName.replace(/\s+/g, '-')}`;
-
-        // Box Card Header
-        boxCard.innerHTML = `
-            <div class="box-card-header" style="padding-bottom: 8px; margin-bottom: 8px;">
-                <div class="box-card-title">
-                    <h3 style="font-size: 0.95rem;">Box ${boxNo}</h3>
-                    <span class="box-badge" style="font-size: 0.7rem; padding: 2px 6px;">${boxItems.length} ${boxItems.length === 1 ? 'Item' : 'Items'}</span>
-                </div>
-                <button type="button" class="btn-delete-box" data-box="${boxNo}" data-item-name="${escapeHtmlAttr(activeItemName)}" title="Delete items of this product from Box ${boxNo}" style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px;">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                </button>
-            </div>
-        `;
-
-        // Serials List
-        const listContainer = document.createElement('div');
-        listContainer.className = 'box-serials-list';
-
-        boxItems.forEach(s => {
-            listContainer.appendChild(createSerialRow(s));
-        });
-
-        boxCard.appendChild(listContainer);
-        return boxCard;
-    }
-
-    function createProductColumn(activeItem, itemSerials) {
-        // Calculate item-specific pieces and unique boxes count
-        const itemPieces = itemSerials.length;
-        const uniqueBoxesSet = new Set(itemSerials.map(s => s.boxNo));
-        const itemBoxes = uniqueBoxesSet.size;
-
-        // Create column container element
-        const col = document.createElement('div');
-        col.className = 'product-scan-column';
-        col.style.cssText = 'display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--border-color); padding: 16px; border-radius: var(--radius-md); background: rgba(255,255,255,0.01); min-width: 300px; flex: 1 1 0px; height: 100%; overflow: hidden;';
-
-        // Column Header
-        col.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
-                <div style="font-weight: 700; color: var(--text-primary); font-size: 0.9rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex: 1;" title="${activeItem.name}">
-                    ${activeItem.name}
-                </div>
-                <div style="display: flex; gap: 6px; flex-shrink: 0;">
-                    <span class="count-badge-pcs" style="font-size: 0.7rem; font-weight: 700; background: rgba(59,130,246,0.1); color: var(--accent-blue); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(59,130,246,0.2);">
-                        PCs: ${itemPieces}
-                    </span>
-                    <span class="count-badge-boxes" style="font-size: 0.7rem; font-weight: 700; background: rgba(16,185,129,0.1); color: var(--accent-emerald); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.2);">
-                        BOXes: ${itemBoxes}
-                    </span>
-                </div>
-            </div>
-        `;
-
-        // Scrollable list container for Box cards of this product
-        const boxListWrapper = document.createElement('div');
-        boxListWrapper.className = 'product-boxes-list';
-        boxListWrapper.style.cssText = 'flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-right: 4px; margin-top: 10px;';
-
-        if (itemSerials.length === 0) {
-            boxListWrapper.innerHTML = `
-                <div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 48px 12px;">
-                    No serials scanned for this item yet.
-                </div>
-            `;
-        } else {
-            // Group itemSerials by boxNo: { boxNo: [item1, item2] }
-            const groups = {};
-            itemSerials.forEach(s => {
-                if (!groups[s.boxNo]) {
-                    groups[s.boxNo] = [];
-                }
-                groups[s.boxNo].push(s);
-            });
-
-            // Sort box numbers from highest to lowest (newest box on top)
-            const boxNumbers = Object.keys(groups).map(Number).sort((a, b) => b - a);
-
-            boxNumbers.forEach(boxNo => {
-                const boxItems = groups[boxNo];
-                const boxCard = createBoxCard(boxNo, boxItems, activeItem.name);
-                boxListWrapper.appendChild(boxCard);
-            });
-        }
-
-        col.appendChild(boxListWrapper);
-        return col;
     }
 
     // Render scanned serials grouped by Box Card inside product columns
@@ -1421,11 +1300,105 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const itemsList = activeSession.items || [];
-        const serialsByItem = groupSerialsByItem(activeSession.serials);
 
         itemsList.forEach(activeItem => {
-            const itemSerials = serialsByItem.get(activeItem.name) || [];
-            const col = createProductColumn(activeItem, itemSerials);
+            // Find all scanned serials belonging to this item
+            const itemSerials = activeSession.serials.filter(s => s.itemName === activeItem.name);
+            
+            // Calculate item-specific pieces and unique boxes count
+            const itemPieces = itemSerials.length;
+            const uniqueBoxesSet = new Set(itemSerials.map(s => s.boxNo));
+            const itemBoxes = uniqueBoxesSet.size;
+
+            // Create column container element
+            const col = document.createElement('div');
+            col.className = 'product-scan-column';
+            col.style.cssText = 'display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--border-color); padding: 16px; border-radius: var(--radius-md); background: rgba(255,255,255,0.01); min-width: 300px; flex: 1 1 0px; height: 100%; overflow: hidden;';
+
+            // Column Header
+            col.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                    <div style="font-weight: 700; color: var(--text-primary); font-size: 0.9rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex: 1;" title="${activeItem.name}">
+                        ${activeItem.name}
+                    </div>
+                    <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                        <span class="count-badge-pcs" style="font-size: 0.7rem; font-weight: 700; background: rgba(59,130,246,0.1); color: var(--accent-blue); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(59,130,246,0.2);">
+                            PCs: ${itemPieces}
+                        </span>
+                        <span class="count-badge-boxes" style="font-size: 0.7rem; font-weight: 700; background: rgba(16,185,129,0.1); color: var(--accent-emerald); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.2);">
+                            BOXes: ${itemBoxes}
+                        </span>
+                    </div>
+                </div>
+            `;
+
+            // Scrollable list container for Box cards of this product
+            const boxListWrapper = document.createElement('div');
+            boxListWrapper.className = 'product-boxes-list';
+            boxListWrapper.style.cssText = 'flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-right: 4px; margin-top: 10px;';
+
+            if (itemSerials.length === 0) {
+                boxListWrapper.innerHTML = `
+                    <div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 48px 12px;">
+                        No serials scanned for this item yet.
+                    </div>
+                `;
+            } else {
+                // Group itemSerials by boxNo: { boxNo: [item1, item2] }
+                const groups = {};
+                itemSerials.forEach(s => {
+                    if (!groups[s.boxNo]) {
+                        groups[s.boxNo] = [];
+                    }
+                    groups[s.boxNo].push(s);
+                });
+
+                // Sort box numbers from highest to lowest (newest box on top)
+                const boxNumbers = Object.keys(groups).map(Number).sort((a, b) => b - a);
+
+                boxNumbers.forEach(boxNo => {
+                    const boxItems = groups[boxNo];
+                    const boxCard = document.createElement('div');
+                    boxCard.className = 'box-card';
+                    boxCard.style.cssText = 'margin-bottom: 0;';
+                    boxCard.id = `box-card-${boxNo}-${activeItem.name.replace(/\s+/g, '-')}`;
+
+                    // Box Card Header
+                    boxCard.innerHTML = `
+                        <div class="box-card-header" style="padding-bottom: 8px; margin-bottom: 8px;">
+                            <div class="box-card-title">
+                                <h3 style="font-size: 0.95rem;">Box ${boxNo}</h3>
+                                <span class="box-badge" style="font-size: 0.7rem; padding: 2px 6px;">${boxItems.length} ${boxItems.length === 1 ? 'Item' : 'Items'}</span>
+                            </div>
+                            <button type="button" class="btn-delete-box" data-box="${boxNo}" data-item-name="${escapeHtmlAttr(activeItem.name)}" title="Delete items of this product from Box ${boxNo}" style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                        </div>
+                    `;
+
+                    // Serials List
+                    const listContainer = document.createElement('div');
+                    listContainer.className = 'box-serials-list';
+
+                    boxItems.forEach(s => {
+                        const row = document.createElement('div');
+                        row.className = 'serial-item-row';
+                        row.style.cssText = 'padding: 6px 8px; font-size: 0.85rem;';
+                        row.innerHTML = `
+                            <span class="serial-item-text font-mono">${s.serial}</span>
+                            <button type="button" class="btn-delete-serial" data-serial="${s.serial}" title="Remove serial">&times;</button>
+                        `;
+                        listContainer.appendChild(row);
+                    });
+
+                    boxCard.appendChild(listContainer);
+                    boxListWrapper.appendChild(boxCard);
+                });
+            }
+
+            col.appendChild(boxListWrapper);
             sessionBoxesContainer.appendChild(col);
         });
     }
@@ -1443,7 +1416,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (items.length > 1) {
             // Show the selector group
             workstationProductSelectorGroup.style.display = 'block';
-
+            
             // Re-populate options, keeping current selection if valid
             const currentVal = workstationProductSelect.value;
             workstationProductSelect.innerHTML = '';
@@ -1477,7 +1450,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (activeSession && !activeSession.items) {
                 activeSession.items = [];
             }
-
+            
             // Backward compatibility conversion of legacy format to items array format
             if (!activeSession.items && activeSession.item) {
                 activeSession.items = [{
@@ -1543,7 +1516,7 @@ document.addEventListener('DOMContentLoaded', () => {
             compactBoxNumbers();
             updateSessionProgress();
             updateWorkstationProductSelector();
-
+            
             // Render restored cards
             renderBoxCards();
             // Check join authorization
@@ -1615,12 +1588,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadInboundItems() {
         const saved = localStorage.getItem('wms_inbound_items');
         if (saved) {
-            try {
-                inboundItems = JSON.parse(saved);
-            } catch (e) {
-                inboundItems = [];
-                saveInboundItems();
-            }
+            inboundItems = JSON.parse(saved);
         } else {
             inboundItems = [];
             saveInboundItems();
@@ -1629,13 +1597,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderDropdownItems() {
         if (!configItemDropdownList) return;
+        loadInboundItems();
         configItemDropdownList.innerHTML = '';
 
         inboundItems.forEach(item => {
             const li = document.createElement('li');
             li.className = 'custom-dropdown-item';
             li.setAttribute('data-value', item);
-
+            
             li.innerHTML = `
                 <span class="custom-dropdown-item-text">${item}</span>
                 <button type="button" class="btn-delete-dropdown-item" data-item="${item}" title="Delete Item">
@@ -1659,13 +1628,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', (e) => {
                     e.stopPropagation(); // Avoid triggering trigger toggle or selection click
-
+                    
                     const pwd = prompt(`Enter password to delete item "${item}":`);
                     if (pwd === '2026') {
                         inboundItems = inboundItems.filter(i => i !== item);
                         saveInboundItems();
                         renderDropdownItems();
-
+                        
                         // Reset if active item was deleted
                         if (configItemSelect && configItemSelect.value === item) {
                             configItemSelect.value = '';
@@ -1744,7 +1713,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (closeAddItemModalBtn) closeAddItemModalBtn.addEventListener('click', closeAddItemModal);
     if (cancelAddItemModalBtn) cancelAddItemModalBtn.addEventListener('click', closeAddItemModal);
-
+    
     // Save New Item and Add to selector dropdown
     if (newItemForm && newItemNameInput) {
         newItemForm.addEventListener('submit', (e) => {
@@ -1768,7 +1737,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === addItemModal) closeAddItemModal();
         if (e.target === addProductToActiveSessionModal) closeActiveProductModal();
         if (e.target === productWeightModal) closeWeightModal();
-
+        
         if (configItemDropdownContainer && !configItemDropdownContainer.contains(e.target)) {
             closeDropdownMenu();
         }
@@ -1792,7 +1761,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (inboundConfigForm) {
         inboundConfigForm.addEventListener('submit', (e) => {
             e.preventDefault();
-
+            
             const vehicleVal = document.getElementById('configVehicleNo').value.trim();
             const itemVal = configItemSelect.value;
             const parsed = parseInt(document.getElementById('configExpectedQty').value);
@@ -1819,14 +1788,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // Lock and update active session display
             if (activeSessionVehicle) activeSessionVehicle.textContent = activeSession.vehicle;
             updateSessionProgress();
-
+            
             // Render empty box cards container
             renderBoxCards();
             // Toggle dashboard states & set joined status
             localStorage.setItem('wms_inbound_joined', 'true');
             inboundInactiveState.style.display = 'none';
             inboundActiveState.style.display = 'flex';
-
+            
             // Save state to localStorage
             saveActiveSession();
             // Cleanup modals & autofocus unified scan input
@@ -1853,10 +1822,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const items = activeSession.items || [];
-
+        
         let totalExpected = 0;
         let totalScanned = 0;
-
+        
         items.forEach(item => {
             totalExpected += parseInt(item.expectedQty) || 0;
             // Count scanned serials for this product
@@ -1873,7 +1842,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeSessionProgress.textContent = `${totalScanned} Scanned`;
             }
         }
-
+        
         // Pieces count
         const sessionScannedCount = document.getElementById('sessionScannedCount');
         if (sessionScannedCount) sessionScannedCount.textContent = totalScanned;
@@ -1893,15 +1862,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Render table rows inside activeSessionRowsContainer
         if (activeSessionRowsContainer) {
             activeSessionRowsContainer.innerHTML = '';
-
+            
             items.forEach(item => {
                 const tr = document.createElement('tr');
                 tr.style.cssText = 'border-bottom: 1px solid rgba(255, 255, 255, 0.05); font-size: 0.9rem;';
-
-                const progressColor = item.expectedQty > 0
+                
+                const progressColor = item.expectedQty > 0 
                     ? (item.scannedCount >= item.expectedQty ? 'var(--accent-emerald)' : 'var(--text-secondary)')
                     : 'var(--accent-blue)';
-
+                
                 // Initialize allowedPatterns if missing (legacy recovery)
                 if (!item.allowedPatterns) {
                     item.allowedPatterns = item.skuAlphabetPattern ? [{
@@ -1913,7 +1882,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Get accepted lengths list
                 const lengthsList = item.allowedPatterns.map(cfg => cfg.length);
                 const lengthVal = lengthsList.length > 0 ? `${lengthsList.join(', ')} Chars` : 'Not Locked Yet';
-
+                
                 const patternStyle = 'background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: var(--accent-blue); padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.8rem; font-family: var(--font-mono); display: block; margin-bottom: 4px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
 
                 let patternCellHtml = '';
@@ -1922,7 +1891,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const patStr = formatAlphabetPattern(cfg.pattern, cfg.length);
                         return `<span style="${patternStyle}" title="${patStr}">${patStr}</span>`;
                     }).join('');
-
+                    
                     patternCellHtml = `
                         <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: 250px; overflow: hidden;">
                             ${badgesHtml}
@@ -1965,7 +1934,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (addSkuBtn) {
                     addSkuBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
-
+                        
                         const pwd = prompt(`Enter password to authorize adding a new SKU pattern structure (e.g. 2026):`);
                         if (pwd === '2026') {
                             const refSerial = prompt(`Scan or enter a reference serial number representing the new SKU format for "${item.name}":`);
@@ -1974,25 +1943,25 @@ document.addEventListener('DOMContentLoaded', () => {
                                 if (cleanRef) {
                                     const newPattern = extractAlphabetPattern(cleanRef);
                                     const newConfig = { pattern: newPattern, length: cleanRef.length };
-
+                                    
                                     if (!item.allowedPatterns) {
                                         item.allowedPatterns = item.skuAlphabetPattern ? [{
                                             pattern: item.skuAlphabetPattern,
                                             length: item.lockedLength || 15
                                         }] : [];
                                     }
-
+                                    
                                     // Avoid duplicates
                                     const exists = item.allowedPatterns.some(cfg => {
                                         return cfg.length === cleanRef.length && matchesAlphabetPattern(cleanRef, cfg.pattern);
                                     });
-
+                                    
                                     if (!exists) {
                                         item.allowedPatterns.push(newConfig);
                                         // update legacy fields for safety
                                         item.skuAlphabetPattern = newPattern;
                                         item.lockedLength = cleanRef.length;
-
+                                        
                                         updateSessionProgress();
                                         saveActiveSession();
                                         alert(`Success! Registered new SKU format of ${cleanRef.length} characters.`);
@@ -2012,7 +1981,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (deleteBtn) {
                     deleteBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
-
+                        
                         if (activeSession.items.length <= 1) {
                             alert('Cannot delete the last remaining product in the session. Please use "Cancel Session" if you want to discard the entire session.');
                             return;
@@ -2022,7 +1991,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (pwd === '2026') {
                             // 1. Remove product item
                             activeSession.items = activeSession.items.filter(i => i.name !== item.name);
-
+                            
                             // 2. Remove all serials scanned under this product item
                             activeSession.serials = activeSession.serials.filter(s => s.itemName !== item.name);
 
@@ -2081,7 +2050,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Add Scanned Serial Helper (with Length Locking & SKU Verification) ---
     function addSerialToSession(serial, targetBoxNo) {
         if (!activeSession) return false;
-
+        
         lastRejectedIsSequence = false;
 
         // Clean serial number
@@ -2166,8 +2135,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Check for duplicates across session
-        const foundItem = activeSession.serials.find(item => item.serial === cleanSerial);
-        if (foundItem) {
+        const serialsList = activeSession.serials.map(item => item.serial);
+        if (serialsList.includes(cleanSerial)) {
+            const foundItem = activeSession.serials.find(item => item.serial === cleanSerial);
             showScanWarning('duplicate', foundItem.boxNo, cleanSerial);
             return false;
         }
@@ -2196,28 +2166,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function compactBoxNumbers() {
         if (!activeSession) return;
         const items = activeSession.items || [];
-
-        const serialsByItem = new Map();
-        activeSession.serials.forEach(s => {
-            let list = serialsByItem.get(s.itemName);
-            if (!list) {
-                list = [];
-                serialsByItem.set(s.itemName, list);
-            }
-            list.push(s);
-        });
-
         items.forEach(activeItem => {
-            const itemSerials = serialsByItem.get(activeItem.name) || [];
-            if (itemSerials.length === 0) return;
-
-            const uniqueBoxes = Array.from(new Set(itemSerials.map(s => s.boxNo))).sort((a, b) => a - b);
-
-            const boxMap = new Map();
-            uniqueBoxes.forEach((boxNo, idx) => boxMap.set(boxNo, idx + 1));
-
+            const itemSerials = activeSession.serials.filter(s => s.itemName === activeItem.name);
+            const uniqueBoxes = [];
             itemSerials.forEach(s => {
-                s.boxNo = boxMap.get(s.boxNo);
+                if (!uniqueBoxes.includes(s.boxNo)) {
+                    uniqueBoxes.push(s.boxNo);
+                }
+            });
+            uniqueBoxes.sort((a, b) => a - b);
+            
+            activeSession.serials.forEach(s => {
+                if (s.itemName === activeItem.name) {
+                    s.boxNo = uniqueBoxes.indexOf(s.boxNo) + 1;
+                }
             });
         });
     }
@@ -2226,28 +2188,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function compactOutboundBoxNumbers() {
         if (!activeOutboundSession) return;
         const items = activeOutboundSession.items || [];
-
-        const serialsByItem = new Map();
-        activeOutboundSession.serials.forEach(s => {
-            let list = serialsByItem.get(s.itemName);
-            if (!list) {
-                list = [];
-                serialsByItem.set(s.itemName, list);
-            }
-            list.push(s);
-        });
-
         items.forEach(activeItem => {
-            const itemSerials = serialsByItem.get(activeItem.name) || [];
-            if (itemSerials.length === 0) return;
-
-            const uniqueBoxes = Array.from(new Set(itemSerials.map(s => s.boxNo))).sort((a, b) => a - b);
-
-            const boxMap = new Map();
-            uniqueBoxes.forEach((boxNo, idx) => boxMap.set(boxNo, idx + 1));
-
+            const itemSerials = activeOutboundSession.serials.filter(s => s.itemName === activeItem.name);
+            const uniqueBoxes = [];
             itemSerials.forEach(s => {
-                s.boxNo = boxMap.get(s.boxNo);
+                if (!uniqueBoxes.includes(s.boxNo)) {
+                    uniqueBoxes.push(s.boxNo);
+                }
+            });
+            uniqueBoxes.sort((a, b) => a - b);
+            
+            activeOutboundSession.serials.forEach(s => {
+                if (s.itemName === activeItem.name) {
+                    s.boxNo = uniqueBoxes.indexOf(s.boxNo) + 1;
+                }
             });
         });
     }
@@ -2273,9 +2227,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const deleteSerialBtn = e.target.closest('.btn-delete-serial');
             if (deleteSerialBtn && activeSession) {
                 const serialToRemove = deleteSerialBtn.getAttribute('data-serial');
-
+                
                 activeSession.serials = activeSession.serials.filter(s => s.serial !== serialToRemove);
-
+                
                 // Unlock length/pattern if scans drop to 0
                 checkAndUnlockProducts();
 
@@ -2291,7 +2245,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (deleteBoxBtn && activeSession) {
                 const boxToRemove = parseInt(deleteBoxBtn.getAttribute('data-box'));
                 const itemName = deleteBoxBtn.getAttribute('data-item-name');
-
+                
                 let confirmMsg = `Are you sure you want to delete entire Box ${boxToRemove} and all its serial numbers?`;
                 if (itemName) {
                     confirmMsg = `Are you sure you want to delete all serial numbers of "${itemName}" from Box ${boxToRemove}?`;
@@ -2303,7 +2257,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         activeSession.serials = activeSession.serials.filter(s => s.boxNo !== boxToRemove);
                     }
-
+                    
                     // Unlock length/pattern if scans drop to 0
                     checkAndUnlockProducts();
 
@@ -2407,7 +2361,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // We will collect all generated serials across all base codes to validate and insert them
         const allTempSerials = []; // Array of { serial, boxNo }
-
+        
         const itemSerials = activeSession.serials.filter(s => s.itemName === matchedItem.name);
         let maxBoxNo = itemSerials.reduce((max, item) => item.boxNo > max ? item.boxNo : max, 0);
 
@@ -2496,13 +2450,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (isPartialMatch) {
                     const expectedStr = activeAllowedPatterns.map(cfg => cfg.length).join(', ');
-
+                    
                     // Capture recovery state variables for approval handler
                     lastRejectedIsSequence = true;
                     lastRejectedSeqBase = baseCode;
                     lastRejectedSeqCount = count;
                     lastRejectedSerial = checkSerial;
-
+                    
                     const workstationProductSelect = document.getElementById('workstationProductSelect');
                     if (activeSession.items.length === 1) {
                         lastRejectedItemName = activeSession.items[0].name;
@@ -2554,7 +2508,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!activeSession) return;
             const count = activeSession.serials.length;
             const totalExpected = activeSession.items.reduce((sum, item) => sum + item.expectedQty, 0);
-
+            
             // Warn if count is less than expected, but allow them to bypass it with confirmation
             if (count < totalExpected) {
                 const remaining = totalExpected - count;
@@ -2563,7 +2517,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
             }
-
+            
             const productSummary = activeSession.items.map(i => `${i.name} (${i.expectedQty} expected)`).join(', ');
             const confirmMsg = `Are you sure you want to end and save this session?\n\nVehicle: ${activeSession.vehicle}\nProducts: ${productSummary}\nTotal Scanned: ${count} / ${totalExpected}`;
             if (confirm(confirmMsg)) {
@@ -2589,15 +2543,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     serials: activeSession.serials
                 });
                 saveHistory(historyData);
-
+ 
                 // Reset dashboard inactive state
                 inboundActiveState.style.display = 'none';
                 inboundInactiveState.style.display = 'block';
-
+                
                 // Clear state & active localStorage
                 activeSession = null;
                 saveActiveSession();
-
+ 
                 // Re-render historical logs list
                 renderHistoryTable();
             }
@@ -2611,7 +2565,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (confirm("Are you sure you want to cancel this inbound session? All scanned serials in this session will be discarded.")) {
                 inboundActiveState.style.display = 'none';
                 inboundInactiveState.style.display = 'block';
-
+                
                 // Clear state & active localStorage
                 activeSession = null;
                 saveActiveSession();
@@ -2656,13 +2610,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Custom Active Dropdown Item List Logic
     function renderActiveDropdownItems() {
         if (!activeConfigItemDropdownList) return;
+        loadInboundItems();
         activeConfigItemDropdownList.innerHTML = '';
 
         inboundItems.forEach(item => {
             const li = document.createElement('li');
             li.className = 'custom-dropdown-item';
             li.setAttribute('data-value', item);
-
+            
             li.innerHTML = `
                 <span class="custom-dropdown-item-text">${item}</span>
                 <button type="button" class="btn-delete-dropdown-item" data-item="${item}" title="Delete Item">
@@ -2692,7 +2647,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         saveInboundItems();
                         renderDropdownItems();
                         renderActiveDropdownItems();
-
+                        
                         if (activeConfigItemSelect && activeConfigItemSelect.value === item) {
                             activeConfigItemSelect.value = '';
                             if (activeConfigItemDropdownSelectedText) activeConfigItemDropdownSelectedText.textContent = 'Choose an item...';
@@ -2795,25 +2750,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const pwd = prompt("Enter password to authorize and register this new SKU pattern structure (e.g. 2026):");
             if (pwd === '2026') {
                 skuWarningModal.classList.remove('active');
-
+                
                 // Inbound recovery
                 if (lastRejectedSerial && lastRejectedItemName && activeSession) {
                     const targetItem = activeSession.items.find(i => i.name === lastRejectedItemName);
                     if (targetItem) {
                         const newPattern = extractAlphabetPattern(lastRejectedSerial);
                         const newConfig = { pattern: newPattern, length: lastRejectedSerial.length };
-
+                        
                         if (!targetItem.allowedPatterns) {
                             targetItem.allowedPatterns = targetItem.skuAlphabetPattern ? [{
                                 pattern: targetItem.skuAlphabetPattern,
                                 length: targetItem.lockedLength || 15
                             }] : [];
                         }
-
+                        
                         const exists = targetItem.allowedPatterns.some(cfg => {
                             return cfg.length === lastRejectedSerial.length && matchesAlphabetPattern(lastRejectedSerial, cfg.pattern);
                         });
-
+                        
                         if (!exists) {
                             targetItem.allowedPatterns.push(newConfig);
                             targetItem.skuAlphabetPattern = newPattern;
@@ -2835,18 +2790,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (targetItem) {
                         const newPattern = extractAlphabetPattern(lastRejectedSerial);
                         const newConfig = { pattern: newPattern, length: lastRejectedSerial.length };
-
+                        
                         if (!targetItem.allowedPatterns) {
                             targetItem.allowedPatterns = targetItem.skuAlphabetPattern ? [{
                                 pattern: targetItem.skuAlphabetPattern,
                                 length: targetItem.lockedLength || 15
                             }] : [];
                         }
-
+                        
                         const exists = targetItem.allowedPatterns.some(cfg => {
                             return cfg.length === lastRejectedSerial.length && matchesAlphabetPattern(lastRejectedSerial, cfg.pattern);
                         });
-
+                        
                         if (!exists) {
                             targetItem.allowedPatterns.push(newConfig);
                             targetItem.skuAlphabetPattern = newPattern;
@@ -2901,7 +2856,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 saveActiveOutboundSession();
-
+                
                 if (lastRejectedIsSequence) {
                     generateOutboundSequenceSerials(lastRejectedSeqBase, lastRejectedSeqCount);
                 } else {
@@ -2971,10 +2926,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const startOutboundSessionBtn = document.getElementById('startOutboundSessionBtn');
     const endOutboundSessionBtn = document.getElementById('endOutboundSessionBtn');
     const cancelActiveOutboundSessionBtn = document.getElementById('cancelActiveOutboundSessionBtn');
-
+    
     const outboundInactiveState = document.getElementById('outboundInactiveState');
     const outboundActiveState = document.getElementById('outboundActiveState');
-
+    
     const outboundConfigModal = document.getElementById('outboundConfigModal');
     const closeOutboundConfigModalBtn = document.getElementById('closeOutboundConfigModalBtn');
     const cancelOutboundConfigModalBtn = document.getElementById('cancelOutboundConfigModalBtn');
@@ -3016,7 +2971,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (activeOutboundSession && !activeOutboundSession.items) {
                 activeOutboundSession.items = [];
             }
-
+            
             // Sanitize activeOutboundSession items
             if (activeOutboundSession.items) {
                 activeOutboundSession.items.forEach(item => {
@@ -3045,7 +3000,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             document.getElementById('activeOutboundShop').textContent = activeOutboundSession.shopName;
             document.getElementById('activeOutboundInvoice').textContent = activeOutboundSession.invoiceNo;
-
+            
             compactOutboundBoxNumbers();
             updateOutboundSessionProgress();
             renderOutboundBoxCards();
@@ -3199,10 +3154,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const found = log.serials.find(s => s && s.serial === serial);
                 if (found) return found.itemName;
             }
-
+            
             // Fallback for mock logs and legacy records (always evaluated if no exact serial match found)
             if (serial.startsWith("GXTFT")) {
-                const hasMonitor = (log.item && log.item.includes("LED Monitor")) ||
+                const hasMonitor = (log.item && log.item.includes("LED Monitor")) || 
                                    (log.items && log.items.some(i => {
                                        const name = typeof i === 'string' ? i : (i.name || '');
                                        return name.includes("LED Monitor");
@@ -3210,7 +3165,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (hasMonitor) return "LED Monitor 19.5\" (Geonix)";
             }
             if (serial.startsWith("BWR")) {
-                const hasWrap = (log.item && log.item.includes("Bubble Wrap")) ||
+                const hasWrap = (log.item && log.item.includes("Bubble Wrap")) || 
                                  (log.items && log.items.some(i => {
                                      const name = typeof i === 'string' ? i : (i.name || '');
                                      return name.includes("Bubble Wrap");
@@ -3298,7 +3253,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 false,
                 false
             );
-
+            
             deletedSerialDismissTimer = setTimeout(() => {
                 skuWarningModal.classList.remove('active');
                 deletedSerialDismissTimer = null;
@@ -3393,12 +3348,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     lockedLength: null,
                     allowedPatterns: []
                 };
-
+                
                 const newPattern = extractAlphabetPattern(serial);
                 newItemObj.skuAlphabetPattern = newPattern;
                 newItemObj.lockedLength = serial.length;
                 newItemObj.allowedPatterns.push({ pattern: newPattern, length: serial.length });
-
+                
                 activeOutboundSession.items.push(newItemObj);
                 saveOutboundSerial(serial, productName);
                 return true;
@@ -3485,7 +3440,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveOutboundSerial(serial, productName) {
         if (!activeOutboundSession) return;
-
+        
         // 1 action = 1 box: get max box number for this product and add 1
         const itemSerials = activeOutboundSession.serials.filter(s => s.itemName === productName);
         const maxBoxNo = itemSerials.reduce((max, item) => item.boxNo > max ? item.boxNo : max, 0);
@@ -3541,12 +3496,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     lockedLength: null,
                     allowedPatterns: []
                 };
-
+                
                 const newPattern = extractAlphabetPattern(baseCode);
                 newItemObj.skuAlphabetPattern = newPattern;
                 newItemObj.lockedLength = baseCode.length;
                 newItemObj.allowedPatterns.push({ pattern: newPattern, length: baseCode.length });
-
+                
                 activeOutboundSession.items.push(newItemObj);
                 generateOutboundSequenceSerials(baseCode, count);
                 return;
@@ -3612,7 +3567,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         });
-
+        
         const activeSerialsSet = new Set(activeOutboundSession.serials.map(s => s.serial));
 
         for (const code of generatedBatch) {
@@ -3740,10 +3695,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const body = document.getElementById('outboundHistoryBody');
         if (!body) return;
         body.innerHTML = '';
-
+        
         let todayBoxesSum = 0;
         let todayWeightSum = 0;
-
+        
         const historyData = getOutboundHistory();
         historyData.forEach(row => {
             const tr = document.createElement('tr');
@@ -3851,7 +3806,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const now = new Date();
         const dateStr = now.toLocaleDateString('en-GB').replace(/\//g, '-'); // DD-MM-YYYY
         const timeStr = now.toLocaleTimeString('en-US', { hour12: false });
-
+        
         // Header text inside cell A1 of every sheet
         const headerText = `${log.shopName} - ${lastIdPart} - ${dateStr} ${timeStr}`;
 
@@ -3889,7 +3844,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const safeId = lastIdPart.replace(/[^a-zA-Z0-9]/g, '_');
         const fileDate = now.toISOString().slice(0, 10).replace(/-/g, '_');
         const fileTime = now.toLocaleTimeString('en-US', { hour12: false }).replace(/:/g, '-');
-
+        
         const filename = `${safeShop}_${safeId}_${fileDate}_${fileTime}`.toUpperCase() + ".xlsx";
         XLSX.writeFile(wb, filename);
     }
@@ -3902,17 +3857,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (container) {
             container.innerHTML = '';
             const weights = getProductWeights();
-
+            
             const items = activeOutboundSession.items || [];
             items.forEach(item => {
                 const itemSerials = activeOutboundSession.serials.filter(s => s.itemName === item.name);
                 const scannedCount = itemSerials.length;
-
+                
                 const weightPerPc = weights[item.name] || 0;
                 const subtotalWeight = (scannedCount * weightPerPc).toFixed(3);
-
+                
                 const tr = document.createElement('tr');
-
+                
                 let patternStr = 'None';
                 if (item.allowedPatterns && item.allowedPatterns.length > 0) {
                     patternStr = item.allowedPatterns.map(cfg => {
@@ -3945,7 +3900,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
             uniqueBoxes += itemBoxes;
         });
-
+        
         const weights = getProductWeights();
         let totalWeight = 0;
         activeOutboundSession.serials.forEach(s => {
@@ -3957,7 +3912,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (countText) {
             countText.textContent = `${totalPcs} Scans across ${uniqueBoxes} boxes`;
         }
-
+        
         const weightText = document.getElementById('activeOutboundWeight');
         if (weightText) {
             weightText.textContent = `${totalWeight.toFixed(3)} kg`;
@@ -3968,143 +3923,6 @@ document.addEventListener('DOMContentLoaded', () => {
             boxesText.textContent = `${uniqueBoxes} ${uniqueBoxes === 1 ? 'Box' : 'Boxes'}`;
         }
 
-    }
-
-    function createOutboundSerialListItem(s, item) {
-        const li = document.createElement('li');
-        li.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 4px; font-size:0.85rem; font-family:var(--font-mono); border: 1px solid rgba(255,255,255,0.04);';
-
-        const displayVal = s.serial.startsWith('WOS-OUT-')
-            ? `<span style="color: var(--accent-amber); font-weight: 700; font-style: italic; font-family: var(--font-sans);">[Non-Serial Item]</span>`
-            : s.serial;
-
-        li.innerHTML = `
-            <span style="color:var(--text-secondary); word-break:break-all;">${displayVal}</span>
-            <button type="button" class="btn-outbound-delete-serial" data-serial="${s.serial}" title="Remove Serial" style="background:none; border:none; color:var(--text-muted); cursor:pointer; padding:2px; display:flex; align-items:center; justify-content:center; transition: var(--transition-smooth); border-radius:4px;">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:14px; height:14px;">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-            </button>
-        `;
-
-        const delBtn = li.querySelector('.btn-outbound-delete-serial');
-        if (delBtn) {
-            delBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (confirm(`Remove serial "${s.serial}" from this outbound session?`)) {
-                    activeOutboundSession.serials = activeOutboundSession.serials.filter(x => x.serial !== s.serial);
-
-                    const remainingForProduct = activeOutboundSession.serials.some(x => x.itemName === item.name);
-                    if (!remainingForProduct) {
-                        activeOutboundSession.items = activeOutboundSession.items.filter(x => x.name !== item.name);
-                    }
-
-                    compactOutboundBoxNumbers();
-                    saveActiveOutboundSession();
-                    updateOutboundSessionProgress();
-                    renderOutboundBoxCards();
-                }
-            });
-        }
-        return li;
-    }
-
-    function createOutboundBoxCard(boxNo, boxItems, item) {
-        const boxCard = document.createElement('div');
-        boxCard.className = 'box-card';
-        boxCard.style.cssText = 'margin-bottom: 0;';
-
-        boxCard.innerHTML = `
-            <div class="box-card-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px; margin-bottom: 8px;">
-                <span class="box-number-badge" style="font-size: 0.8rem; font-weight:700; color: var(--accent-blue);">Box #${boxNo}</span>
-                <span style="font-size: 0.75rem; color: var(--text-muted);" class="font-mono">${boxItems.length} Pcs</span>
-            </div>
-        `;
-
-        const serialsUl = document.createElement('ul');
-        serialsUl.style.cssText = 'list-style: none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px;';
-
-        boxItems.forEach(s => {
-            const li = createOutboundSerialListItem(s, item);
-            serialsUl.appendChild(li);
-        });
-        boxCard.appendChild(serialsUl);
-        return boxCard;
-    }
-
-    function createOutboundItemColumn(item, itemSerials) {
-        const itemPieces = itemSerials.length;
-        const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
-
-        const col = document.createElement('div');
-        col.className = 'product-scan-column';
-        col.style.cssText = 'display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--border-color); padding: 16px; border-radius: var(--radius-md); background: rgba(255,255,255,0.01); min-width: 300px; flex: 1 1 0px; height: 100%; overflow: hidden;';
-
-        col.innerHTML = `
-            <div style="display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; width: 100%;">
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%;">
-                    <div style="font-weight: 700; color: var(--text-primary); font-size: 0.9rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex: 1;" title="${item.name}">
-                        ${item.name}
-                    </div>
-                    <button type="button" class="btn-clear-product-serials" data-name="${item.name}" title="Clear all serials of this product" style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2); color: var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 10px; height: 10px; stroke-width: 2.5;">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        <span>Clear</span>
-                    </button>
-                </div>
-                <div style="display: flex; gap: 6px; flex-shrink: 0;">
-                    <span class="count-badge-pcs" style="font-size: 0.7rem; font-weight: 700; background: rgba(59,130,246,0.1); color: var(--accent-blue); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(59,130,246,0.2);">
-                        PCs: ${itemPieces}
-                    </span>
-                    <span class="count-badge-boxes" style="font-size: 0.7rem; font-weight: 700; background: rgba(16,185,129,0.1); color: var(--accent-emerald); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.2);">
-                        BOXes: ${itemBoxes}
-                    </span>
-                </div>
-            </div>
-        `;
-
-        const clearBtn = col.querySelector('.btn-clear-product-serials');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (confirm(`Are you sure you want to clear all scanned serials for product "${item.name}" from this session?`)) {
-                    activeOutboundSession.serials = activeOutboundSession.serials.filter(s => s.itemName !== item.name);
-                    activeOutboundSession.items = activeOutboundSession.items.filter(i => i.name !== item.name);
-                    compactOutboundBoxNumbers();
-                    saveActiveOutboundSession();
-                    updateOutboundSessionProgress();
-                    renderOutboundBoxCards();
-                }
-            });
-        }
-
-        const boxListWrapper = document.createElement('div');
-        boxListWrapper.className = 'product-boxes-list';
-        boxListWrapper.style.cssText = 'flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-right: 4px; margin-top: 10px;';
-
-        if (itemSerials.length === 0) {
-            boxListWrapper.innerHTML = `
-                <div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 48px 12px;">
-                    No serials scanned for this item yet.
-                </div>
-            `;
-        } else {
-            const groups = {};
-            itemSerials.forEach(s => {
-                if (!groups[s.boxNo]) groups[s.boxNo] = [];
-                groups[s.boxNo].push(s);
-            });
-
-            const boxNumbers = Object.keys(groups).map(Number).sort((a,b)=>b-a);
-            boxNumbers.forEach(boxNo => {
-                const boxItems = groups[boxNo];
-                const boxCard = createOutboundBoxCard(boxNo, boxItems, item);
-                boxListWrapper.appendChild(boxCard);
-            });
-        }
-        col.appendChild(boxListWrapper);
-        return col;
     }
 
     function renderOutboundBoxCards() {
@@ -4121,21 +3939,132 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const serialsByItem = new Map();
-        if (activeOutboundSession.serials) {
-            activeOutboundSession.serials.forEach(s => {
-                let list = serialsByItem.get(s.itemName);
-                if (!list) {
-                    list = [];
-                    serialsByItem.set(s.itemName, list);
-                }
-                list.push(s);
-            });
-        }
-
         activeOutboundSession.items.forEach(item => {
-            const itemSerials = serialsByItem.get(item.name) || [];
-            const col = createOutboundItemColumn(item, itemSerials);
+            const itemSerials = activeOutboundSession.serials.filter(s => s.itemName === item.name);
+            const itemPieces = itemSerials.length;
+            const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
+
+            const col = document.createElement('div');
+            col.className = 'product-scan-column';
+            col.style.cssText = 'display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--border-color); padding: 16px; border-radius: var(--radius-md); background: rgba(255,255,255,0.01); min-width: 300px; flex: 1 1 0px; height: 100%; overflow: hidden;';
+
+            col.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; width: 100%;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%;">
+                        <div style="font-weight: 700; color: var(--text-primary); font-size: 0.9rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex: 1;" title="${item.name}">
+                            ${item.name}
+                        </div>
+                        <button type="button" class="btn-clear-product-serials" data-name="${item.name}" title="Clear all serials of this product" style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2); color: var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 10px; height: 10px; stroke-width: 2.5;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            <span>Clear</span>
+                        </button>
+                    </div>
+                    <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                        <span class="count-badge-pcs" style="font-size: 0.7rem; font-weight: 700; background: rgba(59,130,246,0.1); color: var(--accent-blue); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(59,130,246,0.2);">
+                            PCs: ${itemPieces}
+                        </span>
+                        <span class="count-badge-boxes" style="font-size: 0.7rem; font-weight: 700; background: rgba(16,185,129,0.1); color: var(--accent-emerald); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.2);">
+                            BOXes: ${itemBoxes}
+                        </span>
+                    </div>
+                </div>
+            `;
+
+            const clearBtn = col.querySelector('.btn-clear-product-serials');
+            if (clearBtn) {
+                clearBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (confirm(`Are you sure you want to clear all scanned serials for product "${item.name}" from this session?`)) {
+                        activeOutboundSession.serials = activeOutboundSession.serials.filter(s => s.itemName !== item.name);
+                        activeOutboundSession.items = activeOutboundSession.items.filter(i => i.name !== item.name);
+                        compactOutboundBoxNumbers();
+                        saveActiveOutboundSession();
+                        updateOutboundSessionProgress();
+                        renderOutboundBoxCards();
+                    }
+                });
+            }
+
+            const boxListWrapper = document.createElement('div');
+            boxListWrapper.className = 'product-boxes-list';
+            boxListWrapper.style.cssText = 'flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-right: 4px; margin-top: 10px;';
+
+            if (itemSerials.length === 0) {
+                boxListWrapper.innerHTML = `
+                    <div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 48px 12px;">
+                        No serials scanned for this item yet.
+                    </div>
+                `;
+            } else {
+                const groups = {};
+                itemSerials.forEach(s => {
+                    if (!groups[s.boxNo]) groups[s.boxNo] = [];
+                    groups[s.boxNo].push(s);
+                });
+
+                const boxNumbers = Object.keys(groups).map(Number).sort((a,b)=>b-a);
+                boxNumbers.forEach(boxNo => {
+                    const boxItems = groups[boxNo];
+                    const boxCard = document.createElement('div');
+                    boxCard.className = 'box-card';
+                    boxCard.style.cssText = 'margin-bottom: 0;';
+
+                    boxCard.innerHTML = `
+                        <div class="box-card-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px; margin-bottom: 8px;">
+                            <span class="box-number-badge" style="font-size: 0.8rem; font-weight:700; color: var(--accent-blue);">Box #${boxNo}</span>
+                            <span style="font-size: 0.75rem; color: var(--text-muted);" class="font-mono">${boxItems.length} Pcs</span>
+                        </div>
+                    `;
+
+                    const serialsUl = document.createElement('ul');
+                    serialsUl.style.cssText = 'list-style: none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px;';
+                    
+                    boxItems.forEach(s => {
+                        const li = document.createElement('li');
+                        li.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 4px; font-size:0.85rem; font-family:var(--font-mono); border: 1px solid rgba(255,255,255,0.04);';
+                        
+                        const displayVal = s.serial.startsWith('WOS-OUT-') 
+                            ? `<span style="color: var(--accent-amber); font-weight: 700; font-style: italic; font-family: var(--font-sans);">[Non-Serial Item]</span>` 
+                            : s.serial;
+
+                        li.innerHTML = `
+                            <span style="color:var(--text-secondary); word-break:break-all;">${displayVal}</span>
+                            <button type="button" class="btn-outbound-delete-serial" data-serial="${s.serial}" title="Remove Serial" style="background:none; border:none; color:var(--text-muted); cursor:pointer; padding:2px; display:flex; align-items:center; justify-content:center; transition: var(--transition-smooth); border-radius:4px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:14px; height:14px;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                        `;
+
+                        const delBtn = li.querySelector('.btn-outbound-delete-serial');
+                        if (delBtn) {
+                            delBtn.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                if (confirm(`Remove serial "${s.serial}" from this outbound session?`)) {
+                                    activeOutboundSession.serials = activeOutboundSession.serials.filter(x => x.serial !== s.serial);
+                                    
+                                    const remainingForProduct = activeOutboundSession.serials.some(x => x.itemName === item.name);
+                                    if (!remainingForProduct) {
+                                        activeOutboundSession.items = activeOutboundSession.items.filter(x => x.name !== item.name);
+                                    }
+                                    
+                                    compactOutboundBoxNumbers();
+                                    saveActiveOutboundSession();
+                                    updateOutboundSessionProgress();
+                                    renderOutboundBoxCards();
+                                }
+                            });
+                        }
+
+                        serialsUl.appendChild(li);
+                    });
+                    boxCard.appendChild(serialsUl);
+                    boxListWrapper.appendChild(boxCard);
+                });
+            }
+            col.appendChild(boxListWrapper);
             container.appendChild(col);
         });
     }
@@ -4223,24 +4152,24 @@ document.addEventListener('DOMContentLoaded', () => {
             if (restoreBtn) {
                 e.stopPropagation();
                 const logId = restoreBtn.getAttribute('data-id');
-
+                
                 const pass = prompt("Enter Admin Password to restore this Outbound Session:");
                 if (pass === null) return;
                 if (pass !== '1998') {
                     alert("Incorrect password!");
                     return;
                 }
-
+                
                 if (activeOutboundSession) {
                     alert("Cannot restore! An active Outbound session is already running. Please cancel or save the current session first.");
                     return;
                 }
-
+                
                 const historyData = getOutboundHistory();
                 const logIndex = historyData.findIndex(item => item.id === logId);
                 if (logIndex !== -1) {
                     const restoredLog = historyData[logIndex];
-
+                    
                     // Populate activeOutboundSession
                     activeOutboundSession = {
                         id: restoredLog.id,
@@ -4249,16 +4178,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         items: restoredLog.items || [],
                         serials: restoredLog.serials || []
                     };
-
+                    
                     // Remove from history
                     historyData.splice(logIndex, 1);
-
+                    
                     // Save & reload
                     saveActiveOutboundSession();
                     saveOutboundHistory(historyData);
                     restoreOutboundSessionState();
                     renderInventoryPanel();
-
+                    
                     alert("Outbound session successfully restored to workstation!");
                 } else {
                     alert('Log record not found.');
@@ -4335,7 +4264,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (log.serials && log.serials.length > 0) {
                 log.serials.forEach(s => {
                     const itemName = s.itemName || name; // Fallback if name is missing
-
+                    
                     // Live Stock Count subtraction logic for serials list
                     if (!outboundSerialsSet.has(s.serial)) {
                         availableSerials.push({
@@ -4382,7 +4311,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Set Overview Available Stock Counters
         const uniqueProductNames = Object.keys(productStock).filter(name => productStock[name].serialsCount > 0);
         const totalAvailableCount = Object.values(productStock).reduce((sum, item) => sum + item.serialsCount, 0);
-
+        
         const totalBoxesEl = document.getElementById('inventoryTotalBoxes');
         const totalWeightEl = document.getElementById('inventoryTotalWeight');
         const weights = getProductWeights();
@@ -4415,7 +4344,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const unitWeight = parseFloat(weights[item.name]) || 0;
                 const totalWeight = item.serialsCount * unitWeight;
                 const theme = productColorsMap[item.name] || colorThemes[0];
-
+                
                 return `
                     <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
                         <td style="padding: 10px 8px; font-weight: 700; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 185px;" title="${item.name}">
@@ -4455,12 +4384,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (s.serial.toLowerCase().includes(query) || name.toLowerCase().includes(query)) {
                             const isDispatched = outboundSerialsSet.has(s.serial);
                             const outDetails = outboundDetailsMap[s.serial];
-
+                            
                             filteredList.push({
                                 serial: s.serial,
                                 itemName: name,
                                 status: isDispatched ? 'Dispatched' : 'In Stock',
-                                details: isDispatched
+                                details: isDispatched 
                                     ? `Out to: ${outDetails.shopName} | Invoice: ${outDetails.invoiceNo} (${outDetails.timestamp})`
                                     : `Inwarded: ${log.timestamp} | Vehicle: ${log.vehicle || 'N/A'}`
                             });
@@ -4492,7 +4421,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const card = document.createElement('div');
             card.className = 'inventory-serial-card';
             const theme = productColorsMap[s.itemName] || colorThemes[0];
-
+            
             let borderStyle = `border: 1px solid ${theme.border};`;
             let badgeBg = 'rgba(16, 185, 129, 0.15)';
             let badgeColor = 'var(--accent-emerald)';
@@ -4542,10 +4471,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderDeletedSerialsPanel() {
         const container = document.getElementById('deletedSerialsListContainer');
         if (!container) return;
-
+        
         container.innerHTML = '';
         const deletedList = getDeletedSerials();
-
+        
         if (deletedList.length === 0) {
             container.innerHTML = `
                 <div style="color: var(--text-muted); font-style: italic; text-align: center; padding: 32px 16px;">
@@ -4604,13 +4533,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     sourceInboundLogId = log.id;
                     sourceBoxNo = found.boxNo || 1;
                     itemName = found.itemName || log.item;
-
+                    
                     // Filter out the serial
                     log.serials = log.serials.filter(s => s.serial !== serial);
                     inboundUpdated = true;
                     // Recalculate count
                     log.count = log.serials.length;
-
+                    
                     // If multi-item format exists, update matching item's scannedCount
                     if (log.items) {
                         log.items.forEach(item => {
@@ -4635,11 +4564,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const found = log.serials.find(s => s.serial === serial);
                 if (found) {
                     sourceOutboundLogId = log.id;
-
+                    
                     // Filter out
                     log.serials = log.serials.filter(s => s.serial !== serial);
                     outboundUpdated = true;
-
+                    
                     // Update items scannedCount
                     if (log.items) {
                         log.items.forEach(item => {
@@ -4922,7 +4851,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     saveWosItems(currentWosItems);
                     renderWosDropdownItems();
                 }
-
+                
                 // Automatically select the newly created item
                 if (wosItemSelect) wosItemSelect.value = cleanName;
                 if (wosItemDropdownSelectedText) wosItemDropdownSelectedText.textContent = cleanName;
@@ -5042,7 +4971,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderOutboundWosDropdownItems() {
         if (!outboundWosItemDropdownList) return;
         outboundWosItemDropdownList.innerHTML = '';
-
+        
         // Scan completed Inbound history to find items successfully inwarded without serial numbers!
         const history = getHistory();
         const inwardedWosItems = Array.from(new Set(
@@ -5182,9 +5111,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.populateMisProductsDropdown = populateMisProductsDropdown; // export for global trigger
 
-    function extractMisEvents(logs, logType, productFilter, fromDateStr, toDateStr) {
+    function generateMisReportData() {
+        const productFilter = document.getElementById('misProductSelect')?.value || 'ALL';
+        const fromDateStr = document.getElementById('misFromDate')?.value || '';
+        const toDateStr = document.getElementById('misToDate')?.value || '';
+
+        const history = getHistory();
+        const outboundHistory = getOutboundHistory();
+
         let mergedEvents = [];
-        logs.forEach(log => {
+
+        // 1. Gather Inward events
+        history.forEach(log => {
             if (!log.timestamp) return;
             const timestamp = new Date(log.timestamp);
             // Check date range filters
@@ -5192,9 +5130,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (toDateStr && new Date(toDateStr + 'T23:59:59') < timestamp) return;
 
             const name = log.item;
-            const details = logType === "INWARD"
-                ? (log.vehicle ? `Vehicle: ${log.vehicle}` : 'Inward Logs')
-                : `Shop: ${log.shopName || 'N/A'}, Inv: ${log.invoiceNo || 'N/A'}`;
+            const logType = "INWARD";
+            const details = log.vehicle ? `Vehicle: ${log.vehicle}` : 'Inward Logs';
 
             if (log.serials && log.serials.length > 0) {
                 log.serials.forEach(s => {
@@ -5213,38 +5150,64 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 });
             } else {
-                // Non-serial
+                // Non-serial inward
                 if (productFilter !== 'ALL' && name !== productFilter) return;
                 mergedEvents.push({
                     rawTime: timestamp,
                     timeStr: log.timestamp,
                     activity: logType,
                     itemName: name,
-                    serial: logType === "INWARD" ? 'Without Serial Number (WOS-IN)' : 'Without Serial Number (WOS-OUT)',
-                    boxNo: (logType === "INWARD" ? log.wosBoxNo : log.outboundWosBoxNo) || '-',
+                    serial: 'Without Serial Number (WOS-IN)',
+                    boxNo: log.wosBoxNo || '-',
                     qty: log.count || 0,
                     details: details
                 });
             }
         });
-        return mergedEvents;
-    }
-
-    function generateMisReportData() {
-        const productFilter = document.getElementById('misProductSelect')?.value || 'ALL';
-        const fromDateStr = document.getElementById('misFromDate')?.value || '';
-        const toDateStr = document.getElementById('misToDate')?.value || '';
-
-        const history = getHistory();
-        const outboundHistory = getOutboundHistory();
-
-        let mergedEvents = [];
-
-        // 1. Gather Inward events
-        mergedEvents = mergedEvents.concat(extractMisEvents(history, "INWARD", productFilter, fromDateStr, toDateStr));
 
         // 2. Gather Outward events
-        mergedEvents = mergedEvents.concat(extractMisEvents(outboundHistory, "OUTWARD", productFilter, fromDateStr, toDateStr));
+        outboundHistory.forEach(log => {
+            if (!log.timestamp) return;
+            const timestamp = new Date(log.timestamp);
+            // Check date range filters
+            if (fromDateStr && new Date(fromDateStr + 'T00:00:00') > timestamp) return;
+            if (toDateStr && new Date(toDateStr + 'T23:59:59') < timestamp) return;
+
+            const name = log.item;
+            const logType = "OUTWARD";
+            const details = `Shop: ${log.shopName || 'N/A'}, Inv: ${log.invoiceNo || 'N/A'}`;
+
+            if (log.serials && log.serials.length > 0) {
+                log.serials.forEach(s => {
+                    const itemName = s.itemName || name;
+                    if (productFilter !== 'ALL' && itemName !== productFilter) return;
+
+                    mergedEvents.push({
+                        rawTime: timestamp,
+                        timeStr: log.timestamp,
+                        activity: logType,
+                        itemName: itemName,
+                        serial: s.serial,
+                        boxNo: s.boxNo,
+                        qty: 1,
+                        details: details
+                    });
+                });
+            } else {
+                // Non-serial outbound
+                if (productFilter !== 'ALL' && name !== productFilter) return;
+                mergedEvents.push({
+                    rawTime: timestamp,
+                    timeStr: log.timestamp,
+                    activity: logType,
+                    itemName: name,
+                    serial: 'Without Serial Number (WOS-OUT)',
+                    boxNo: log.outboundWosBoxNo || '-',
+                    qty: log.count || 0,
+                    details: details
+                });
+            }
+        });
 
         // Sort by timestamp (oldest first)
         mergedEvents.sort((a, b) => a.rawTime - b.rawTime);
@@ -5280,7 +5243,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             data.forEach(row => {
                 const tr = document.createElement('tr');
-
+                
                 // Color code Activity
                 const badgeColor = row.activity === 'INWARD' ? 'var(--accent-blue)' : 'var(--accent-rose)';
                 const badgeBg = row.activity === 'INWARD' ? 'rgba(59,130,246,0.1)' : 'rgba(244,63,94,0.1)';
@@ -5388,7 +5351,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dot = document.getElementById('systemStatusDot');
         const text = document.getElementById('systemStatusText');
         if (!dot || !text) return;
-
+        
         if (connected) {
             dot.style.backgroundColor = 'var(--accent-emerald)';
             dot.style.boxShadow = '0 0 8px var(--accent-emerald)';
@@ -5422,7 +5385,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const accessLockOverlay = document.getElementById('accessLockOverlay');
     const accessOverlayDeviceId = document.getElementById('accessOverlayDeviceId');
     const btnUnlockOverlayWithPass = document.getElementById('btnUnlockOverlayWithPass');
-
+    
     if (accessOverlayDeviceId) {
         accessOverlayDeviceId.textContent = deviceId;
     }
@@ -5518,7 +5481,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnClearAllDevicesBtn.addEventListener('click', () => {
             const msg = "Are you sure you want to clear all device authorization records?\n\nThis will instantly lock all other devices. If your own device is locked, you can unlock it using the Admin Password '1998'.";
             if (!confirm(msg)) return;
-
+            
             if (isFirebaseConnected && db) {
                 db.ref('wms_data/devices').set(null).then(() => {
                     alert("All device records cleared successfully.");
@@ -5533,7 +5496,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadDevicesInManager() {
         if (!isFirebaseConnected || !db || !deviceManagerTableBody) return;
-
+        
         db.ref('wms_data/devices').on('value', (snapshot) => {
             deviceManagerTableBody.innerHTML = '';
             const devices = snapshot.val();
@@ -5545,7 +5508,7 @@ document.addEventListener('DOMContentLoaded', () => {
             Object.values(devices).forEach(dev => {
                 const tr = document.createElement('tr');
                 tr.style.borderBottom = '1px solid rgba(255, 255, 255, 0.05)';
-
+                
                 let statusBadge = `<span style="font-size: 0.7rem; font-weight: 700; background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(245, 158, 11, 0.2); text-transform: uppercase;">Pending</span>`;
                 if (dev.status === 'approved') {
                     statusBadge = `<span style="font-size: 0.7rem; font-weight: 700; background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.2); text-transform: uppercase;">Approved</span>`;
@@ -5606,15 +5569,54 @@ document.addEventListener('DOMContentLoaded', () => {
         const style = document.createElement('style');
         style.id = 'barcode-animation-style';
         style.textContent = `
-            @keyframes barcodeGlowPulse {
-                0% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.3); }
-                50% { box-shadow: 0 0 16px rgba(59, 130, 246, 0.6); border-color: var(--accent-blue); }
-                100% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.3); }
+            @keyframes barcodeRedPulse {
+                0% { box-shadow: 0 0 5px rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.3); }
+                50% { box-shadow: 0 0 16px rgba(239, 68, 68, 0.7); border-color: #ef4444; }
+                100% { box-shadow: 0 0 5px rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.3); }
             }
-            .active-barcode-card {
-                animation: barcodeGlowPulse 1.8s infinite ease-in-out;
-                border: 1.5px solid var(--accent-blue) !important;
+            @keyframes barcodeGreenPulse {
+                0% { box-shadow: 0 0 5px rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.3); }
+                50% { box-shadow: 0 0 16px rgba(16, 185, 129, 0.7); border-color: #10b981; }
+                100% { box-shadow: 0 0 5px rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.3); }
             }
+            @keyframes barcodeAmberPulse {
+                0% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.3); }
+                50% { box-shadow: 0 0 16px rgba(245, 158, 11, 0.7); border-color: #f59e0b; }
+                100% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.3); }
+            }
+            @keyframes barcodePurplePulse {
+                0% { box-shadow: 0 0 5px rgba(139, 92, 246, 0.2); border-color: rgba(139, 92, 246, 0.3); }
+                50% { box-shadow: 0 0 16px rgba(139, 92, 246, 0.7); border-color: #8b5cf6; }
+                100% { box-shadow: 0 0 5px rgba(139, 92, 246, 0.2); border-color: rgba(139, 92, 246, 0.3); }
+            }
+            @keyframes barcodePinkPulse {
+                0% { box-shadow: 0 0 5px rgba(236, 72, 153, 0.2); border-color: rgba(236, 72, 153, 0.3); }
+                50% { box-shadow: 0 0 16px rgba(236, 72, 153, 0.7); border-color: #ec4899; }
+                100% { box-shadow: 0 0 5px rgba(236, 72, 153, 0.2); border-color: rgba(236, 72, 153, 0.3); }
+            }
+            @keyframes barcodeCyanPulse {
+                0% { box-shadow: 0 0 5px rgba(6, 182, 212, 0.2); border-color: rgba(6, 182, 212, 0.3); }
+                50% { box-shadow: 0 0 16px rgba(6, 182, 212, 0.7); border-color: #06b6d4; }
+                100% { box-shadow: 0 0 5px rgba(6, 182, 212, 0.2); border-color: rgba(6, 182, 212, 0.3); }
+            }
+            @keyframes barcodeIndigoPulse {
+                0% { box-shadow: 0 0 5px rgba(99, 102, 241, 0.2); border-color: rgba(99, 102, 241, 0.3); }
+                50% { box-shadow: 0 0 16px rgba(99, 102, 241, 0.7); border-color: #6366f1; }
+                100% { box-shadow: 0 0 5px rgba(99, 102, 241, 0.2); border-color: rgba(99, 102, 241, 0.3); }
+            }
+            @keyframes barcodeYellowPulse {
+                0% { box-shadow: 0 0 5px rgba(234, 179, 8, 0.2); border-color: rgba(234, 179, 8, 0.3); }
+                50% { box-shadow: 0 0 16px rgba(234, 179, 8, 0.7); border-color: #eab308; }
+                100% { box-shadow: 0 0 5px rgba(234, 179, 8, 0.2); border-color: rgba(234, 179, 8, 0.3); }
+            }
+            .pulse-theme-0 { animation: barcodeRedPulse 1.8s infinite ease-in-out; border: 1.5px solid #ef4444 !important; }
+            .pulse-theme-1 { animation: barcodeGreenPulse 1.8s infinite ease-in-out; border: 1.5px solid #10b981 !important; }
+            .pulse-theme-2 { animation: barcodeAmberPulse 1.8s infinite ease-in-out; border: 1.5px solid #f59e0b !important; }
+            .pulse-theme-3 { animation: barcodePurplePulse 1.8s infinite ease-in-out; border: 1.5px solid #8b5cf6 !important; }
+            .pulse-theme-4 { animation: barcodePinkPulse 1.8s infinite ease-in-out; border: 1.5px solid #ec4899 !important; }
+            .pulse-theme-5 { animation: barcodeCyanPulse 1.8s infinite ease-in-out; border: 1.5px solid #06b6d4 !important; }
+            .pulse-theme-6 { animation: barcodeIndigoPulse 1.8s infinite ease-in-out; border: 1.5px solid #6366f1 !important; }
+            .pulse-theme-7 { animation: barcodeYellowPulse 1.8s infinite ease-in-out; border: 1.5px solid #eab308 !important; }
         `;
         document.head.appendChild(style);
     }
@@ -5698,7 +5700,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Mode is 'barcode': Gather and group all sequences flats
             const allSequences = [];
             const productNames = Array.from(new Set(row.serials.map(s => s.itemName).filter(Boolean)));
-
+            
             productNames.forEach((pName, pIdx) => {
                 const productSerials = row.serials.filter(s => s.itemName === pName);
 
@@ -5779,9 +5781,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 const seq = unarchived[0];
                 const currentIndex = allSequences.length - unarchived.length + 1;
 
+                // Configure distinct theme color based on index
+                const themes = [
+                    { name: 'Red', color: '#ef4444', class: 'pulse-theme-0' },
+                    { name: 'Green', color: '#10b981', class: 'pulse-theme-1' },
+                    { name: 'Amber', color: '#f59e0b', class: 'pulse-theme-2' },
+                    { name: 'Purple', color: '#8b5cf6', class: 'pulse-theme-3' },
+                    { name: 'Pink', color: '#ec4899', class: 'pulse-theme-4' },
+                    { name: 'Cyan', color: '#06b6d4', class: 'pulse-theme-5' },
+                    { name: 'Indigo', color: '#6366f1', class: 'pulse-theme-6' },
+                    { name: 'Yellow', color: '#eab308', class: 'pulse-theme-7' }
+                ];
+                const theme = themes[(currentIndex - 1) % themes.length];
+
                 // Render active sequence details with blinking pulse border
                 const card = document.createElement('div');
-                card.className = 'active-barcode-card';
+                card.className = 'active-barcode-card ' + theme.class;
                 card.style.background = 'rgba(255, 255, 255, 0.02)';
                 card.style.padding = '20px';
                 card.style.borderRadius = 'var(--radius-md)';
@@ -5792,22 +5807,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Display range text and large total count
                 const boxText = seq.startBox === seq.endBox ? `Box ${seq.startBox}` : `Boxes ${seq.startBox} - ${seq.endBox}`;
-
+                
                 card.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
                         <div style="display: flex; flex-direction: column; gap: 4px;">
-                            <span style="font-size: 0.72rem; color: var(--accent-blue); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">
+                            <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">
                                 ${seq.pName}
                             </span>
                             <div style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary); font-family: var(--font-mono); word-break: break-all; margin-top: 4px;">
                                 ${seq.startSerial}
                             </div>
                             <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-top: 2px;">
-                                ${boxText} &bull; <span style="color: var(--accent-emerald);">Barcode ${currentIndex} of ${allSequences.length}</span>
+                                ${boxText} &bull; <span style="color: ${theme.color}; font-weight: 700;">Barcode ${currentIndex} of ${allSequences.length}</span>
                             </div>
                         </div>
                         <div style="text-align: right;">
-                            <div style="font-size: 2.2rem; font-weight: 900; color: var(--accent-blue); line-height: 1;">
+                            <div style="font-size: 2.2rem; font-weight: 900; color: ${theme.color}; line-height: 1;">
                                 ${seq.count}
                             </div>
                             <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px;">
@@ -5815,12 +5830,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         </div>
                     </div>
-
+                    
                     <div style="display: flex; justify-content: center; background: white; padding: 16px; border-radius: var(--radius-sm); margin: 4px 0;">
                         <svg id="activeBarcodeSvg"></svg>
                     </div>
 
-                    <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="width: 100%; padding: 14px; background: var(--accent-blue); border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="width: 100%; padding: 14px; background: ${theme.color}; border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
@@ -5867,9 +5882,9 @@ document.addEventListener('DOMContentLoaded', () => {
         currentOutboundHistoryRow = row;
         firstSerialsViewMode = 'list'; // Reset view mode to default List view when opened
         archivedSequenceKeys.clear(); // Clear any cached archives
-
+        
         renderFirstSerialsModalContent();
-
+        
         if (outboundFirstSerialsModal) {
             outboundFirstSerialsModal.classList.add('active');
         }
@@ -5906,7 +5921,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderFirstSerialsModalContent();
                 return;
             }
-
+            
             const resetBtn = e.target.closest('#btnResetBarcodeArchives');
             if (resetBtn) {
                 archivedSequenceKeys.clear();
@@ -5924,3 +5939,4 @@ document.addEventListener('DOMContentLoaded', () => {
     populateMisProductsDropdown();
     checkDeviceApprovalStatus();
 });
+
