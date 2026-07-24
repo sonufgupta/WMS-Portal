@@ -5194,6 +5194,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.populateMisProductsDropdown = populateMisProductsDropdown; // export for global trigger
 
+    function extractMisEvents(logs, logType, productFilter, fromDateStr, toDateStr) {
+        let mergedEvents = [];
+        logs.forEach(log => {
+            if (!log.timestamp) return;
+            const timestamp = new Date(log.timestamp);
+            // Check date range filters
+            if (fromDateStr && new Date(fromDateStr + 'T00:00:00') > timestamp) return;
+            if (toDateStr && new Date(toDateStr + 'T23:59:59') < timestamp) return;
+
+            const name = log.item;
+            const details = logType === "INWARD"
+                ? (log.vehicle ? `Vehicle: ${log.vehicle}` : 'Inward Logs')
+                : `Shop: ${log.shopName || 'N/A'}, Inv: ${log.invoiceNo || 'N/A'}`;
+
+            if (log.serials && log.serials.length > 0) {
+                log.serials.forEach(s => {
+                    const itemName = s.itemName || name;
+                    if (productFilter !== 'ALL' && itemName !== productFilter) return;
+
+                    mergedEvents.push({
+                        rawTime: timestamp,
+                        timeStr: log.timestamp,
+                        activity: logType,
+                        itemName: itemName,
+                        serial: s.serial,
+                        boxNo: s.boxNo,
+                        qty: 1,
+                        details: details
+                    });
+                });
+            } else {
+                // Non-serial
+                if (productFilter !== 'ALL' && name !== productFilter) return;
+                mergedEvents.push({
+                    rawTime: timestamp,
+                    timeStr: log.timestamp,
+                    activity: logType,
+                    itemName: name,
+                    serial: logType === "INWARD" ? 'Without Serial Number (WOS-IN)' : 'Without Serial Number (WOS-OUT)',
+                    boxNo: (logType === "INWARD" ? log.wosBoxNo : log.outboundWosBoxNo) || '-',
+                    qty: log.count || 0,
+                    details: details
+                });
+            }
+        });
+        return mergedEvents;
+    }
+
     function generateMisReportData() {
         const productFilter = document.getElementById('misProductSelect')?.value || 'ALL';
         const fromDateStr = document.getElementById('misFromDate')?.value || '';
@@ -5205,92 +5253,10 @@ document.addEventListener('DOMContentLoaded', () => {
         let mergedEvents = [];
 
         // 1. Gather Inward events
-        history.forEach(log => {
-            if (!log.timestamp) return;
-            const timestamp = new Date(log.timestamp);
-            // Check date range filters
-            if (fromDateStr && new Date(fromDateStr + 'T00:00:00') > timestamp) return;
-            if (toDateStr && new Date(toDateStr + 'T23:59:59') < timestamp) return;
-
-            const name = log.item;
-            const logType = "INWARD";
-            const details = log.vehicle ? `Vehicle: ${log.vehicle}` : 'Inward Logs';
-
-            if (log.serials && log.serials.length > 0) {
-                log.serials.forEach(s => {
-                    const itemName = s.itemName || name;
-                    if (productFilter !== 'ALL' && itemName !== productFilter) return;
-
-                    mergedEvents.push({
-                        rawTime: timestamp,
-                        timeStr: log.timestamp,
-                        activity: logType,
-                        itemName: itemName,
-                        serial: s.serial,
-                        boxNo: s.boxNo,
-                        qty: 1,
-                        details: details
-                    });
-                });
-            } else {
-                // Non-serial inward
-                if (productFilter !== 'ALL' && name !== productFilter) return;
-                mergedEvents.push({
-                    rawTime: timestamp,
-                    timeStr: log.timestamp,
-                    activity: logType,
-                    itemName: name,
-                    serial: 'Without Serial Number (WOS-IN)',
-                    boxNo: log.wosBoxNo || '-',
-                    qty: log.count || 0,
-                    details: details
-                });
-            }
-        });
+        mergedEvents = mergedEvents.concat(extractMisEvents(history, "INWARD", productFilter, fromDateStr, toDateStr));
 
         // 2. Gather Outward events
-        outboundHistory.forEach(log => {
-            if (!log.timestamp) return;
-            const timestamp = new Date(log.timestamp);
-            // Check date range filters
-            if (fromDateStr && new Date(fromDateStr + 'T00:00:00') > timestamp) return;
-            if (toDateStr && new Date(toDateStr + 'T23:59:59') < timestamp) return;
-
-            const name = log.item;
-            const logType = "OUTWARD";
-            const details = `Shop: ${log.shopName || 'N/A'}, Inv: ${log.invoiceNo || 'N/A'}`;
-
-            if (log.serials && log.serials.length > 0) {
-                log.serials.forEach(s => {
-                    const itemName = s.itemName || name;
-                    if (productFilter !== 'ALL' && itemName !== productFilter) return;
-
-                    mergedEvents.push({
-                        rawTime: timestamp,
-                        timeStr: log.timestamp,
-                        activity: logType,
-                        itemName: itemName,
-                        serial: s.serial,
-                        boxNo: s.boxNo,
-                        qty: 1,
-                        details: details
-                    });
-                });
-            } else {
-                // Non-serial outbound
-                if (productFilter !== 'ALL' && name !== productFilter) return;
-                mergedEvents.push({
-                    rawTime: timestamp,
-                    timeStr: log.timestamp,
-                    activity: logType,
-                    itemName: name,
-                    serial: 'Without Serial Number (WOS-OUT)',
-                    boxNo: log.outboundWosBoxNo || '-',
-                    qty: log.count || 0,
-                    details: details
-                });
-            }
-        });
+        mergedEvents = mergedEvents.concat(extractMisEvents(outboundHistory, "OUTWARD", productFilter, fromDateStr, toDateStr));
 
         // Sort by timestamp (oldest first)
         mergedEvents.sort((a, b) => a.rawTime - b.rawTime);
