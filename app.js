@@ -6199,6 +6199,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
 
+            // Sort all sequences by count (Total PCs) in ascending order
+            allSequences.sort((a, b) => a.count - b.count);
+
             // Filter unarchived sequences
             const unarchived = allSequences.filter(seq => !archivedSequenceKeys.has(seq.key));
 
