@@ -312,24 +312,54 @@ document.addEventListener('DOMContentLoaded', () => {
             const outboundHistory = getOutboundHistory();
             const weights = getProductWeights();
 
-            // 1. Map outbound dispatches count by product
+            // 1. Gather all completed outbound scans and build normalizations
+            const outboundSerialsSet = new Set();
+            const unmatchedOutboundCounts = {};
             const outboundCountsByProduct = {};
+
+            const inboundSerialsSet = new Set();
+            history.forEach(log => {
+                if (log.serials) {
+                    log.serials.forEach(s => {
+                        if (s && s.serial) {
+                            inboundSerialsSet.add(s.serial.trim().toUpperCase());
+                        }
+                    });
+                }
+            });
+
             outboundHistory.forEach(log => {
                 if (log.serials) {
                     log.serials.forEach(s => {
-                        if (!outboundCountsByProduct[s.itemName]) {
-                            outboundCountsByProduct[s.itemName] = 0;
+                        const cleanSerial = s.serial.trim().toUpperCase();
+                        outboundSerialsSet.add(cleanSerial);
+
+                        const itemName = s.itemName;
+                        if (!outboundCountsByProduct[itemName]) {
+                            outboundCountsByProduct[itemName] = 0;
                         }
-                        outboundCountsByProduct[s.itemName]++;
+                        outboundCountsByProduct[itemName]++;
+
+                        if (!inboundSerialsSet.has(cleanSerial) && !cleanSerial.includes('WOS-OUT-')) {
+                            if (!unmatchedOutboundCounts[itemName]) {
+                                unmatchedOutboundCounts[itemName] = 0;
+                            }
+                            unmatchedOutboundCounts[itemName]++;
+                        }
                     });
                 }
             });
 
             // 2. Map inbound arrivals and box counts with FIFO weights
             const productStock = {};
-            const remainingOutbound = {};
+            const remainingWosOutbound = {};
             Object.keys(outboundCountsByProduct).forEach(key => {
-                remainingOutbound[key] = outboundCountsByProduct[key];
+                remainingWosOutbound[key] = outboundCountsByProduct[key];
+            });
+
+            const remainingUnmatchedOutbound = {};
+            Object.keys(unmatchedOutboundCounts).forEach(key => {
+                remainingUnmatchedOutbound[key] = unmatchedOutboundCounts[key];
             });
 
             // Process inbound history from oldest to newest (FIFO)
@@ -340,6 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (log.serials && log.serials.length > 0) {
                     log.serials.forEach(s => {
                         const itemName = s.itemName || name; // Fallback if name is missing
+                        const cleanInboundSerial = s.serial.trim().toUpperCase();
                         const logW = resolveLogWeight(log, itemName);
                         const unitWeight = (logW !== undefined) ? logW : (parseFloat(weights[itemName]) || 0);
 
@@ -355,8 +386,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         productStock[itemName].inboundCount++;
                         
-                        const isOutbound = outboundHistory.some(ol => ol.serials && ol.serials.some(os => os.serial === s.serial));
-                        if (!isOutbound) {
+                        let isDispatched = false;
+                        if (outboundSerialsSet.has(cleanInboundSerial)) {
+                            isDispatched = true;
+                        } else if (remainingUnmatchedOutbound[itemName] && remainingUnmatchedOutbound[itemName] > 0) {
+                            isDispatched = true;
+                            remainingUnmatchedOutbound[itemName]--;
+                        }
+
+                        if (!isDispatched) {
                             productStock[itemName].serialsCount++;
                             productStock[itemName].availableWeight += unitWeight;
                             productStock[itemName].boxNumbers.add(s.boxNo);
@@ -382,12 +420,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         // FIFO deduction for WOS
                         const inboundQty = log.count;
-                        const remOut = remainingOutbound[name] || 0;
+                        const remOut = remainingWosOutbound[name] || 0;
                         if (remOut >= inboundQty) {
-                            remainingOutbound[name] -= inboundQty;
+                            remainingWosOutbound[name] -= inboundQty;
                         } else {
                             const availableQty = inboundQty - remOut;
-                            remainingOutbound[name] = 0;
+                            remainingWosOutbound[name] = 0;
                             
                             productStock[name].serialsCount += availableQty;
                             productStock[name].availableWeight += (availableQty * unitWeight);
@@ -4548,36 +4586,64 @@ document.addEventListener('DOMContentLoaded', () => {
         const outboundHistory = getOutboundHistory();
         const outboundSerialsSet = new Set();
         const outboundDetailsMap = {};
+        const unmatchedOutboundCounts = {};
         const outboundCountsByProduct = {};
+
+        // Track all serials that exist in the inbound database so we can identify if an outbound serial is unmatched
+        const inboundSerialsSet = new Set();
+        const inboundHistory = getHistory();
+        inboundHistory.forEach(log => {
+            if (log.serials) {
+                log.serials.forEach(s => {
+                    if (s && s.serial) {
+                        inboundSerialsSet.add(s.serial.trim().toUpperCase());
+                    }
+                });
+            }
+        });
 
         outboundHistory.forEach(log => {
             if (log.serials) {
                 log.serials.forEach(s => {
-                    outboundSerialsSet.add(s.serial);
-                    outboundDetailsMap[s.serial] = {
+                    const cleanSerial = s.serial.trim().toUpperCase();
+                    outboundSerialsSet.add(cleanSerial);
+                    outboundDetailsMap[cleanSerial] = {
                         shopName: log.shopName,
                         invoiceNo: log.invoiceNo,
                         timestamp: log.timestamp
                     };
 
-                    if (!outboundCountsByProduct[s.itemName]) {
-                        outboundCountsByProduct[s.itemName] = 0;
+                    const itemName = s.itemName;
+                    if (!outboundCountsByProduct[itemName]) {
+                        outboundCountsByProduct[itemName] = 0;
                     }
-                    outboundCountsByProduct[s.itemName]++;
+                    outboundCountsByProduct[itemName]++;
+
+                    // If this serial was not in bounded, it is unmatched
+                    if (!inboundSerialsSet.has(cleanSerial) && !cleanSerial.includes('WOS-OUT-')) {
+                        if (!unmatchedOutboundCounts[itemName]) {
+                            unmatchedOutboundCounts[itemName] = 0;
+                        }
+                        unmatchedOutboundCounts[itemName]++;
+                    }
                 });
             }
         });
 
-        // Gather all inbound scans from logs history
-        const inboundHistory = getHistory();
         const availableSerials = [];
         const productStock = {};
         const weights = getProductWeights();
 
         // Copy outbound counts to keep track of remaining to deduct for WOS (FIFO)
-        const remainingOutbound = {};
+        const remainingWosOutbound = {};
         Object.keys(outboundCountsByProduct).forEach(key => {
-            remainingOutbound[key] = outboundCountsByProduct[key];
+            remainingWosOutbound[key] = outboundCountsByProduct[key];
+        });
+
+        // Copy unmatched outbound counts to decrement them as we deduct from inbound logs in FIFO order
+        const remainingUnmatchedOutbound = {};
+        Object.keys(unmatchedOutboundCounts).forEach(key => {
+            remainingUnmatchedOutbound[key] = unmatchedOutboundCounts[key];
         });
 
         // Process inbound history from oldest to newest (FIFO)
@@ -4588,6 +4654,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (log.serials && log.serials.length > 0) {
                 log.serials.forEach(s => {
                     const itemName = s.itemName || name; // Fallback if name is missing
+                    const cleanInboundSerial = s.serial.trim().toUpperCase();
                     const logW = resolveLogWeight(log, itemName);
                     const unitWeight = (logW !== undefined) ? logW : (parseFloat(weights[itemName]) || 0);
 
@@ -4603,8 +4670,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     productStock[itemName].inboundCount++;
                     
-                    // Live Stock Count subtraction logic for serials list
-                    if (!outboundSerialsSet.has(s.serial)) {
+                    // Deduction logic: dispatch if matched exactly, or if matched to an unmatched count for this product in FIFO order
+                    let isDispatched = false;
+                    if (outboundSerialsSet.has(cleanInboundSerial)) {
+                        isDispatched = true;
+                    } else if (remainingUnmatchedOutbound[itemName] && remainingUnmatchedOutbound[itemName] > 0) {
+                        isDispatched = true;
+                        remainingUnmatchedOutbound[itemName]--; // Consume one unmatched outbound scan
+                    }
+
+                    if (!isDispatched) {
                         productStock[itemName].serialsCount++;
                         productStock[itemName].availableWeight += unitWeight;
                         productStock[itemName].boxNumbers.add(s.boxNo);
@@ -4637,13 +4712,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // FIFO subtraction logic for WOS
                     const inboundQty = log.count;
-                    const remOut = remainingOutbound[name] || 0;
+                    const remOut = remainingWosOutbound[name] || 0;
                     if (remOut >= inboundQty) {
-                        remainingOutbound[name] -= inboundQty;
+                        remainingWosOutbound[name] -= inboundQty;
                         // 0 available from this log
                     } else {
                         const availableQty = inboundQty - remOut;
-                        remainingOutbound[name] = 0;
+                        remainingWosOutbound[name] = 0;
                         
                         productStock[name].serialsCount += availableQty;
                         productStock[name].availableWeight += (availableQty * unitWeight);
