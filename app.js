@@ -749,11 +749,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function resolveItemWeight(serial, itemName) {
         const inboundHistory = getHistory();
         
-        // 1. If it's a serialized item, try to find it by serial first
+        // 1. If it's a serialized item, try to find it by serial first (case-insensitive)
         if (serial && !serial.includes('WOS-OUT-')) {
+            const cleanSerialUpper = serial.trim().toUpperCase();
             for (let log of inboundHistory) {
                 if (log.serials && log.serials.length > 0) {
-                    const found = log.serials.some(s => s.serial === serial);
+                    const found = log.serials.some(s => s && s.serial && s.serial.trim().toUpperCase() === cleanSerialUpper);
                     if (found) {
                         const logW = resolveLogWeight(log, itemName);
                         if (logW !== undefined) {
@@ -766,8 +767,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // 2. If it's a WOS item (or serialized item not found in history),
-        // find the most recent log containing this item that has weights configured.
-        for (let log of inboundHistory) {
+        // find the oldest log containing this item that has weights configured (FIFO order).
+        const inboundHistoryReversed = [...inboundHistory].reverse();
+        for (let log of inboundHistoryReversed) {
             const isMatch = log.item === itemName || 
                             (log.items && log.items.some(i => i.name === itemName)) || 
                             (log.serials && log.serials.some(s => s.itemName === itemName));
@@ -4125,7 +4127,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const tr = document.createElement('tr');
             let totalWeight = 0;
             (row.serials || []).forEach(s => {
-                totalWeight += resolveItemWeight(s.serial, s.itemName);
+                totalWeight += s.resolvedWeight !== undefined ? s.resolvedWeight : resolveItemWeight(s.serial, s.itemName);
             });
             const itemNames = (row.items || []).map(i => {
                 const count = (row.serials || []).filter(s => s.itemName === i.name).length;
@@ -4515,13 +4517,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 const timeStr = now.toLocaleTimeString('en-US', {
                     hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit'
                 });
+                const frozenSerials = (activeOutboundSession.serials || []).map(s => {
+                    return {
+                        ...s,
+                        resolvedWeight: resolveItemWeight(s.serial, s.itemName)
+                    };
+                });
+
                 const logObj = {
                     id: Date.now().toString(),
                     timestamp: timeStr,
                     shopName: activeOutboundSession.shopName,
                     invoiceNo: activeOutboundSession.invoiceNo,
                     items: activeOutboundSession.items,
-                    serials: activeOutboundSession.serials
+                    serials: frozenSerials
                 };
 
                 const historyData = getOutboundHistory();
