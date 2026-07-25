@@ -38,7 +38,7 @@
                     </div>
                     <span class="logo-text">WMS Portal</span>
                 </div>
-                <button type="button" id="btnCollapseSidebar" title="Collapse Sidebar" style="background: none; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 6px; border-radius: var(--radius-sm); transition: var(--transition-smooth); margin-left: auto;">
+                <button type="button" id="btnCollapseSidebar" title="Collapse Sidebar" aria-label="Collapse Sidebar" style="background: none; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 6px; border-radius: var(--radius-sm); transition: var(--transition-smooth); margin-left: auto;">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px; stroke-width: 2.5;">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
                     </svg>
@@ -686,7 +686,7 @@
                                                 </ul>
                                             </div>
                                         </div>
-                                        <button type="button" id="btnAddNewWosProduct" class="btn-secondary" style="height: 45px; width: 45px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); border: 1px solid var(--border-color); cursor: pointer; padding: 0;" title="Add new product item">
+                                        <button type="button" id="btnAddNewWosProduct" class="btn-secondary" style="height: 45px; width: 45px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); border: 1px solid var(--border-color); cursor: pointer; padding: 0;" title="Add new product item" aria-label="Add new product item">
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px; stroke-width: 2.5;">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                             </svg>
@@ -1042,7 +1042,7 @@
                     </svg>
                     <span>Dispatch Without Serial Number</span>
                 </h3>
-                <button type="button" class="close-modal" id="closeOutboundWithoutSerialModalBtn" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
+                <button type="button" class="close-modal" id="closeOutboundWithoutSerialModalBtn" aria-label="Close modal" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
             </div>
             <form id="outboundWithoutSerialForm" style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
                 <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4; margin: 0;">
@@ -1091,7 +1091,7 @@
                     </svg>
                     <span id="weightModalTitle">Set Product Weight</span>
                 </h3>
-                <button type="button" class="close-modal" id="closeWeightModalBtn" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
+                <button type="button" class="close-modal" id="closeWeightModalBtn" aria-label="Close modal" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
             </div>
             <form id="productWeightForm" style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
                 <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4; margin: 0;" id="weightModalProductDesc">
@@ -1120,7 +1120,7 @@
                     </svg>
                     <span>Configure Outbound Session</span>
                 </h3>
-                <button type="button" class="close-modal" id="closeOutboundConfigModalBtn" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
+                <button type="button" class="close-modal" id="closeOutboundConfigModalBtn" aria-label="Close modal" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
             </div>
             <form id="outboundConfigForm" style="display: flex; flex-direction: column; gap: 20px; margin-top: 16px;">
                 <div class="form-group">
@@ -1250,7 +1250,7 @@
                         <span id="btnToggleFirstSerialsViewText">Barcode View</span>
                     </button>
                 </div>
-                <button type="button" class="close-modal" id="closeOutboundFirstSerialsModalBtn" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
+                <button type="button" class="close-modal" id="closeOutboundFirstSerialsModalBtn" aria-label="Close modal" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
             </div>
             <div class="modal-body" id="outboundFirstSerialsModalBody" style="padding: 16px 0; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 16px;">
                 <!-- Dynamically populated contents -->
