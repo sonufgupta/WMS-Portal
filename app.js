@@ -340,7 +340,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (log.serials && log.serials.length > 0) {
                     log.serials.forEach(s => {
                         const itemName = s.itemName || name; // Fallback if name is missing
-                        const unitWeight = (log.weights && log.weights[itemName] !== undefined) ? parseFloat(log.weights[itemName]) : (parseFloat(weights[itemName]) || 0);
+                        const logW = resolveLogWeight(log, itemName);
+                        const unitWeight = (logW !== undefined) ? logW : (parseFloat(weights[itemName]) || 0);
 
                         if (!productStock[itemName]) {
                             productStock[itemName] = {
@@ -364,7 +365,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     // Support "Without Serial Number Inward" math fallback (WOS)
                     if (name && log.count > 0) {
-                        const unitWeight = (log.weights && log.weights[name] !== undefined) ? parseFloat(log.weights[name]) : (parseFloat(weights[name]) || 0);
+                        const logW = resolveLogWeight(log, name);
+                        const unitWeight = (logW !== undefined) ? logW : (parseFloat(weights[name]) || 0);
                         
                         if (!productStock[name]) {
                             productStock[name] = {
@@ -659,6 +661,53 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentEndingSessionLogId = '';
 
     // --- Product Weight Storage Helpers ---
+    function resolveLogWeight(log, itemName) {
+        if (!log || !log.weights) return undefined;
+        if (Array.isArray(log.weights)) {
+            const found = log.weights.find(w => w.name === itemName);
+            return found ? parseFloat(found.weight) : undefined;
+        }
+        return log.weights[itemName] !== undefined ? parseFloat(log.weights[itemName]) : undefined;
+    }
+
+    function saveLogWeight(log, itemName, weightVal) {
+        if (!log) return;
+        const parsed = parseFloat(weightVal);
+        if (isNaN(parsed) || parsed <= 0) {
+            if (log.weights) {
+                if (Array.isArray(log.weights)) {
+                    log.weights = log.weights.filter(w => w.name !== itemName);
+                } else {
+                    delete log.weights[itemName];
+                }
+            }
+            return;
+        }
+        
+        if (!log.weights) {
+            log.weights = [];
+        }
+        
+        if (Array.isArray(log.weights)) {
+            const existing = log.weights.find(w => w.name === itemName);
+            if (existing) {
+                existing.weight = parsed;
+            } else {
+                log.weights.push({ name: itemName, weight: parsed });
+            }
+        } else {
+            const dict = log.weights;
+            const arr = Object.keys(dict).map(k => ({ name: k, weight: parseFloat(dict[k]) }));
+            const existing = arr.find(w => w.name === itemName);
+            if (existing) {
+                existing.weight = parsed;
+            } else {
+                arr.push({ name: itemName, weight: parsed });
+            }
+            log.weights = arr;
+        }
+    }
+
     function resolveItemWeight(serial, itemName) {
         const inboundHistory = getHistory();
         
@@ -668,8 +717,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (log.serials && log.serials.length > 0) {
                     const found = log.serials.some(s => s.serial === serial);
                     if (found) {
-                        if (log.weights && log.weights[itemName] !== undefined) {
-                            return parseFloat(log.weights[itemName]);
+                        const logW = resolveLogWeight(log, itemName);
+                        if (logW !== undefined) {
+                            return logW;
                         }
                         break;
                     }
@@ -683,8 +733,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const isMatch = log.item === itemName || 
                             (log.items && log.items.some(i => i.name === itemName)) || 
                             (log.serials && log.serials.some(s => s.itemName === itemName));
-            if (isMatch && log.weights && log.weights[itemName] !== undefined) {
-                return parseFloat(log.weights[itemName]);
+            const logW = resolveLogWeight(log, itemName);
+            if (isMatch && logW !== undefined) {
+                return logW;
             }
         }
         
@@ -1211,8 +1262,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const itemsList = row.items || [{ name: row.item, expectedQty: row.expected }];
             const itemsHtml = itemsList.map(item => {
-                const weight = (row.weights && row.weights[item.name] !== undefined) ? row.weights[item.name] : null;
-                const weightLabel = weight ? ` (${weight} kg)` : ' (Set Weight)';
+                const weight = resolveLogWeight(row, item.name);
+                const weightLabel = (weight !== undefined) ? ` (${weight} kg)` : ' (Set Weight)';
                 const badgeStyle = weight 
                     ? 'background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--accent-emerald);' 
                     : 'background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--accent-blue);';
@@ -3039,8 +3090,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (logId) {
                         const historyData = getHistory();
                         const log = historyData.find(l => l.id === logId);
-                        if (log && log.weights && log.weights[itemName] !== undefined) {
-                            activeWeight = log.weights[itemName];
+                        const logW = resolveLogWeight(log, itemName);
+                        if (logW !== undefined) {
+                            activeWeight = logW;
                         }
                     }
                     
@@ -3110,15 +3162,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const val = weightInputVal.value.trim();
                 saveProductWeight(selectedWeightItemName, val);
                 
-                // If ending a session, save the weight specifically inside that history log
+                // If ending a session or editing a past log, save the weight specifically inside that history log
                 if (currentEndingSessionLogId) {
                     const historyData = getHistory();
                     const logIndex = historyData.findIndex(l => l.id === currentEndingSessionLogId);
                     if (logIndex !== -1) {
-                        if (!historyData[logIndex].weights) {
-                            historyData[logIndex].weights = {};
-                        }
-                        historyData[logIndex].weights[selectedWeightItemName] = val;
+                        saveLogWeight(historyData[logIndex], selectedWeightItemName, val);
                         saveHistory(historyData);
                     }
                 }
@@ -4539,7 +4588,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (log.serials && log.serials.length > 0) {
                 log.serials.forEach(s => {
                     const itemName = s.itemName || name; // Fallback if name is missing
-                    const unitWeight = (log.weights && log.weights[itemName] !== undefined) ? parseFloat(log.weights[itemName]) : (parseFloat(weights[itemName]) || 0);
+                    const logW = resolveLogWeight(log, itemName);
+                    const unitWeight = (logW !== undefined) ? logW : (parseFloat(weights[itemName]) || 0);
 
                     if (!productStock[itemName]) {
                         productStock[itemName] = {
@@ -4570,7 +4620,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 // Support "Without Serial Number Inward" math fallback (WOS)
                 if (name && log.count > 0) {
-                    const unitWeight = (log.weights && log.weights[name] !== undefined) ? parseFloat(log.weights[name]) : (parseFloat(weights[name]) || 0);
+                    const logW = resolveLogWeight(log, name);
+                    const unitWeight = (logW !== undefined) ? logW : (parseFloat(weights[name]) || 0);
                     
                     if (!productStock[name]) {
                         productStock[name] = {
