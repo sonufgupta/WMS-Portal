@@ -911,6 +911,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Custom Warning Modal triggers
     function showScanWarning(type, expected, scanned, isSameProductLengthError) {
+        if (type === 'duplicate' || type === 'duplicate-seq' || type === 'duplicate-batch') {
+            triggerSpeak("duplicate scan");
+        } else if (type === 'sku') {
+            triggerSpeak("incorrect product");
+        } else if (type === 'length') {
+            triggerSpeak("incomplete serial");
+        }
         if (!skuWarningModal) return;
 
         const modalContainer = skuWarningModal.querySelector('.modal-card');
@@ -1029,6 +1036,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Generic SKU Warning Modal for Outbound Workstation
     function showSkuWarningModal(title, desc, expectedLabel, expectedVal, scannedLabel, scannedVal, showAllowLengthBtn, showAddBtn, extraVal) {
+        if (title.includes('Deleted')) {
+            triggerSpeak("deleted serial");
+        } else if (title.includes('Already Dispatched')) {
+            triggerSpeak("already dispatched");
+        } else if (title.includes('Already Inbound')) {
+            triggerSpeak("already inbound");
+        } else if (title.includes('Duplicate')) {
+            triggerSpeak("duplicate scan");
+        } else if (title.includes('Unrecognized')) {
+            triggerSpeak("unrecognized barcode");
+        } else if (title.includes('Invalid')) {
+            triggerSpeak("invalid serial");
+        }
         if (!skuWarningModal) return;
         if (!title.includes('Deleted') && deletedSerialDismissTimer) {
             clearTimeout(deletedSerialDismissTimer);
@@ -2409,6 +2429,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Push to active serial list
         activeSession.serials.push({ serial: cleanSerial, boxNo: boxNo, itemName: matchedItem.name });
 
+        // Speak last 3 digits
+        const last3 = cleanSerial.slice(-3);
+        const speakStr = last3.split('').join(' ');
+        triggerSpeak(speakStr);
+
         // Update stats, re-render cards, and save active session state
         renderBoxCards();
         updateSessionProgress();
@@ -2772,6 +2797,9 @@ document.addEventListener('DOMContentLoaded', () => {
         allTempSerials.forEach(item => {
             activeSession.serials.push({ serial: item.serial, boxNo: item.boxNo, itemName: matchedItem.name });
         });
+
+        // Speak summary of sequence generated
+        triggerSpeak(`${allTempSerials.length} items added`);
 
         // Update stats, re-render cards, and save active session state
         renderBoxCards();
@@ -3829,6 +3857,11 @@ document.addEventListener('DOMContentLoaded', () => {
             itemName: productName
         });
 
+        // Speak last 3 digits
+        const last3 = serial.slice(-3);
+        const speakStr = last3.split('').join(' ');
+        triggerSpeak(speakStr);
+
         saveActiveOutboundSession();
         updateOutboundSessionProgress();
         renderOutboundBoxCards();
@@ -4049,6 +4082,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 itemName: productName
             });
         });
+
+        // Speak summary of sequence outbound
+        triggerSpeak(`${generatedBatch.length} items out bounded`);
 
         saveActiveOutboundSession();
         updateOutboundSessionProgress();
@@ -5872,6 +5908,95 @@ document.addEventListener('DOMContentLoaded', () => {
         accessOverlayDeviceId.textContent = deviceId;
     }
 
+    // --- Real-time speech synthesis notification helpers ---
+    let localSpeakerActive = localStorage.getItem('wms_speaker_active') === 'true';
+
+    function triggerSpeak(text) {
+        if (isFirebaseConnected && db) {
+            db.ref('wms_data/speak_event').set({
+                text: text,
+                timestamp: Date.now()
+            });
+        } else {
+            playLocalSpeak(text);
+        }
+    }
+
+    function playLocalSpeak(text) {
+        if (!localSpeakerActive) return;
+        if (isFirebaseConnected && db) {
+            db.ref('wms_data/devices/' + deviceId).once('value').then(snapshot => {
+                const dev = snapshot.val();
+                if (dev && dev.status === 'approved' && dev.speakerApproved) {
+                    executeSpeech(text);
+                }
+            });
+        } else {
+            executeSpeech(text);
+        }
+    }
+
+    function executeSpeech(text) {
+        if (!window.speechSynthesis) return;
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        utterance.rate = 1.05;
+        utterance.pitch = 1.0;
+        window.speechSynthesis.speak(utterance);
+    }
+
+    // Toggle Local Speaker button handler
+    const btnToggleLocalSpeaker = document.getElementById('btnToggleLocalSpeaker');
+    const btnToggleLocalSpeakerText = document.getElementById('btnToggleLocalSpeakerText');
+    const localSpeakerIcon = document.getElementById('localSpeakerIcon');
+
+    function updateLocalSpeakerUI() {
+        if (!btnToggleLocalSpeaker || !btnToggleLocalSpeakerText) return;
+        if (localSpeakerActive) {
+            btnToggleLocalSpeaker.style.background = 'rgba(16, 185, 129, 0.12)';
+            btnToggleLocalSpeaker.style.color = 'var(--accent-emerald)';
+            btnToggleLocalSpeaker.style.borderColor = 'var(--accent-emerald)';
+            btnToggleLocalSpeakerText.textContent = 'Speaker Active';
+            if (localSpeakerIcon) {
+                localSpeakerIcon.style.color = 'var(--accent-emerald)';
+            }
+        } else {
+            btnToggleLocalSpeaker.style.background = 'rgba(244, 63, 94, 0.08)';
+            btnToggleLocalSpeaker.style.color = 'var(--accent-rose)';
+            btnToggleLocalSpeaker.style.borderColor = 'rgba(244, 63, 94, 0.2)';
+            btnToggleLocalSpeakerText.textContent = 'Muted (Click to Unmute)';
+            if (localSpeakerIcon) {
+                localSpeakerIcon.style.color = 'var(--accent-rose)';
+            }
+        }
+    }
+
+    if (btnToggleLocalSpeaker) {
+        btnToggleLocalSpeaker.addEventListener('click', () => {
+            localSpeakerActive = !localSpeakerActive;
+            localStorage.setItem('wms_speaker_active', localSpeakerActive ? 'true' : 'false');
+            updateLocalSpeakerUI();
+            if (localSpeakerActive) {
+                executeSpeech("Speaker active");
+            }
+        });
+    }
+
+    updateLocalSpeakerUI();
+
+    // Bind real-time listener for speak events across all authorized speaker devices
+    if (isFirebaseConnected && db) {
+        db.ref('wms_data/speak_event').on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val && val.text && val.timestamp) {
+                if (Date.now() - val.timestamp < 5000) {
+                    playLocalSpeak(val.text);
+                }
+            }
+        });
+    }
+
     function checkDeviceApprovalStatus() {
         if (!isFirebaseConnected || !db) {
             // Offline fallback: allow access for local testing if offline
@@ -5983,7 +6108,7 @@ document.addEventListener('DOMContentLoaded', () => {
             deviceManagerTableBody.innerHTML = '';
             const devices = snapshot.val();
             if (!devices) {
-                deviceManagerTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 20px;">No device requests logged.</td></tr>';
+                deviceManagerTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 20px;">No device requests logged.</td></tr>';
                 return;
             }
 
@@ -5996,6 +6121,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     statusBadge = `<span style="font-size: 0.7rem; font-weight: 700; background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.2); text-transform: uppercase;">Approved</span>`;
                 } else if (dev.status === 'rejected') {
                     statusBadge = `<span style="font-size: 0.7rem; font-weight: 700; background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(244, 63, 94, 0.2); text-transform: uppercase;">Rejected</span>`;
+                }
+
+                let speakerToggle = '';
+                if (dev.status === 'approved') {
+                    const isApproved = dev.speakerApproved ? 'checked' : '';
+                    speakerToggle = `
+                        <div style="display: flex; justify-content: center; align-items: center;">
+                            <label style="position: relative; display: inline-block; width: 34px; height: 20px; cursor: pointer;">
+                                <input type="checkbox" ${isApproved} onchange="window.toggleDeviceSpeaker('${dev.id}', this.checked)" style="opacity: 0; width: 0; height: 0; display: none;">
+                                <span style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: ${dev.speakerApproved ? 'var(--accent-emerald)' : 'rgba(255,255,255,0.1)'}; transition: .4s; border-radius: 20px;">
+                                    <span style="position: absolute; content: ''; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; transform: ${dev.speakerApproved ? 'translateX(14px)' : 'none'};"></span>
+                                </span>
+                            </label>
+                        </div>
+                    `;
+                } else {
+                    speakerToggle = `<div style="text-align: center; color: var(--text-muted); font-size: 0.75rem;">N/A</div>`;
                 }
 
                 let actionButton = '';
@@ -6023,6 +6165,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tr.innerHTML = `
                     <td style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: 700; padding: 12px 8px;">${dev.id}</td>
                     <td style="font-size: 0.8rem; color: var(--text-secondary); padding: 12px 8px;">${dev.requestedAt || 'N/A'}</td>
+                    <td style="padding: 12px 8px;">${speakerToggle}</td>
                     <td style="padding: 12px 8px;">${statusBadge}</td>
                     <td style="padding: 12px 8px;">${actionButton}</td>
                 `;
@@ -6034,6 +6177,12 @@ document.addEventListener('DOMContentLoaded', () => {
     window.setDeviceStatus = function(devId, status) {
         if (isFirebaseConnected && db) {
             db.ref('wms_data/devices/' + devId + '/status').set(status);
+        }
+    };
+
+    window.toggleDeviceSpeaker = function(devId, isChecked) {
+        if (isFirebaseConnected && db) {
+            db.ref('wms_data/devices/' + devId + '/speakerApproved').set(isChecked);
         }
     };
 
