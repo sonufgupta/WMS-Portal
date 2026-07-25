@@ -6424,7 +6424,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Insert a preparation card
                     finalSequences.push({
-                        key: `prep_${seq.pName}_${seq.count}_${index}`,
+                        key: `prep_${index}`,
                         isPrepCard: true,
                         pName: seq.pName,
                         count: seq.count
