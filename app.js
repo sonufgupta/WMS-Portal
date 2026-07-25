@@ -2368,6 +2368,34 @@ document.addEventListener('DOMContentLoaded', () => {
             return false;
         }
 
+        // Check for duplicates across past inbound history logs (case-insensitive)
+        const inboundHistory = getHistory();
+        let alreadyInboundLog = null;
+        const cleanSerialUpper = cleanSerial.toUpperCase();
+        for (const log of inboundHistory) {
+            if (log.serials) {
+                const found = log.serials.find(s => s && s.serial && s.serial.trim().toUpperCase() === cleanSerialUpper);
+                if (found) {
+                    alreadyInboundLog = log;
+                    break;
+                }
+            }
+        }
+
+        if (alreadyInboundLog) {
+            showSkuWarningModal(
+                'Already Inbound Alert!',
+                'This serial barcode already exists in a previously saved inbound history session.',
+                'RECEIVED ON VEHICLE:',
+                alreadyInboundLog.vehicle || 'N/A',
+                'EXISTING BARCODE:',
+                cleanSerial,
+                false,
+                false
+            );
+            return false;
+        }
+
         // Determine Box Number (Product-Specific)
         let boxNo;
         if (targetBoxNo !== undefined) {
@@ -2663,6 +2691,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             batchSerialsSet.add(checkSerial);
+
+            // Check duplicate across past history database (case-insensitive)
+            const inboundHistory = getHistory();
+            let alreadyInboundLog = null;
+            const cleanSerialUpper = checkSerial.toUpperCase();
+            for (const log of inboundHistory) {
+                if (log.serials) {
+                    const found = log.serials.find(s => s && s.serial && s.serial.trim().toUpperCase() === cleanSerialUpper);
+                    if (found) {
+                        alreadyInboundLog = log;
+                        break;
+                    }
+                }
+            }
+
+            if (alreadyInboundLog) {
+                showSkuWarningModal(
+                    'Already Inbound Alert!',
+                    'A generated sequence serial barcode already exists in a previously saved inbound history session.',
+                    'RECEIVED ON VEHICLE:',
+                    alreadyInboundLog.vehicle || 'N/A',
+                    'EXISTING BARCODE:',
+                    checkSerial,
+                    false,
+                    false
+                );
+                return;
+            }
 
             // Validate strictly against the active pattern layout configuration
             const isStrictMatch = activeAllowedPatterns.some(cfg => {
