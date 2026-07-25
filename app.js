@@ -2431,7 +2431,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Speak last 3 digits
         const last3 = cleanSerial.slice(-3);
-        const speakStr = last3.split('').join(' ');
+        const speakStr = last3.split('').join(', ');
         triggerSpeak(speakStr);
 
         // Update stats, re-render cards, and save active session state
@@ -3859,7 +3859,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Speak last 3 digits
         const last3 = serial.slice(-3);
-        const speakStr = last3.split('').join(' ');
+        const speakStr = last3.split('').join(', ');
         triggerSpeak(speakStr);
 
         saveActiveOutboundSession();
@@ -5941,7 +5941,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'en-US';
-        utterance.rate = 1.05;
+        utterance.rate = 0.82;
         utterance.pitch = 1.0;
         window.speechSynthesis.speak(utterance);
     }
