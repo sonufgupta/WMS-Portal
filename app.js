@@ -6404,92 +6404,172 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
 
-            // Sort all sequences by count (Total PCs) in ascending order
-            allSequences.sort((a, b) => a.count - b.count);
+            // Sort all sequences by Product Name first, and then by count (Total PCs) in ascending order
+            allSequences.sort((a, b) => {
+                if (a.pName !== b.pName) {
+                    return a.pName.localeCompare(b.pName);
+                }
+                return a.count - b.count;
+            });
+
+            // Insert preparation cards whenever the product name or count changes
+            const finalSequences = [];
+            let lastProduct = null;
+            let lastCount = null;
+
+            allSequences.forEach((seq, index) => {
+                if (seq.pName !== lastProduct || seq.count !== lastCount) {
+                    lastProduct = seq.pName;
+                    lastCount = seq.count;
+
+                    // Insert a preparation card
+                    finalSequences.push({
+                        key: `prep_${seq.pName}_${seq.count}_${index}`,
+                        isPrepCard: true,
+                        pName: seq.pName,
+                        count: seq.count
+                    });
+                }
+                finalSequences.push(seq);
+            });
 
             // Filter unarchived sequences
-            const unarchived = allSequences.filter(seq => !archivedSequenceKeys.has(seq.key));
+            const unarchived = finalSequences.filter(seq => !archivedSequenceKeys.has(seq.key));
 
             if (unarchived.length > 0) {
                 // Show ONLY the first unarchived sequence
                 const seq = unarchived[0];
-                const currentIndex = allSequences.length - unarchived.length + 1;
+                const currentIndex = finalSequences.length - unarchived.length + 1;
 
-                // Configure distinct theme color based on index
-                const themes = [
-                    { name: 'Red', color: '#ef4444', class: 'pulse-theme-0' },
-                    { name: 'Green', color: '#10b981', class: 'pulse-theme-1' },
-                    { name: 'Amber', color: '#f59e0b', class: 'pulse-theme-2' },
-                    { name: 'Purple', color: '#8b5cf6', class: 'pulse-theme-3' },
-                    { name: 'Pink', color: '#ec4899', class: 'pulse-theme-4' },
-                    { name: 'Cyan', color: '#06b6d4', class: 'pulse-theme-5' },
-                    { name: 'Indigo', color: '#6366f1', class: 'pulse-theme-6' },
-                    { name: 'Yellow', color: '#eab308', class: 'pulse-theme-7' }
-                ];
-                const theme = themes[(currentIndex - 1) % themes.length];
-
-                // Render active sequence details with blinking pulse border
-                const card = document.createElement('div');
-                card.className = 'active-barcode-card ' + theme.class;
-                card.style.background = 'rgba(255, 255, 255, 0.02)';
-                card.style.padding = '20px';
-                card.style.borderRadius = 'var(--radius-md)';
-                card.style.display = 'flex';
-                card.style.flexDirection = 'column';
-                card.style.gap = '14px';
-                card.style.transition = 'all 0.3s ease';
-
-                // Display range text and large total count
-                const boxText = seq.startBox === seq.endBox ? `Box ${seq.startBox}` : `Boxes ${seq.startBox} - ${seq.endBox}`;
-                
-                card.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
-                        <div style="display: flex; flex-direction: column; gap: 4px;">
-                            <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">
-                                ${seq.pName}
-                            </span>
-                            <div style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary); font-family: var(--font-mono); word-break: break-all; margin-top: 4px;">
-                                ${seq.startSerial}
-                            </div>
-                            <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-top: 2px;">
-                                ${boxText} &bull; <span style="color: ${theme.color}; font-weight: 700;">Barcode ${currentIndex} of ${allSequences.length}</span>
-                            </div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 2.2rem; font-weight: 900; color: ${theme.color}; line-height: 1;">
-                                ${seq.count}
-                            </div>
-                            <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px;">
-                                Total PCs
-                            </div>
-                        </div>
-                    </div>
+                if (seq.isPrepCard) {
+                    // Render Preparation Card (White Background, Black Text)
+                    const card = document.createElement('div');
+                    card.className = 'active-barcode-card';
+                    card.style.background = '#ffffff';
+                    card.style.border = '2px dashed #94a3b8';
+                    card.style.padding = '24px';
+                    card.style.borderRadius = 'var(--radius-md)';
+                    card.style.display = 'flex';
+                    card.style.flexDirection = 'column';
+                    card.style.gap = '16px';
+                    card.style.color = '#000000';
+                    card.style.boxShadow = '0 10px 25px rgba(0,0,0,0.05)';
                     
-                    <div style="display: flex; justify-content: center; background: white; padding: 16px; border-radius: var(--radius-sm); margin: 4px 0;">
-                        <svg id="activeBarcodeSvg"></svg>
-                    </div>
+                    card.innerHTML = `
+                        <div style="text-align: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px; width: 100%;">
+                            <span style="font-size: 0.75rem; color: #64748b; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">
+                                NEXT SEQUENCE PREPARATION
+                            </span>
+                            <h3 style="font-size: 1.1rem; font-weight: 800; color: #0f172a; margin: 8px 0 4px 0; word-break: break-all;">
+                                ${seq.pName}
+                            </h3>
+                            <div style="font-size: 0.8rem; color: #64748b; font-weight: 600;">
+                                Card ${currentIndex} of ${finalSequences.length}
+                            </div>
+                        </div>
 
-                    <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="width: 100%; padding: 14px; background: ${theme.color}; border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                        Archive Barcode
-                    </button>
-                `;
-                body.appendChild(card);
+                        <div style="text-align: center; padding: 20px 10px; background: #f8fafc; border-radius: var(--radius-sm); width: 100%; box-sizing: border-box;">
+                            <div style="font-size: 2.8rem; font-weight: 900; color: #0f172a; line-height: 1;">
+                                ${seq.count} PCs
+                            </div>
+                            <div style="font-size: 0.85rem; color: #334155; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 8px;">
+                                Barcodes Starting
+                            </div>
+                            <p style="font-size: 0.78rem; color: #64748b; margin: 8px 0 0 0; line-height: 1.4;">
+                                Please prepare boxes of <strong>${seq.count} pieces</strong> for this product.
+                            </p>
+                        </div>
 
-                // Render vector barcode
-                if (window.JsBarcode) {
-                    try {
-                        JsBarcode("#activeBarcodeSvg", seq.startSerial, {
-                            format: "CODE128",
-                            width: 1.8,
-                            height: 60,
-                            displayValue: false,
-                            margin: 0
-                        });
-                    } catch (err) {
-                        console.error("JsBarcode failed for serial: ", seq.startSerial, err);
+                        <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="width: 100%; padding: 14px; background: #0f172a; border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>Start ${seq.count} PC Sequence</span>
+                        </button>
+                    `;
+                    body.appendChild(card);
+
+                    // Voice notification to prepare boxes
+                    const shortName = seq.pName.split(' ')[0];
+                    triggerSpeak(`Prepare, ${seq.count}, pieces sequence, for, ${shortName}`);
+                } else {
+                    // Configure distinct theme color based on index
+                    const themes = [
+                        { name: 'Red', color: '#ef4444', class: 'pulse-theme-0' },
+                        { name: 'Green', color: '#10b981', class: 'pulse-theme-1' },
+                        { name: 'Amber', color: '#f59e0b', class: 'pulse-theme-2' },
+                        { name: 'Purple', color: '#8b5cf6', class: 'pulse-theme-3' },
+                        { name: 'Pink', color: '#ec4899', class: 'pulse-theme-4' },
+                        { name: 'Cyan', color: '#06b6d4', class: 'pulse-theme-5' },
+                        { name: 'Indigo', color: '#6366f1', class: 'pulse-theme-6' },
+                        { name: 'Yellow', color: '#eab308', class: 'pulse-theme-7' }
+                    ];
+                    const theme = themes[(currentIndex - 1) % themes.length];
+
+                    // Render active sequence details with blinking pulse border
+                    const card = document.createElement('div');
+                    card.className = 'active-barcode-card ' + theme.class;
+                    card.style.background = 'rgba(255, 255, 255, 0.02)';
+                    card.style.padding = '20px';
+                    card.style.borderRadius = 'var(--radius-md)';
+                    card.style.display = 'flex';
+                    card.style.flexDirection = 'column';
+                    card.style.gap = '14px';
+                    card.style.transition = 'all 0.3s ease';
+
+                    // Display range text and large total count
+                    const boxText = seq.startBox === seq.endBox ? `Box ${seq.startBox}` : `Boxes ${seq.startBox} - ${seq.endBox}`;
+                    
+                    card.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; width: 100%;">
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">
+                                    ${seq.pName}
+                                </span>
+                                <div style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary); font-family: var(--font-mono); word-break: break-all; margin-top: 4px;">
+                                    ${seq.startSerial}
+                                </div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-top: 2px;">
+                                    ${boxText} &bull; <span style="color: ${theme.color}; font-weight: 700;">Barcode ${currentIndex} of ${finalSequences.length}</span>
+                                </div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 2.2rem; font-weight: 900; color: ${theme.color}; line-height: 1;">
+                                    ${seq.count}
+                                </div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px;">
+                                    Total PCs
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: center; background: white; padding: 16px; border-radius: var(--radius-sm); margin: 4px 0;">
+                            <svg id="activeBarcodeSvg"></svg>
+                        </div>
+
+                        <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="width: 100%; padding: 14px; background: ${theme.color}; border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span>Archive Barcode</span>
+                        </button>
+                    `;
+                    body.appendChild(card);
+
+                    // Render vector barcode
+                    if (window.JsBarcode) {
+                        try {
+                            JsBarcode("#activeBarcodeSvg", seq.startSerial, {
+                                format: "CODE128",
+                                width: 1.8,
+                                height: 60,
+                                displayValue: false,
+                                margin: 0
+                            });
+                        } catch (err) {
+                            console.error("JsBarcode failed for serial: ", seq.startSerial, err);
+                        }
                     }
                 }
             } else {
