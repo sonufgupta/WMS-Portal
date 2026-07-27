@@ -84,6 +84,13 @@
                     </svg>
                     <span id="btnToggleLocalSpeakerText">Muted (Click to Unmute)</span>
                 </button>
+                <div id="speakerSpeedControlContainer" style="display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-sm); width: 100%; box-sizing: border-box; margin-bottom: 2px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: var(--text-secondary); font-weight: 700;">
+                        <span>🔊 speech speed:</span>
+                        <span id="lblSpeakerSpeedVal" style="font-family: var(--font-mono); color: var(--accent-blue); font-weight: 800;">0.95x</span>
+                    </div>
+                    <input type="range" id="inputSpeakerSpeed" min="0.60" max="2.00" step="0.05" value="0.95" style="width: 100%; cursor: pointer; accent-color: var(--accent-blue); background: rgba(255,255,255,0.08); height: 4px; border-radius: 2px; outline: none; border: none; padding: 0; margin: 4px 0; display: block; -webkit-appearance: none;">
+                </div>
                 <button type="button" id="btnOpenDeviceManager" class="btn-primary" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--accent-blue); width: 100%; border-style: solid; padding: 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: var(--transition-smooth); margin-bottom: 2px;">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />

@@ -5929,6 +5929,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Real-time speech synthesis notification helpers ---
     let localSpeakerActive = localStorage.getItem('wms_speaker_active') === 'true';
+    let baseSpeakerSpeed = parseFloat(localStorage.getItem('wms_speaker_speed')) || 0.95;
     let wakeLock = null;
     let silentAudioEl = null;
     let ttsAudioEl = null;
@@ -6029,22 +6030,22 @@ document.addEventListener('DOMContentLoaded', () => {
         isSpeaking = true;
         let text = speechQueue.shift();
 
-        // Calculate rate based on queue backup (size of items waiting in queue)
+        // Calculate rate dynamically based on the user-configured baseSpeakerSpeed
         const queueSize = speechQueue.length;
-        let rate = 0.93;
+        let rate = baseSpeakerSpeed;
         let processedText = text;
 
         if (queueSize >= 2) {
             // Turbo Speed: 3+ items back-to-back (current + 2 waiting)
-            rate = 1.45;
-            processedText = text.replace(/,/g, ' '); // remove commas for back-to-back speed
+            rate = Math.min(baseSpeakerSpeed * 1.55, 2.0);
+            processedText = text.replace(/,/g, ' '); // remove commas for speed
         } else if (queueSize === 1) {
             // Fast Speed: 2 items back-to-back (current + 1 waiting)
-            rate = 1.18;
-            processedText = text.replace(/,/g, ' '); // remove commas for back-to-back speed
+            rate = Math.min(baseSpeakerSpeed * 1.25, 2.0);
+            processedText = text.replace(/,/g, ' '); // remove commas for speed
         } else {
-            // Normal speed (clear and slightly faster)
-            rate = 0.93;
+            // Normal user-selected speed
+            rate = baseSpeakerSpeed;
             processedText = text;
         }
 
@@ -6112,6 +6113,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnToggleLocalSpeaker = document.getElementById('btnToggleLocalSpeaker');
     const btnToggleLocalSpeakerText = document.getElementById('btnToggleLocalSpeakerText');
     const localSpeakerIcon = document.getElementById('localSpeakerIcon');
+    const inputSpeakerSpeed = document.getElementById('inputSpeakerSpeed');
+    const lblSpeakerSpeedVal = document.getElementById('lblSpeakerSpeedVal');
 
     function updateLocalSpeakerUI() {
         if (!btnToggleLocalSpeaker || !btnToggleLocalSpeakerText) return;
@@ -6131,6 +6134,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (localSpeakerIcon) {
                 localSpeakerIcon.style.color = 'var(--accent-rose)';
             }
+        }
+
+        // Update Speed Control Slider UI value
+        if (inputSpeakerSpeed && lblSpeakerSpeedVal) {
+            inputSpeakerSpeed.value = baseSpeakerSpeed;
+            lblSpeakerSpeedVal.textContent = baseSpeakerSpeed.toFixed(2) + 'x';
         }
     }
 
@@ -6155,6 +6164,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     try { window.speechSynthesis.cancel(); } catch(e){}
                 }
             }
+        });
+    }
+
+    if (inputSpeakerSpeed && lblSpeakerSpeedVal) {
+        inputSpeakerSpeed.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            baseSpeakerSpeed = val;
+            localStorage.setItem('wms_speaker_speed', val.toString());
+            lblSpeakerSpeedVal.textContent = val.toFixed(2) + 'x';
         });
     }
 
