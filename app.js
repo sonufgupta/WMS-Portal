@@ -2800,8 +2800,13 @@ document.addEventListener('DOMContentLoaded', () => {
             activeSession.serials.push({ serial: item.serial, boxNo: item.boxNo, itemName: matchedItem.name });
         });
 
-        // Speak summary of sequence generated
-        triggerSpeak(`${allTempSerials.length} items added`);
+        // Speak last 3 digits of the first serial scanned in this sequence
+        if (allTempSerials.length > 0) {
+            const firstSerial = allTempSerials[0].serial;
+            const last3 = firstSerial.slice(-3);
+            const speakStr = last3.split('').join(', ');
+            triggerSpeak(speakStr);
+        }
 
         // Update stats, re-render cards, and save active session state
         renderBoxCards();
@@ -4085,8 +4090,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        // Speak summary of sequence outbound
-        triggerSpeak(`${generatedBatch.length} items out bounded`);
+        // Speak last 3 digits of the first serial scanned in this sequence
+        if (generatedBatch.length > 0) {
+            const firstSerial = generatedBatch[0];
+            const last3 = firstSerial.slice(-3);
+            const speakStr = last3.split('').join(', ');
+            triggerSpeak(speakStr);
+        }
 
         saveActiveOutboundSession();
         updateOutboundSessionProgress();
@@ -5919,6 +5929,80 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Real-time speech synthesis notification helpers ---
     let localSpeakerActive = localStorage.getItem('wms_speaker_active') === 'true';
+    let wakeLock = null;
+    let audioCtx = null;
+    let silenceNode = null;
+
+    async function requestWakeLock() {
+        try {
+            if ('wakeLock' in navigator) {
+                wakeLock = await navigator.wakeLock.request('screen');
+                console.log("Wake Lock acquired successfully.");
+            }
+        } catch (err) {
+            console.warn(`Wake Lock failed: ${err.name}, ${err.message}`);
+        }
+    }
+
+    function releaseWakeLock() {
+        if (wakeLock !== null) {
+            wakeLock.release().then(() => {
+                wakeLock = null;
+                console.log("Wake Lock released.");
+            }).catch(err => {
+                console.warn("Wake Lock release failed:", err);
+            });
+        }
+    }
+
+    function startSilenceLoop() {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            if (!audioCtx) {
+                audioCtx = new AudioContext();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            if (!silenceNode) {
+                // Create an oscillator node playing extremely low volume (silent) to keep audio session alive
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                gainNode.gain.value = 0.0001; // practically silent
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                osc.start(0);
+                silenceNode = osc;
+                console.log("Silence loop started to prevent background suspension.");
+            }
+        } catch (e) {
+            console.warn("Silence loop failed: ", e);
+        }
+    }
+
+    function stopSilenceLoop() {
+        if (silenceNode) {
+            try {
+                silenceNode.stop();
+            } catch(e){}
+            silenceNode = null;
+        }
+        if (audioCtx) {
+            try {
+                audioCtx.close();
+            } catch(e){}
+            audioCtx = null;
+        }
+        console.log("Silence loop stopped.");
+    }
+
+    // Auto-acquire wake lock if page visibility changes back to visible and speaker is active
+    document.addEventListener('visibilitychange', async () => {
+        if (localSpeakerActive && document.visibilityState === 'visible') {
+            await requestWakeLock();
+        }
+    });
 
     function triggerSpeak(text) {
         if (isFirebaseConnected && db) {
@@ -5947,6 +6031,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function executeSpeech(text) {
         if (!window.speechSynthesis) return;
+        
+        // Re-resume audio context if it was suspended (safari backgrounding)
+        if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'en-US';
@@ -5988,9 +6078,24 @@ document.addEventListener('DOMContentLoaded', () => {
             updateLocalSpeakerUI();
             if (localSpeakerActive) {
                 executeSpeech("Speaker active");
+                requestWakeLock();
+                startSilenceLoop();
+            } else {
+                releaseWakeLock();
+                stopSilenceLoop();
             }
         });
     }
+
+    // Try to restore wake lock and silent loop if localSpeakerActive was saved as active
+    // Note: Browser rules require user gesture, so this will activate on the first user interaction on the page.
+    window.addEventListener('click', function initSpeakerOnGesture() {
+        if (localSpeakerActive) {
+            requestWakeLock();
+            startSilenceLoop();
+        }
+        window.removeEventListener('click', initSpeakerOnGesture);
+    });
 
     updateLocalSpeakerUI();
 
