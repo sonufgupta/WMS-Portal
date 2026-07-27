@@ -6878,6 +6878,31 @@ document.addEventListener('DOMContentLoaded', () => {
     // Keyboard navigation shortcuts: S = Stock, I = Inbound, O = Outbound, Y = Inventory, M = MIS Report
     document.addEventListener('keydown', (e) => {
         const activeNode = document.activeElement;
+        const outboundConfigModal = document.getElementById('outboundConfigModal');
+        const isConfigModalActive = outboundConfigModal && outboundConfigModal.classList.contains('active');
+        
+        // Handle "p" key paste shortcut when an input in the Outbound Config Modal is focused and empty
+        if (activeNode && isConfigModalActive) {
+            const tagName = activeNode.tagName.toLowerCase();
+            if (tagName === 'input' && (activeNode.id === 'configShopName' || activeNode.id === 'configInvoiceNo')) {
+                if (e.key.toLowerCase() === 'p' && activeNode.value === '') {
+                    e.preventDefault();
+                    navigator.clipboard.readText().then(text => {
+                        if (text) {
+                            activeNode.value = text;
+                            activeNode.dispatchEvent(new Event('input')); // trigger validation updates
+                        } else {
+                            activeNode.value = e.key;
+                        }
+                    }).catch(err => {
+                        activeNode.value = e.key;
+                    });
+                    return;
+                }
+            }
+        }
+
+        // Ignore global hotkeys if the user is typing inside any form field
         if (activeNode) {
             const tagName = activeNode.tagName.toLowerCase();
             if (tagName === 'input' || tagName === 'textarea' || tagName === 'select' || activeNode.isContentEditable) {
@@ -6885,7 +6910,34 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // Skip shortcuts if warning modal is active
+        // Handle custom hotkeys inside Outbound Config Modal (when open but inputs not focused)
+        if (isConfigModalActive) {
+            const key = e.key.toLowerCase();
+            if (key === 's') {
+                e.preventDefault();
+                const shopNameInput = document.getElementById('configShopName');
+                const invoiceNoInput = document.getElementById('configInvoiceNo');
+                if (shopNameInput && invoiceNoInput) {
+                    // Toggle focus between the inputs
+                    if (activeNode === shopNameInput) {
+                        invoiceNoInput.focus();
+                        invoiceNoInput.select();
+                    } else {
+                        shopNameInput.focus();
+                        shopNameInput.select();
+                    }
+                }
+            } else if (key === 'l') {
+                e.preventDefault();
+                const form = document.getElementById('outboundConfigForm');
+                if (form) {
+                    form.requestSubmit(); // trigger validation and submission
+                }
+            }
+            return; // block other navigation hotkeys while modal is active
+        }
+
+        // Skip shortcuts if other alert/warning modals are active
         if (document.querySelector('.modal.active') || document.querySelector('.sku-warning-modal.active')) {
             return;
         }
@@ -6906,6 +6958,16 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (key === 'm') {
             e.preventDefault();
             navigateToTab('navMisReport');
+        } else if (key === 'n') {
+            // "o" tabane ke bad (if Outbound section is active), pressing "n" starts a New Outbound Session
+            const sectionOutbound = document.getElementById('sectionOutbound');
+            if (sectionOutbound && sectionOutbound.style.display !== 'none') {
+                e.preventDefault();
+                const startBtn = document.getElementById('startOutboundSessionBtn');
+                if (startBtn && startBtn.style.display !== 'none' && !startBtn.disabled) {
+                    startBtn.click();
+                }
+            }
         }
     });
 
