@@ -5930,8 +5930,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Real-time speech synthesis notification helpers ---
     let localSpeakerActive = localStorage.getItem('wms_speaker_active') === 'true';
     let wakeLock = null;
-    let audioCtx = null;
-    let silenceNode = null;
+    let silentAudioEl = null;
+    let ttsAudioEl = null;
 
     async function requestWakeLock() {
         try {
@@ -5957,44 +5957,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function startSilenceLoop() {
         try {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            if (!AudioContext) return;
-            if (!audioCtx) {
-                audioCtx = new AudioContext();
+            if (!silentAudioEl) {
+                silentAudioEl = document.createElement('audio');
+                silentAudioEl.id = 'silentAudioLoop';
+                // 1-second silent WAV base64 data to keep audio session alive on mobile devices
+                silentAudioEl.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
+                silentAudioEl.loop = true;
+                silentAudioEl.volume = 0.05;
+                document.body.appendChild(silentAudioEl);
             }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
-            if (!silenceNode) {
-                // Create an oscillator node playing extremely low volume (silent) to keep audio session alive
-                const osc = audioCtx.createOscillator();
-                const gainNode = audioCtx.createGain();
-                gainNode.gain.value = 0.0001; // practically silent
-                osc.connect(gainNode);
-                gainNode.connect(audioCtx.destination);
-                osc.start(0);
-                silenceNode = osc;
-                console.log("Silence loop started to prevent background suspension.");
-            }
+            silentAudioEl.play().then(() => {
+                console.log("Silent audio loop started successfully.");
+            }).catch(err => {
+                console.warn("Silent audio play failed:", err);
+            });
         } catch (e) {
-            console.warn("Silence loop failed: ", e);
+            console.warn("Silent audio loop setup failed: ", e);
         }
     }
 
     function stopSilenceLoop() {
-        if (silenceNode) {
+        if (silentAudioEl) {
             try {
-                silenceNode.stop();
+                silentAudioEl.pause();
             } catch(e){}
-            silenceNode = null;
+            console.log("Silent audio loop stopped.");
         }
-        if (audioCtx) {
-            try {
-                audioCtx.close();
-            } catch(e){}
-            audioCtx = null;
-        }
-        console.log("Silence loop stopped.");
     }
 
     // Auto-acquire wake lock if page visibility changes back to visible and speaker is active
@@ -6030,13 +6018,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function executeSpeech(text) {
-        if (!window.speechSynthesis) return;
-        
-        // Re-resume audio context if it was suspended (safari backgrounding)
-        if (audioCtx && audioCtx.state === 'suspended') {
-            audioCtx.resume();
+        // iOS/Android lock screen: SpeechSynthesis gets suspended.
+        // Bypassed by using HTML5 Audio element playing a Google TTS URL, which plays continuously on lock screen.
+        if (navigator.onLine) {
+            try {
+                if (!ttsAudioEl) {
+                    ttsAudioEl = document.createElement('audio');
+                    ttsAudioEl.id = 'ttsAudioPlayer';
+                    document.body.appendChild(ttsAudioEl);
+                }
+                const url = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=' + encodeURIComponent(text);
+                ttsAudioEl.src = url;
+                ttsAudioEl.volume = 1.0;
+                ttsAudioEl.play().then(() => {
+                    console.log("Online TTS audio played successfully:", text);
+                }).catch(err => {
+                    console.warn("Online TTS play failed, falling back to local SpeechSynthesis:", err);
+                    localSpeechFallback(text);
+                });
+                return;
+            } catch (e) {
+                console.warn("Online TTS play exception, falling back to local SpeechSynthesis:", e);
+            }
         }
-        
+        localSpeechFallback(text);
+    }
+
+    function localSpeechFallback(text) {
+        if (!window.speechSynthesis) return;
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'en-US';
@@ -6077,12 +6086,15 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('wms_speaker_active', localSpeakerActive ? 'true' : 'false');
             updateLocalSpeakerUI();
             if (localSpeakerActive) {
+                startSilenceLoop();
                 executeSpeech("Speaker active");
                 requestWakeLock();
-                startSilenceLoop();
             } else {
                 releaseWakeLock();
                 stopSilenceLoop();
+                if (ttsAudioEl) {
+                    try { ttsAudioEl.pause(); } catch(e){}
+                }
             }
         });
     }
@@ -6091,8 +6103,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Note: Browser rules require user gesture, so this will activate on the first user interaction on the page.
     window.addEventListener('click', function initSpeakerOnGesture() {
         if (localSpeakerActive) {
-            requestWakeLock();
             startSilenceLoop();
+            requestWakeLock();
         }
         window.removeEventListener('click', initSpeakerOnGesture);
     });
