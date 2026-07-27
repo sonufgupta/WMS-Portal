@@ -6968,6 +6968,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     startBtn.click();
                 }
             }
+        } else if (key === 'e') {
+            // If Outbound tab is active, pressing "e" ends the active Outbound Session
+            const sectionOutbound = document.getElementById('sectionOutbound');
+            if (sectionOutbound && sectionOutbound.style.display !== 'none') {
+                e.preventDefault();
+                const endBtn = document.getElementById('endOutboundSessionBtn');
+                if (endBtn && endBtn.style.display !== 'none' && !endBtn.disabled) {
+                    endBtn.click();
+                }
+            }
+        } else if (key === 'c') {
+            // If Outbound tab is active, pressing "c" cancels the active Outbound Session
+            const sectionOutbound = document.getElementById('sectionOutbound');
+            if (sectionOutbound && sectionOutbound.style.display !== 'none') {
+                e.preventDefault();
+                const cancelBtn = document.getElementById('cancelActiveOutboundSessionBtn');
+                if (cancelBtn && cancelBtn.style.display !== 'none' && !cancelBtn.disabled) {
+                    cancelBtn.click();
+                }
+            }
         }
     });
 
