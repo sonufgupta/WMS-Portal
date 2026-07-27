@@ -6003,23 +6003,55 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let speechQueue = [];
+    let isSpeaking = false;
+
     function playLocalSpeak(text) {
         if (!localSpeakerActive) return;
         if (isFirebaseConnected && db) {
             db.ref('wms_data/devices/' + deviceId).once('value').then(snapshot => {
                 const dev = snapshot.val();
                 if (dev && dev.status === 'approved' && dev.speakerApproved) {
-                    executeSpeech(text);
+                    speechQueue.push(text);
+                    processSpeechQueue();
                 }
             });
         } else {
-            executeSpeech(text);
+            speechQueue.push(text);
+            processSpeechQueue();
         }
     }
 
-    function executeSpeech(text) {
-        // iOS/Android lock screen: SpeechSynthesis gets suspended.
-        // Bypassed by using HTML5 Audio element playing a Google TTS URL, which plays continuously on lock screen.
+    function processSpeechQueue() {
+        if (isSpeaking) return;
+        if (speechQueue.length === 0) return;
+
+        isSpeaking = true;
+        let text = speechQueue.shift();
+
+        // Calculate rate based on queue backup (size of items waiting in queue)
+        const queueSize = speechQueue.length;
+        let rate = 0.82;
+        let processedText = text;
+
+        if (queueSize >= 2) {
+            // Turbo Speed: 3+ items back-to-back (current + 2 waiting)
+            rate = 1.30;
+            processedText = text.replace(/,/g, ' '); // remove commas for back-to-back speed
+        } else if (queueSize === 1) {
+            // Fast Speed: 2 items back-to-back (current + 1 waiting)
+            rate = 1.08;
+            processedText = text.replace(/,/g, ' '); // remove commas for back-to-back speed
+        } else {
+            // Normal calm speed
+            rate = 0.82;
+            processedText = text;
+        }
+
+        executeSpeechQueueItem(processedText, rate);
+    }
+
+    function executeSpeechQueueItem(text, rate) {
         if (navigator.onLine) {
             try {
                 if (!ttsAudioEl) {
@@ -6029,28 +6061,50 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 const url = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=' + encodeURIComponent(text);
                 ttsAudioEl.src = url;
+                ttsAudioEl.playbackRate = rate;
                 ttsAudioEl.volume = 1.0;
-                ttsAudioEl.play().then(() => {
-                    console.log("Online TTS audio played successfully:", text);
-                }).catch(err => {
-                    console.warn("Online TTS play failed, falling back to local SpeechSynthesis:", err);
-                    localSpeechFallback(text);
+                
+                ttsAudioEl.onended = () => {
+                    isSpeaking = false;
+                    processSpeechQueue();
+                };
+                ttsAudioEl.onerror = () => {
+                    console.warn("TTS audio play failed, trying local fallback.");
+                    localSpeechFallbackQueue(text, rate);
+                };
+
+                ttsAudioEl.play().catch(err => {
+                    console.warn("TTS play failed, trying local fallback:", err);
+                    localSpeechFallbackQueue(text, rate);
                 });
                 return;
             } catch (e) {
-                console.warn("Online TTS play exception, falling back to local SpeechSynthesis:", e);
+                console.warn("TTS play exception, trying local fallback:", e);
             }
         }
-        localSpeechFallback(text);
+        localSpeechFallbackQueue(text, rate);
     }
 
-    function localSpeechFallback(text) {
-        if (!window.speechSynthesis) return;
+    function localSpeechFallbackQueue(text, rate) {
+        if (!window.speechSynthesis) {
+            isSpeaking = false;
+            processSpeechQueue();
+            return;
+        }
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'en-US';
-        utterance.rate = 0.82;
+        utterance.rate = rate;
         utterance.pitch = 1.0;
+        
+        utterance.onend = () => {
+            isSpeaking = false;
+            processSpeechQueue();
+        };
+        utterance.onerror = () => {
+            isSpeaking = false;
+            processSpeechQueue();
+        };
         window.speechSynthesis.speak(utterance);
     }
 
@@ -6087,13 +6141,18 @@ document.addEventListener('DOMContentLoaded', () => {
             updateLocalSpeakerUI();
             if (localSpeakerActive) {
                 startSilenceLoop();
-                executeSpeech("Speaker active");
+                playLocalSpeak("Speaker active");
                 requestWakeLock();
             } else {
                 releaseWakeLock();
                 stopSilenceLoop();
+                speechQueue = [];
+                isSpeaking = false;
                 if (ttsAudioEl) {
                     try { ttsAudioEl.pause(); } catch(e){}
+                }
+                if (window.speechSynthesis) {
+                    try { window.speechSynthesis.cancel(); } catch(e){}
                 }
             }
         });
