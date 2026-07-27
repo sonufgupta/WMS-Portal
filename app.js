@@ -6031,20 +6031,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Calculate rate based on queue backup (size of items waiting in queue)
         const queueSize = speechQueue.length;
-        let rate = 0.82;
+        let rate = 0.93;
         let processedText = text;
 
         if (queueSize >= 2) {
             // Turbo Speed: 3+ items back-to-back (current + 2 waiting)
-            rate = 1.30;
+            rate = 1.45;
             processedText = text.replace(/,/g, ' '); // remove commas for back-to-back speed
         } else if (queueSize === 1) {
             // Fast Speed: 2 items back-to-back (current + 1 waiting)
-            rate = 1.08;
+            rate = 1.18;
             processedText = text.replace(/,/g, ' '); // remove commas for back-to-back speed
         } else {
-            // Normal calm speed
-            rate = 0.82;
+            // Normal speed (clear and slightly faster)
+            rate = 0.93;
             processedText = text;
         }
 
