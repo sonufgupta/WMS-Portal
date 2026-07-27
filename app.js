@@ -560,6 +560,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const appContainer = document.querySelector('.app-container');
             if (appContainer && appContainer.classList.contains('sidebar-collapsed')) {
                 appContainer.classList.remove('sidebar-collapsed');
+                localStorage.setItem('wms_sidebar_collapsed', 'false');
             } else {
                 appSidebar.classList.toggle('active');
             }
@@ -580,10 +581,12 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             e.stopPropagation();
             const appContainer = document.querySelector('.app-container');
+            if (appContainer) {
+                const collapsed = appContainer.classList.toggle('sidebar-collapsed');
+                localStorage.setItem('wms_sidebar_collapsed', collapsed ? 'true' : 'false');
+            }
             if (window.innerWidth <= 768) {
                 appSidebar.classList.remove('active');
-            } else if (appContainer) {
-                appContainer.classList.toggle('sidebar-collapsed');
             }
         });
     }
@@ -5260,14 +5263,23 @@ document.addEventListener('DOMContentLoaded', () => {
     if (inventorySearchBtn) {
         inventorySearchBtn.addEventListener('click', renderInventoryPanel);
     }
+    function debounce(func, wait) {
+        let timeout;
+        return function(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), wait);
+        };
+    }
+
     if (inventorySearchInput) {
         inventorySearchInput.addEventListener('keyup', (e) => {
             if (e.key === 'Enter') {
                 renderInventoryPanel();
             }
         });
-        // Real-time filter as you type
-        inventorySearchInput.addEventListener('input', renderInventoryPanel);
+        // Real-time filter as you type (debounced to prevent lag)
+        const debouncedInventorySearch = debounce(renderInventoryPanel, 150);
+        inventorySearchInput.addEventListener('input', debouncedInventorySearch);
     }
 
     // --- Without Serial Number Inward Workspace Controllers ---
@@ -6848,7 +6860,57 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function restoreSidebarCollapsedState() {
+        const isCollapsed = localStorage.getItem('wms_sidebar_collapsed') === 'true';
+        const appContainer = document.querySelector('.app-container');
+        if (isCollapsed && appContainer) {
+            appContainer.classList.add('sidebar-collapsed');
+        }
+    }
+
+    function navigateToTab(tabId) {
+        const link = document.getElementById(tabId);
+        if (link) {
+            link.click();
+        }
+    }
+
+    // Keyboard navigation shortcuts: S = Stock, I = Inbound, O = Outbound, Y = Inventory, M = MIS Report
+    document.addEventListener('keydown', (e) => {
+        const activeNode = document.activeElement;
+        if (activeNode) {
+            const tagName = activeNode.tagName.toLowerCase();
+            if (tagName === 'input' || tagName === 'textarea' || tagName === 'select' || activeNode.isContentEditable) {
+                return;
+            }
+        }
+        
+        // Skip shortcuts if warning modal is active
+        if (document.querySelector('.modal.active') || document.querySelector('.sku-warning-modal.active')) {
+            return;
+        }
+
+        const key = e.key.toLowerCase();
+        if (key === 's') {
+            e.preventDefault();
+            navigateToTab('navOverview');
+        } else if (key === 'i') {
+            e.preventDefault();
+            navigateToTab('navInbound');
+        } else if (key === 'o') {
+            e.preventDefault();
+            navigateToTab('navOutbound');
+        } else if (key === 'y') {
+            e.preventDefault();
+            navigateToTab('navInventory');
+        } else if (key === 'm') {
+            e.preventDefault();
+            navigateToTab('navMisReport');
+        }
+    });
+
     // Initial load: Restore states on page load/reload
+    restoreSidebarCollapsedState();
     restoreSessionState();
     restoreOutboundSessionState();
     renderInventoryPanel();
