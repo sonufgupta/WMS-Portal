@@ -1369,3 +1369,100 @@ a {
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
     filter: brightness(1.15);
 }
+
+/* Sidebar Collapse & Responsive Transitions */
+.app-sidebar {
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    will-change: transform;
+    backface-visibility: hidden;
+}
+.main-panel {
+    transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    will-change: margin-left;
+    backface-visibility: hidden;
+}
+
+/* Sidebar Collapse Mode Styles */
+.app-container.sidebar-collapsed .app-sidebar {
+    transform: translateX(-100%) !important;
+    border-right: none !important;
+}
+.app-container.sidebar-collapsed .main-panel {
+    margin-left: 0 !important;
+}
+.app-container.sidebar-collapsed .menu-toggle {
+    display: block !important;
+}
+
+/* Mobile Screen Responsiveness Optimizations (Phones) */
+@media (max-width: 768px) {
+    .dashboard-card {
+        height: auto !important;
+        max-height: none !important;
+        padding: 16px !important;
+        gap: 16px !important;
+    }
+    .modal-card {
+        max-width: 92% !important;
+        padding: 20px !important;
+        gap: 16px !important;
+    }
+    .modal-header h3 {
+        font-size: 1.1rem !important;
+    }
+    .modal-body {
+        padding: 12px 0 !important;
+    }
+    .modal-footer {
+        padding-top: 12px !important;
+    }
+    .table-container {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .portal-table th, .portal-table td {
+        padding: 12px 16px !important;
+        font-size: 0.85rem !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .app-header {
+        flex-direction: row !important;
+        justify-content: space-between !important;
+        padding: 0 12px !important;
+    }
+    .header-title h1 {
+        font-size: 1.05rem !important;
+    }
+    .header-widget {
+        font-size: 0.78rem !important;
+        padding: 4px 8px !important;
+    }
+    .content-area {
+        padding: 12px !important;
+    }
+    .logo-text {
+        font-size: 1.1rem !important;
+    }
+}
+
+/* Alternating Row Styles for Outbound History Logs */
+.portal-table tr.white-row td {
+    background-color: #ffffff !important;
+    color: #1e293b !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+}
+.portal-table tr.white-row:hover td {
+    background-color: #f1f5f9 !important;
+}
+.portal-table tr.black-row td {
+    background-color: #0d1321 !important;
+    color: #f8fafc !important;
+    border-bottom: 1px solid #1e293b !important;
+}
+.portal-table tr.black-row:hover td {
+    background-color: #161e2f !important;
+}
+
