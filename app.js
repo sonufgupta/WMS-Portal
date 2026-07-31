@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let cachedInboundHistory = null;
     let cachedOutboundHistory = null;
     let cachedProductWeights = null;
+    let weightResolutionCache = null;
 
     if (window.firebase) {
         try {
@@ -66,9 +67,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const newStr = JSON.stringify(value);
         if (currentLocal !== newStr) {
             localStorage.setItem(key, newStr);
-            if (key === 'wms_inbound_history') cachedInboundHistory = null;
+            if (key === 'wms_inbound_history') {
+                cachedInboundHistory = null;
+                weightResolutionCache = null;
+            }
             if (key === 'wms_outbound_history') cachedOutboundHistory = null;
-            if (key === 'wms_product_weights') cachedProductWeights = null;
+            if (key === 'wms_product_weights') {
+                cachedProductWeights = null;
+                weightResolutionCache = null;
+            }
             return true;
         }
         return false;
@@ -444,23 +451,31 @@ document.addEventListener('DOMContentLoaded', () => {
             let sumBoxes = 0;
             let sumWeight = 0.0;
 
-            Object.values(productStock).forEach(item => {
-                const currentPcQty = item.serialsCount;
-                if (currentPcQty > 0) {
-                    const currentBoxQty = item.boxNumbers.size;
-                    const totalWeight = item.availableWeight;
-
-                    sheetRows.push({
-                        "S.No.": rowIdx++,
-                        "Product Name": item.name,
-                        "Piece Quantity (PCs)": currentPcQty,
-                        "Total Weight (kg)": totalWeight > 0 ? parseFloat(totalWeight.toFixed(3)) : 0
-                    });
-
-                    sumPcs += currentPcQty;
-                    sumBoxes += currentBoxQty;
-                    sumWeight += totalWeight;
+            // Sort to place Out of Stock items at the top
+            const sortedExcelStock = Object.values(productStock).sort((a, b) => {
+                const aIsOut = a.serialsCount === 0 ? 1 : 0;
+                const bIsOut = b.serialsCount === 0 ? 1 : 0;
+                if (aIsOut !== bIsOut) {
+                    return bIsOut - aIsOut;
                 }
+                return a.name.localeCompare(b.name);
+            });
+
+            sortedExcelStock.forEach(item => {
+                const currentPcQty = item.serialsCount;
+                const currentBoxQty = item.boxNumbers.size;
+                const totalWeight = item.availableWeight;
+
+                sheetRows.push({
+                    "S.No.": rowIdx++,
+                    "Product Name": item.name,
+                    "Piece Quantity (PCs)": currentPcQty === 0 ? "Out of Stock" : currentPcQty,
+                    "Total Weight (kg)": totalWeight > 0 ? parseFloat(totalWeight.toFixed(3)) : 0
+                });
+
+                sumPcs += currentPcQty;
+                sumBoxes += currentBoxQty;
+                sumWeight += totalWeight;
             });
 
             if (sheetRows.length === 0) {
@@ -749,42 +764,66 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function resolveItemWeight(serial, itemName) {
+    function buildWeightResolutionCache() {
         const inboundHistory = getHistory();
-        
-        // 1. If it's a serialized item, try to find it by serial first (case-insensitive)
-        if (serial && !serial.includes('WOS-OUT-')) {
-            const cleanSerialUpper = serial.trim().toUpperCase();
-            for (let log of inboundHistory) {
-                if (log.serials && log.serials.length > 0) {
-                    const found = log.serials.some(s => s && s.serial && s.serial.trim().toUpperCase() === cleanSerialUpper);
-                    if (found) {
-                        const logW = resolveLogWeight(log, itemName);
+        const serialToWeight = new Map();
+        const itemToWeight = new Map();
+
+        // 1. Populate serial-to-weight mapping (oldest to newest, so newest log overrides and wins)
+        for (let i = inboundHistory.length - 1; i >= 0; i--) {
+            const log = inboundHistory[i];
+            if (log.serials && log.serials.length > 0) {
+                log.serials.forEach(s => {
+                    if (s && s.serial) {
+                        const cleanSerial = s.serial.trim().toUpperCase();
+                        const logW = resolveLogWeight(log, s.itemName || log.item);
                         if (logW !== undefined) {
-                            return logW;
+                            serialToWeight.set(cleanSerial, logW);
                         }
-                        break;
+                    }
+                });
+            }
+        }
+
+        // 2. Populate item-to-weight mapping (newest to oldest, so oldest log overrides and wins for FIFO)
+        for (let i = 0; i < inboundHistory.length; i++) {
+            const log = inboundHistory[i];
+            const itemNames = new Set();
+            if (log.item) itemNames.add(log.item);
+            if (log.items) log.items.forEach(it => { if (it.name) itemNames.add(it.name); });
+            if (log.serials) log.serials.forEach(sr => { if (sr.itemName) itemNames.add(sr.itemName); });
+
+            itemNames.forEach(itemName => {
+                const logW = resolveLogWeight(log, itemName);
+                if (logW !== undefined) {
+                    itemToWeight.set(itemName, logW);
+                }
+            });
+        }
+
+        const globalWeights = getProductWeights();
+
+        return {
+            resolve: function(serial, itemName) {
+                if (serial && !serial.includes('WOS-OUT-')) {
+                    const cleanSerial = serial.trim().toUpperCase();
+                    if (serialToWeight.has(cleanSerial)) {
+                        return serialToWeight.get(cleanSerial);
                     }
                 }
+                if (itemName && itemToWeight.has(itemName)) {
+                    return itemToWeight.get(itemName);
+                }
+                return parseFloat(globalWeights[itemName]) || 0;
             }
+        };
+    }
+
+    function resolveItemWeight(serial, itemName) {
+        if (!weightResolutionCache) {
+            weightResolutionCache = buildWeightResolutionCache();
         }
-        
-        // 2. If it's a WOS item (or serialized item not found in history),
-        // find the oldest log containing this item that has weights configured (FIFO order).
-        const inboundHistoryReversed = [...inboundHistory].reverse();
-        for (let log of inboundHistoryReversed) {
-            const isMatch = log.item === itemName || 
-                            (log.items && log.items.some(i => i.name === itemName)) || 
-                            (log.serials && log.serials.some(s => s.itemName === itemName));
-            const logW = resolveLogWeight(log, itemName);
-            if (isMatch && logW !== undefined) {
-                return logW;
-            }
-        }
-        
-        // 3. Fallback to global product weights
-        const weights = getProductWeights();
-        return parseFloat(weights[itemName]) || 0;
+        return weightResolutionCache.resolve(serial, itemName);
     }
 
     function getProductWeights() {
@@ -826,6 +865,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         cachedProductWeights = weights;
+        weightResolutionCache = null;
         
         // Convert dictionary to array of objects to bypass Firebase path segment key restrictions
         const weightsArray = Object.keys(weights).map(name => ({
@@ -1280,6 +1320,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveHistory(historyData) {
         cachedInboundHistory = historyData;
+        weightResolutionCache = null;
         localStorage.setItem('wms_inbound_history', JSON.stringify(historyData));
         firebaseSet('inbound_history', historyData);
     }
@@ -3336,6 +3377,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Outbound Logs Panel Controller Workspace
     // ==========================================================================
     let activeOutboundSession = null;
+    let isEditingOutboundSession = false;
 
     // Outbound Workstation elements
     const startOutboundSessionBtn = document.getElementById('startOutboundSessionBtn');
@@ -3456,8 +3498,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert('Incorrect passcode.');
                 }
             } else {
+                isEditingOutboundSession = false;
+                const modalTitle = document.getElementById('outboundConfigModalTitle');
+                const modalSubmitBtn = document.getElementById('confirmOutboundSessionBtn');
+                if (modalTitle) modalTitle.textContent = 'Configure Outbound Session';
+                if (modalSubmitBtn) modalSubmitBtn.textContent = 'Lock Details & Start Scanning';
+                
+                document.getElementById('configShopName').value = '';
+                document.getElementById('configInvoiceNo').value = '';
+                
                 outboundConfigModal.classList.add('active');
             }
+        });
+    }
+
+    // Edit Session Details trigger
+    const btnEditOutboundSessionInfo = document.getElementById('btnEditOutboundSessionInfo');
+    if (btnEditOutboundSessionInfo && outboundConfigModal) {
+        btnEditOutboundSessionInfo.addEventListener('click', () => {
+            if (!activeOutboundSession) return;
+            
+            isEditingOutboundSession = true;
+            const modalTitle = document.getElementById('outboundConfigModalTitle');
+            const modalSubmitBtn = document.getElementById('confirmOutboundSessionBtn');
+            if (modalTitle) modalTitle.textContent = 'Edit Outbound Session Details';
+            if (modalSubmitBtn) modalSubmitBtn.textContent = 'Update Details';
+            
+            document.getElementById('configShopName').value = activeOutboundSession.shopName || '';
+            document.getElementById('configInvoiceNo').value = activeOutboundSession.invoiceNo || '';
+            
+            outboundConfigModal.classList.add('active');
         });
     }
 
@@ -3483,7 +3553,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (closeOutboundConfigModalBtn) closeOutboundConfigModalBtn.addEventListener('click', closeOutboundConfigModal);
     if (cancelOutboundConfigModalBtn) cancelOutboundConfigModalBtn.addEventListener('click', closeOutboundConfigModal);
 
-    // Outbound session initialization
+    // Outbound session initialization or edit
     if (outboundConfigForm) {
         outboundConfigForm.addEventListener('submit', (e) => {
             e.preventDefault();
@@ -3495,13 +3565,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            activeOutboundSession = {
-                shopName: shopVal,
-                invoiceNo: invoiceVal,
-                items: [],
-                serials: []
-            };
-            localStorage.setItem('wms_outbound_joined', 'true');
+            if (isEditingOutboundSession && activeOutboundSession) {
+                activeOutboundSession.shopName = shopVal;
+                activeOutboundSession.invoiceNo = invoiceVal;
+            } else {
+                activeOutboundSession = {
+                    shopName: shopVal,
+                    invoiceNo: invoiceVal,
+                    items: [],
+                    serials: []
+                };
+                localStorage.setItem('wms_outbound_joined', 'true');
+            }
             saveActiveOutboundSession();
             closeOutboundConfigModal();
             restoreOutboundSessionState();
@@ -4136,8 +4211,9 @@ document.addEventListener('DOMContentLoaded', () => {
         let todayWeightSum = 0;
         
         const historyData = getOutboundHistory();
-        historyData.forEach(row => {
+        historyData.forEach((row, index) => {
             const tr = document.createElement('tr');
+            tr.className = (index % 2 === 0) ? 'white-row' : 'black-row';
             let totalWeight = 0;
             (row.serials || []).forEach(s => {
                 totalWeight += s.resolvedWeight !== undefined ? s.resolvedWeight : resolveItemWeight(s.serial, s.itemName);
@@ -4183,7 +4259,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (rowIsToday) {
                 timestampHtml = `${row.timestamp} <span style="background: var(--accent-emerald); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; margin-left: 6px; display: inline-block; vertical-align: middle;">Today</span>`;
                 tr.style.borderLeft = "4px solid var(--accent-emerald)";
-                tr.style.background = "rgba(16, 185, 129, 0.015)";
             }
 
             // Build checkbox indicator HTML
@@ -4459,9 +4534,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     boxCard.innerHTML = `
                         <div class="box-card-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px; margin-bottom: 8px;">
                             <span class="box-number-badge" style="font-size: 0.8rem; font-weight:700; color: var(--accent-blue);">Box #${boxNo}</span>
-                            <span style="font-size: 0.75rem; color: var(--text-muted);" class="font-mono">${boxItems.length} Pcs</span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 0.75rem; color: var(--text-muted);" class="font-mono">${boxItems.length} Pcs</span>
+                                <button type="button" class="btn-outbound-delete-box" data-box="${boxNo}" data-product="${item.name}" title="Delete entire Box #${boxNo}" style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px; display: flex; align-items: center; justify-content: center; transition: var(--transition-smooth); border-radius: 4px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5; color: var(--accent-rose);">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     `;
+
+                    const delBoxBtn = boxCard.querySelector('.btn-outbound-delete-box');
+                    if (delBoxBtn) {
+                        delBoxBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            if (confirm(`Are you sure you want to delete entire Box #${boxNo} of product "${item.name}"? This will delete all ${boxItems.length} scanned serials in this box.`)) {
+                                activeOutboundSession.serials = activeOutboundSession.serials.filter(x => !(x.boxNo === boxNo && x.itemName === item.name));
+                                
+                                const remainingForProduct = activeOutboundSession.serials.some(x => x.itemName === item.name);
+                                if (!remainingForProduct) {
+                                    activeOutboundSession.items = activeOutboundSession.items.filter(x => x.name !== item.name);
+                                }
+                                
+                                compactOutboundBoxNumbers();
+                                saveActiveOutboundSession();
+                                updateOutboundSessionProgress();
+                                renderOutboundBoxCards();
+                            }
+                        });
+                    }
 
                     const serialsUl = document.createElement('ul');
                     serialsUl.style.cssText = 'list-style: none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px;';
@@ -4847,9 +4949,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Set Overview Available Stock Counters
         const uniqueProductNames = Object.keys(productStock).filter(name => productStock[name].serialsCount > 0);
         const totalAvailableCount = Object.values(productStock).reduce((sum, item) => sum + item.serialsCount, 0);
+        const outOfStockProducts = Object.values(productStock).filter(item => item.serialsCount === 0);
+        const outOfStockCount = outOfStockProducts.length;
         
         const totalBoxesEl = document.getElementById('inventoryTotalBoxes');
         const totalWeightEl = document.getElementById('inventoryTotalWeight');
+        const outOfStockCountEl = document.getElementById('inventoryOutOfStockCount');
 
         const totalAvailableBoxes = Object.values(productStock).reduce((sum, item) => sum + (item.serialsCount > 0 ? item.boxNumbers.size : 0), 0);
         const totalAvailableWeight = Object.values(productStock).reduce((sum, item) => {
@@ -4860,6 +4965,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (uniqueProductsEl) uniqueProductsEl.textContent = uniqueProductNames.length;
         if (totalBoxesEl) totalBoxesEl.textContent = totalAvailableBoxes;
         if (totalWeightEl) totalWeightEl.textContent = `${totalAvailableWeight.toFixed(3)} kg`;
+        if (outOfStockCountEl) outOfStockCountEl.textContent = outOfStockCount;
 
         // Map Colors dynamically to products
         let colorIdx = 0;
@@ -4873,17 +4979,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Render Detailed Stock Register Table Body based on available stock
         if (registerBody) {
-            const registerRowsHtml = Object.values(productStock).map(item => {
+            // Sort to place Out of Stock items at the top
+            const sortedRegisterStock = Object.values(productStock).sort((a, b) => {
+                const aIsOut = a.serialsCount === 0 ? 1 : 0;
+                const bIsOut = b.serialsCount === 0 ? 1 : 0;
+                if (aIsOut !== bIsOut) {
+                    return bIsOut - aIsOut;
+                }
+                return a.name.localeCompare(b.name);
+            });
+
+            const registerRowsHtml = sortedRegisterStock.map(item => {
                 const totalWeight = item.availableWeight;
                 const theme = productColorsMap[item.name] || colorThemes[0];
+                const isOut = item.serialsCount === 0;
+                
+                const qtyHtml = isOut 
+                    ? `<span style="color: var(--accent-rose); font-weight: 800; background: rgba(244, 63, 94, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(244, 63, 94, 0.15); font-size: 0.72rem; text-transform: uppercase;">Out of Stock</span>` 
+                    : item.serialsCount;
                 
                 return `
-                    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
+                    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05); ${isOut ? 'opacity: 0.75;' : ''}">
                         <td style="padding: 10px 8px; font-weight: 700; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 185px;" title="${item.name}">
-                            <span style="border-left: 3px solid ${theme.text}; padding-left: 6px;">${item.name}</span>
+                            <span style="border-left: 3px solid ${isOut ? 'var(--accent-rose)' : theme.text}; padding-left: 6px;">${item.name}</span>
                         </td>
-                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: var(--text-secondary);">${item.serialsCount}</td>
-                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: var(--accent-emerald);">${totalWeight.toFixed(3)} kg</td>
+                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: var(--text-secondary);">${qtyHtml}</td>
+                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: ${isOut ? 'var(--text-muted)' : 'var(--accent-emerald)'};">${totalWeight.toFixed(3)} kg</td>
                     </tr>
                 `;
             }).join('');
@@ -6976,16 +7097,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const endBtn = document.getElementById('endOutboundSessionBtn');
                 if (endBtn && endBtn.style.display !== 'none' && !endBtn.disabled) {
                     endBtn.click();
-                }
-            }
-        } else if (key === 'c') {
-            // If Outbound tab is active, pressing "c" cancels the active Outbound Session
-            const sectionOutbound = document.getElementById('sectionOutbound');
-            if (sectionOutbound && sectionOutbound.style.display !== 'none') {
-                e.preventDefault();
-                const cancelBtn = document.getElementById('cancelActiveOutboundSessionBtn');
-                if (cancelBtn && cancelBtn.style.display !== 'none' && !cancelBtn.disabled) {
-                    cancelBtn.click();
                 }
             }
         }
