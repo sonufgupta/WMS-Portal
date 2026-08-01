@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"></script>
     <script>
         window.addEventListener('error', function(e) {
             // Ignore cross-origin browser extension and masked script errors
@@ -490,23 +491,8 @@
                                     <p>Assigned orders waiting to be dispatched</p>
                                 </div>
                             </div>
-                            <div class="table-container" style="max-height: 250px; overflow-y: auto;">
-                                <table class="portal-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Shop Name</th>
-                                            <th>Invoice / SO No.</th>
-                                            <th>Target Items</th>
-                                            <th style="text-align: right;">Total Pcs</th>
-                                            <th style="text-align: center; width: 150px;">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="outboundQueueTableBody">
-                                        <tr>
-                                            <td colspan="5" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 24px;">No active orders in queue.</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                            <div id="outboundQueueList" style="padding: 24px; display: flex; flex-direction: column; gap: 16px; max-height: 450px; overflow-y: auto;">
+                                <div style="text-align: center; color: var(--text-muted); font-style: italic;">No active orders in queue.</div>
                             </div>
                         </div>
 
@@ -725,81 +711,29 @@
                             </div>
                         </div>
 
-                        <div class="inbound-grid" style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 24px; width: 100%;">
-                            <!-- Left Side: Paste Form & Extracted Results -->
-                            <div style="display: flex; flex-direction: column; gap: 24px;">
-                                <!-- Paste Form Card -->
-                                <div class="dashboard-card" style="padding: 24px; display: flex; flex-direction: column; gap: 20px; justify-content: flex-start; height: auto;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; width: 100%;">
-                                        <h3 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 0;">Paste Sales Order Data</h3>
-                                        <button type="button" id="btnOrderAssignPasteClip" class="btn-primary" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--accent-blue); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                            </svg>
-                                            <span>Paste Clipboard</span>
-                                        </button>
-                                    </div>
-
-                                    <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
-                                        <textarea id="orderAssignRawText" placeholder="Paste Zoho / Tally Sales Order text details here... e.g.&#10;Sales Order# : SO-MH /26-27/299&#10;Ship To&#10;NEW WAY COMMUNICATION&#10;85285200  12 pcs" style="width: 100%; height: 180px; background-color: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; color: var(--text-primary); font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.5; resize: none; outline: none; box-sizing: border-box;"></textarea>
-                                    </div>
-
-                                    <button type="button" id="btnOrderAssignProcess" class="btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 0.9rem; font-weight: 700; background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); display: flex; align-items: center; gap: 8px;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                        <div class="inbound-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; width: 100%;">
+                            <!-- Left Side: Paste Form Card -->
+                            <div class="dashboard-card" style="padding: 24px; display: flex; flex-direction: column; gap: 20px; justify-content: flex-start; height: auto;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; width: 100%;">
+                                    <h3 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 0;">Paste Sales Order Data</h3>
+                                    <button type="button" id="btnOrderAssignPasteClip" class="btn-primary" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--accent-blue); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                                         </svg>
-                                        <span>Extract & Parse Sales Order</span>
+                                        <span>Paste Clipboard</span>
                                     </button>
                                 </div>
 
-                                <!-- Extracted Results Card -->
-                                <div class="dashboard-card" style="padding: 24px; display: flex; flex-direction: column; gap: 20px; justify-content: flex-start; height: auto; overflow: hidden;">
-                                    <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; width: 100%;">
-                                        <h3 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 0;">Extracted Order Info</h3>
-                                    </div>
-
-                                    <div style="display: flex; flex-direction: column; gap: 14px; width: 100%;">
-                                        <div style="display: flex; gap: 16px; flex-wrap: wrap;">
-                                            <div style="flex: 1; min-width: 180px; background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 12px; border-radius: var(--radius-md); position: relative;">
-                                                <span style="font-size: 0.68rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 4px;">SHOP NAME / SHIP TO</span>
-                                                <span style="font-size: 0.88rem; font-weight: 800; color: var(--text-primary); word-break: break-all;" id="orderAssignExtractedShop">N/A</span>
-                                            </div>
-                                            <div style="flex: 1; min-width: 180px; background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 12px; border-radius: var(--radius-md);">
-                                                <span style="font-size: 0.68rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 4px;">SALES ORDER# / INVOICE NO.</span>
-                                                <span style="font-size: 0.88rem; font-weight: 800; color: var(--accent-blue); word-break: break-all;" id="orderAssignExtractedInvoice">N/A</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div style="display: flex; flex-direction: column; gap: 8px; flex: 1; overflow: hidden; width: 100%;">
-                                        <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); margin: 0;">Extracted Items List</h4>
-                                        <div class="table-container" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-y: auto; background: var(--bg-primary); max-height: 240px; width: 100%;">
-                                            <table class="portal-table" style="font-size: 0.8rem; margin: 0; width: 100%;">
-                                                <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 10; border-bottom: 1px solid var(--border-color);">
-                                                    <tr>
-                                                        <th style="padding: 8px; font-weight: 700; text-align: left; width: 40px;">S.No.</th>
-                                                        <th style="padding: 8px; font-weight: 700; text-align: left;">Raw Name in SO</th>
-                                                        <th style="padding: 8px; font-weight: 700; text-align: left;">Matched Database Item</th>
-                                                        <th style="padding: 8px; font-weight: 700; text-align: right; width: 85px;">Qty</th>
-                                                        <th style="padding: 8px; font-weight: 700; text-align: center; width: 50px;">Action</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody id="orderAssignTableBody">
-                                                    <tr>
-                                                        <td colspan="5" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 24px;">No items parsed yet. Paste text above to extract.</td>
-                                                    </tr>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-
-                                    <button type="button" id="btnOrderAssignSubmit" class="btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 0.9rem; font-weight: 700; background-color: var(--accent-emerald); border-color: var(--accent-emerald); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); display: flex; align-items: center; gap: 8px; border-style: solid;" disabled>
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <span>Add Order to Dispatch Queue</span>
-                                    </button>
+                                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                                    <textarea id="orderAssignRawText" placeholder="Paste Zoho / Tally Sales Order text details here... e.g.&#10;Sales Order# : SO-MH /26-27/299&#10;Ship To&#10;NEW WAY COMMUNICATION&#10;85285200  12 pcs" style="width: 100%; height: 350px; background-color: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; color: var(--text-primary); font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.5; resize: none; outline: none; box-sizing: border-box;"></textarea>
                                 </div>
+
+                                <button type="button" id="btnOrderAssignProcess" class="btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 0.95rem; font-weight: 700; background-color: var(--accent-emerald); border-color: var(--accent-emerald); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); display: flex; align-items: center; gap: 8px; border-style: solid;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span>Process & Add to Queue</span>
+                                </button>
                             </div>
 
                             <!-- Right Side: Active Order Queue -->
@@ -807,22 +741,8 @@
                                 <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; width: 100%;">
                                     <h3 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 0;">Active Dispatch Order Queue</h3>
                                 </div>
-                                <div class="table-container" style="flex: 1; border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-y: auto; background: var(--bg-primary); width: 100%;">
-                                    <table class="portal-table" style="font-size: 0.8rem; margin: 0; width: 100%;">
-                                        <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 10; border-bottom: 1px solid var(--border-color);">
-                                            <tr>
-                                                <th style="padding: 8px; font-weight: 700; text-align: left;">Shop Name</th>
-                                                <th style="padding: 8px; font-weight: 700; text-align: left;">SO / Invoice No</th>
-                                                <th style="padding: 8px; font-weight: 700; text-align: right; width: 60px;">Total Pcs</th>
-                                                <th style="padding: 8px; font-weight: 700; text-align: center; width: 140px;">Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="orderAssignQueueTableBody">
-                                            <tr>
-                                                <td colspan="4" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 24px;">No active orders in queue.</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                                <div id="orderAssignQueueList" style="flex: 1; overflow-y: auto; width: 100%; display: flex; flex-direction: column; gap: 16px; padding-right: 4px;">
+                                    <div style="text-align: center; color: var(--text-muted); font-style: italic; padding: 24px;">No active orders in queue.</div>
                                 </div>
                             </div>
                         </div>
