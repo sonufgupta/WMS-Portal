@@ -212,6 +212,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        // 7.5. Sync Dispatch Order Queue (Real-Time Multi-Terminal sync)
+        db.ref('wms_data/order_queue').on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val === null) {
+                localStorage.setItem('wms_order_queue', '[]');
+                renderOrderQueueUI();
+            } else {
+                if (syncCloudDataToLocal('wms_order_queue', val)) {
+                    renderOrderQueueUI();
+                    console.log("Order Queue synchronized.");
+                }
+            }
+        });
+
         // 8. Sync Deleted Serials (Trash Bin)
         db.ref('wms_data/deleted_serials').on('value', (snapshot) => {
             const val = snapshot.val();
@@ -5405,7 +5419,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================================================
-    // Order Assign Workspace Controller
+    // Order Assign Workspace Controller (Queue & Packing Rules)
     // ==========================================================================
     let parsedOrderAssignData = { shopName: '', invoiceNo: '', items: [] };
 
@@ -5417,6 +5431,23 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const orderAssignExtractedShop = document.getElementById('orderAssignExtractedShop');
     const orderAssignExtractedInvoice = document.getElementById('orderAssignExtractedInvoice');
+
+    function getOrderQueue() {
+        const saved = localStorage.getItem('wms_order_queue');
+        if (saved) {
+            try {
+                return JSON.parse(saved);
+            } catch (e) {
+                return [];
+            }
+        }
+        return [];
+    }
+
+    function saveOrderQueue(queue) {
+        localStorage.setItem('wms_order_queue', JSON.stringify(queue));
+        firebaseSet('order_queue', queue);
+    }
 
     if (btnOrderAssignPasteClip) {
         btnOrderAssignPasteClip.addEventListener('click', () => {
@@ -5520,10 +5551,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // If no items matched Zoho structure, try line-by-line keyword fallback
         if (parsedItems.length === 0) {
-            // Find lines containing common product keywords
             lines.forEach((line, idx) => {
                 if (line.toLowerCase().includes('monitor') || line.toLowerCase().includes('led') || line.toLowerCase().includes('warranty')) {
-                    // Avoid double counting description lines
                     if (idx > 0 && (lines[idx-1].toLowerCase().includes('monitor') || lines[idx-1].toLowerCase().includes('led'))) {
                         return; 
                     }
@@ -5569,18 +5598,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function findFuzzyProduct(soItemName, knownProducts) {
         const clean = soItemName.trim().toLowerCase();
         
-        // 1. Exact match
         const exact = knownProducts.find(p => p.toLowerCase() === clean);
         if (exact) return exact;
         
-        // 2. Contains match
         const contains = knownProducts.find(p => {
             const lp = p.toLowerCase();
             return lp.includes(clean) || clean.includes(lp);
         });
         if (contains) return contains;
         
-        // 3. Partial keywords match
         const parts = clean.split(/\s+/).filter(p => p.length > 2 && p !== 'led' && p !== 'hdmi');
         if (parts.length > 0) {
             const matched = knownProducts.find(p => {
@@ -5589,7 +5615,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             if (matched) return matched;
         }
-
         return null;
     }
 
@@ -5610,23 +5635,41 @@ document.addEventListener('DOMContentLoaded', () => {
         parsedOrderAssignData.items.forEach((item, index) => {
             const tr = document.createElement('tr');
             
-            // Build matched product dropdown options
             let optionsHtml = `<option value="">-- Choose Database Product --</option>`;
             knownProducts.forEach(prod => {
                 const selected = (prod === item.matchedName) ? 'selected' : '';
                 optionsHtml += `<option value="${prod}" ${selected}>${prod}</option>`;
             });
 
+            // 5 packing rule check for 18.5" and 19.5" monitor
+            const isMonitor = (item.matchedName.toLowerCase().includes('18.5') || item.matchedName.toLowerCase().includes('19.5')) && item.matchedName.toLowerCase().includes('monitor');
+            const isInvalidPacking = isMonitor && (item.qty % 5 !== 0);
+            
+            const warningStyle = isInvalidPacking ? 'border: 2px solid var(--accent-rose); background: rgba(244, 63, 94, 0.05);' : '';
+            const warningMessageHtml = isInvalidPacking
+                ? `<div style="color: var(--accent-rose); font-size: 0.72rem; font-weight: 700; display: flex; align-items: center; gap: 4px; margin-top: 4px; justify-content: flex-end;" title="Monitor packing always comes in boxes of 5.">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 12px; height: 12px;">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                    <span>Pack of 5 warning!</span>
+                  </div>`
+                : '';
+
             tr.innerHTML = `
-                <td style="padding: 8px; font-weight: 700; color: var(--text-secondary); text-align: left;">${index + 1}</td>
-                <td style="padding: 8px; color: var(--text-muted); font-size: 0.78rem;" title="${item.rawName}">${item.rawName}</td>
-                <td style="padding: 8px;">
+                <td style="padding: 8px; font-weight: 700; color: var(--text-secondary); text-align: left; vertical-align: middle;">${index + 1}</td>
+                <td style="padding: 8px; color: var(--text-muted); font-size: 0.75rem; vertical-align: middle;" title="${item.rawName}">${item.rawName}</td>
+                <td style="padding: 8px; vertical-align: middle;">
                     <select class="order-assign-product-select" data-index="${index}" style="background-color: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px; border-radius: var(--radius-sm); font-size: 0.8rem; width: 100%; outline: none;">
                         ${optionsHtml}
                     </select>
                 </td>
-                <td style="padding: 8px; text-align: right; font-weight: 700; color: var(--text-primary); font-family: var(--font-mono);">${item.qty}</td>
-                <td style="padding: 8px; text-align: center;">
+                <td style="padding: 8px; text-align: right; vertical-align: middle;">
+                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                        <input type="number" class="order-assign-qty-input" data-index="${index}" value="${item.qty}" min="1" style="background-color: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px; border-radius: var(--radius-sm); font-size: 0.8rem; width: 75px; text-align: right; font-weight: 700; font-family: var(--font-mono); outline: none; ${warningStyle}">
+                        ${warningMessageHtml}
+                    </div>
+                </td>
+                <td style="padding: 8px; text-align: center; vertical-align: middle;">
                     <button type="button" class="btn-delete-order-assign-row" data-index="${index}" title="Remove Item" style="background: none; border: none; color: var(--accent-rose); cursor: pointer; padding: 4px; display: inline-flex; align-items: center; justify-content: center; transition: var(--transition-smooth); border-radius: 4px;">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -5639,7 +5682,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const selectEl = tr.querySelector('.order-assign-product-select');
             selectEl.addEventListener('change', (e) => {
                 parsedOrderAssignData.items[index].matchedName = e.target.value;
-                validateOrderAssignSubmit();
+                // Re-render to update the monitor packing rule warnings if product name changes!
+                renderOrderAssignTable(knownProducts);
+            });
+
+            // Listeners for quantity edit
+            const qtyInput = tr.querySelector('.order-assign-qty-input');
+            qtyInput.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value) || 1;
+                parsedOrderAssignData.items[index].qty = val;
+                // Re-render to dynamically update/hide warnings
+                renderOrderAssignTable(knownProducts);
             });
 
             // Listeners for delete row
@@ -5657,10 +5710,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function validateOrderAssignSubmit() {
         if (!btnOrderAssignSubmit) return;
-        // Check if there's at least one item, and all items have matchedName selected
         const hasItems = parsedOrderAssignData.items.length > 0;
         const allMatched = parsedOrderAssignData.items.every(item => item.matchedName !== '');
-        
         btnOrderAssignSubmit.disabled = !(hasItems && allMatched);
     }
 
@@ -5668,42 +5719,165 @@ document.addEventListener('DOMContentLoaded', () => {
         btnOrderAssignSubmit.addEventListener('click', () => {
             if (parsedOrderAssignData.items.length === 0) return;
 
-            // Direct start outbound session with parsed details
-            activeOutboundSession = {
+            const queue = getOrderQueue();
+            queue.push({
+                id: "q_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
                 shopName: parsedOrderAssignData.shopName,
                 invoiceNo: parsedOrderAssignData.invoiceNo,
                 items: parsedOrderAssignData.items.map(item => ({
                     name: item.matchedName,
-                    skuAlphabetPattern: null,
-                    lockedLength: null,
-                    allowedPatterns: [],
-                    targetQty: item.qty
+                    qty: item.qty
                 })),
-                serials: []
-            };
+                timestamp: new Date().toLocaleString()
+            });
 
-            localStorage.setItem('wms_outbound_joined', 'true');
-            saveActiveOutboundSession();
-            restoreOutboundSessionState();
-            
-            // clear form
+            saveOrderQueue(queue);
+            renderOrderQueueUI();
+
+            // Clear parsed details view
+            parsedOrderAssignData = { shopName: '', invoiceNo: '', items: [] };
             if (orderAssignRawText) orderAssignRawText.value = '';
             if (orderAssignExtractedShop) orderAssignExtractedShop.textContent = 'N/A';
             if (orderAssignExtractedInvoice) orderAssignExtractedInvoice.textContent = 'N/A';
             if (orderAssignTableBody) {
                 orderAssignTableBody.innerHTML = `
                     <tr>
-                        <td colspan="5" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 24px;">No items parsed yet. Paste text on the left to extract.</td>
+                        <td colspan="5" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 24px;">No items parsed yet. Paste text above to extract.</td>
                     </tr>
                 `;
             }
             btnOrderAssignSubmit.disabled = true;
 
-            // Redirect to Outbound tab
-            navigateToTab('navOutbound');
-            
-            alert(`Order successfully assigned to Outbound! Outbound session started for "${parsedOrderAssignData.shopName}" (${parsedOrderAssignData.invoiceNo}).`);
+            alert("Order added successfully to active dispatch queue!");
         });
+    }
+
+    function renderOrderQueueUI() {
+        const queue = getOrderQueue();
+
+        // 1. Render on Order Assign Tab (right side)
+        const assignQueueBody = document.getElementById('orderAssignQueueTableBody');
+        if (assignQueueBody) {
+            assignQueueBody.innerHTML = '';
+            if (queue.length === 0) {
+                assignQueueBody.innerHTML = `
+                    <tr>
+                        <td colspan="4" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 24px;">No active orders in queue.</td>
+                    </tr>
+                `;
+            } else {
+                queue.forEach(order => {
+                    const totalPcs = order.items.reduce((sum, item) => sum + item.qty, 0);
+                    const tr = document.createElement('tr');
+                    
+                    const itemsDesc = order.items.map(it => `${it.name} (${it.qty} pcs)`).join(', ');
+
+                    tr.innerHTML = `
+                        <td style="padding: 10px 8px; font-weight: 700; color: var(--text-primary);" title="${order.shopName}">${order.shopName}</td>
+                        <td style="padding: 10px 8px; color: var(--accent-blue); font-weight: 700;">${order.invoiceNo}</td>
+                        <td style="padding: 10px 8px; text-align: right; font-weight: 700; font-family: var(--font-mono);">${totalPcs}</td>
+                        <td style="padding: 10px 8px; text-align: center; vertical-align: middle;">
+                            <div style="display: flex; gap: 8px; justify-content: center; align-items: center;">
+                                <button type="button" class="btn-start-queue-session btn-primary" data-id="${order.id}" style="background-color: var(--accent-emerald); border-color: var(--accent-emerald); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700; cursor: pointer;">
+                                    Start Session
+                                </button>
+                                <button type="button" class="btn-delete-queue-order" data-id="${order.id}" style="background: none; border: none; color: var(--accent-rose); cursor: pointer; padding: 4px; display: inline-flex; align-items: center; justify-content: center;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </td>
+                    `;
+
+                    tr.querySelector('.btn-start-queue-session').addEventListener('click', () => {
+                        startSessionFromQueue(order.id);
+                    });
+
+                    tr.querySelector('.btn-delete-queue-order').addEventListener('click', () => {
+                        deleteOrderFromQueue(order.id);
+                    });
+
+                    assignQueueBody.appendChild(tr);
+                });
+            }
+        }
+
+        // 2. Render on Outbound Logs Tab (top area)
+        const outboundQueueBody = document.getElementById('outboundQueueTableBody');
+        const outboundQueueCard = document.getElementById('outboundQueueContainer');
+        if (outboundQueueBody) {
+            outboundQueueBody.innerHTML = '';
+            if (queue.length === 0) {
+                if (outboundQueueCard) outboundQueueCard.style.display = 'none';
+            } else {
+                if (outboundQueueCard) outboundQueueCard.style.display = 'block';
+                queue.forEach(order => {
+                    const totalPcs = order.items.reduce((sum, item) => sum + item.qty, 0);
+                    const tr = document.createElement('tr');
+
+                    const itemsDesc = order.items.map(it => `${it.name} (${it.qty} pcs)`).join(', ');
+
+                    tr.innerHTML = `
+                        <td style="padding: 10px 8px; font-weight: 700; color: var(--text-primary);" title="${order.shopName}">${order.shopName}</td>
+                        <td style="padding: 10px 8px; color: var(--accent-blue); font-weight: 700;">${order.invoiceNo}</td>
+                        <td style="padding: 10px 8px; color: var(--text-secondary); max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${itemsDesc}">${itemsDesc}</td>
+                        <td style="padding: 10px 8px; text-align: right; font-weight: 700; font-family: var(--font-mono);">${totalPcs}</td>
+                        <td style="padding: 10px 8px; text-align: center;">
+                            <button type="button" class="btn-start-outbound-queue-session btn-primary" data-id="${order.id}" style="background-color: var(--accent-emerald); border-color: var(--accent-emerald); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700; cursor: pointer;">
+                                Start Session
+                            </button>
+                        </td>
+                    `;
+
+                    tr.querySelector('.btn-start-outbound-queue-session').addEventListener('click', () => {
+                        startSessionFromQueue(order.id);
+                    });
+
+                    outboundQueueBody.appendChild(tr);
+                });
+            }
+        }
+    }
+
+    function startSessionFromQueue(orderId) {
+        const queue = getOrderQueue();
+        const order = queue.find(q => q.id === orderId);
+        if (!order) return;
+
+        // Start active outbound session prefilled
+        activeOutboundSession = {
+            shopName: order.shopName,
+            invoiceNo: order.invoiceNo,
+            items: order.items.map(item => ({
+                name: item.name,
+                skuAlphabetPattern: null,
+                lockedLength: null,
+                allowedPatterns: [],
+                targetQty: item.qty
+            })),
+            serials: []
+        };
+
+        localStorage.setItem('wms_outbound_joined', 'true');
+        saveActiveOutboundSession();
+        restoreOutboundSessionState();
+
+        // Remove from queue
+        const newQueue = queue.filter(q => q.id !== orderId);
+        saveOrderQueue(newQueue);
+        renderOrderQueueUI();
+
+        navigateToTab('navOutbound');
+        alert(`Outbound Session started for "${order.shopName}" (${order.invoiceNo}).`);
+    }
+
+    function deleteOrderFromQueue(orderId) {
+        if (!confirm("Are you sure you want to delete this order from the queue?")) return;
+        const queue = getOrderQueue();
+        const newQueue = queue.filter(q => q.id !== orderId);
+        saveOrderQueue(newQueue);
+        renderOrderQueueUI();
     }
 
     // --- Without Serial Number Inward Workspace Controllers ---
@@ -7415,6 +7589,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderInventoryPanel();
     renderDeletedSerialsPanel();
     populateMisProductsDropdown();
+    renderOrderQueueUI();
     checkDeviceApprovalStatus();
 });
 
