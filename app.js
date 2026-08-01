@@ -5708,6 +5708,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Without Serial Number Inward Workspace Controllers ---
     const inboundActionsDropdownBtn = document.getElementById('inboundActionsDropdownBtn');
+    const inboundActionsDropdownMenu = document.getElementById('inboundActionsDropdownMenu');
     const btnOpenWithoutSerialInward = document.getElementById('btnOpenWithoutSerialInward');
     const sectionInbound = document.getElementById('sectionInbound');
     const sectionWithoutSerialInbound = document.getElementById('sectionWithoutSerialInbound');
