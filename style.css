@@ -548,8 +548,17 @@ a {
     align-items: start;
 }
 
+.inventory-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    width: 100%;
+    align-items: start;
+}
+
 @media (max-width: 1024px) {
-    .inbound-grid {
+    .inbound-grid,
+    .inventory-grid {
         grid-template-columns: 1fr !important;
     }
 }
@@ -1504,11 +1513,20 @@ a {
         display: flex !important;
     }
 
-    /* Prevent horizontal grid scrolling inside Outbound Workstation inputs and tables */
-    .inbound-grid .dashboard-card {
+    /* Prevent horizontal grid scrolling inside Outbound/Inbound/Inventory Workstation inputs and tables */
+    .inbound-grid .dashboard-card,
+    .inventory-grid .dashboard-card,
+    #sectionOverview .dashboard-card,
+    #sectionMisReport .dashboard-card {
         height: auto !important;
         max-height: none !important;
         padding: 16px !important;
+    }
+
+    /* Fixed height for stock register table container on mobile to stay scrollable */
+    #sectionOverview .table-container {
+        height: 350px !important;
+        max-height: 350px !important;
     }
 
     /* Responsive modal adjustments (popups and dialogs) */
@@ -1543,6 +1561,22 @@ a {
         width: 100% !important;
         justify-content: center !important;
         display: inline-flex !important;
+    }
+}
+
+/* Extra small mobile screens tuning (e.g. Vivo V70, width <= 480px) */
+@media (max-width: 480px) {
+    /* Summary cards inside stock overview scale down */
+    .dashboard-card div[style*="flex-wrap: wrap"] {
+        gap: 8px !important;
+    }
+    .dashboard-card div[style*="flex-wrap: wrap"] > div {
+        padding: 8px 12px !important;
+        min-width: 100px !important;
+        flex: 1 1 calc(50% - 8px) !important;
+    }
+    .dashboard-card div[style*="flex-wrap: wrap"] span[style*="font-size: 1.5rem"] {
+        font-size: 1.2rem !important;
     }
 }
 
