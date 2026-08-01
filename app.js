@@ -299,20 +299,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 sec.style.display = 'none';
             });
 
-            // Close mobile sidebar drawer on navigation
-            const appSidebar = document.getElementById('appSidebar');
-            if (appSidebar) {
-                appSidebar.classList.remove('active');
-            }
-
-            // Auto-collapse sidebar on Inbound Logs and Outbound Logs pages
-            if (targetSectionId === 'sectionInbound' || targetSectionId === 'sectionOutbound') {
-                const appContainer = document.querySelector('.app-container');
-                if (appContainer) {
-                    appContainer.classList.add('sidebar-collapsed');
-                    localStorage.setItem('wms_sidebar_collapsed', 'true');
-                }
-            }
             
             // Activate and show target section
             const targetSection = document.getElementById(targetSectionId);
@@ -5130,8 +5116,8 @@ document.addEventListener('DOMContentLoaded', () => {
             card.style.cssText = borderStyle + ' padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px; transition: var(--transition-smooth);';
 
             card.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 10px; flex-wrap: wrap;">
-                    <span style="font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: ${theme.text}; opacity: 0.85; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; min-width: 0;" title="${s.itemName}">${s.itemName}</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 10px;">
+                    <span style="font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: ${theme.text}; opacity: 0.85; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${s.itemName}">${s.itemName}</span>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span style="font-size: 0.65rem; font-weight: 700; background: ${badgeBg}; color: ${badgeColor}; padding: 2px 6px; border-radius: 4px; border: 1px solid ${badgeColor}33; text-transform: uppercase; flex-shrink: 0;">${s.status}</span>
                         <button type="button" class="btn-delete-inventory-serial" data-serial="${s.serial}" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose); width: 22px; height: 22px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; transition: var(--transition-smooth);" title="Delete Serial">
@@ -5181,8 +5167,8 @@ document.addEventListener('DOMContentLoaded', () => {
             card.style.cssText = 'border: 1px dashed rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.02); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px; transition: var(--transition-smooth);';
 
             card.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 10px; flex-wrap: wrap;">
-                    <span style="font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--accent-rose); opacity: 0.85; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; min-width: 0;" title="${s.itemName}">${s.itemName}</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 10px;">
+                    <span style="font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--accent-rose); opacity: 0.85; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${s.itemName}">${s.itemName}</span>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <button type="button" class="btn-restore-serial" data-serial="${s.serial}" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--accent-emerald); padding: 2px 8px; border-radius: var(--radius-sm); font-size: 0.65rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: var(--transition-smooth);" title="Restore Serial">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 10px; height: 10px; stroke-width: 3;">
@@ -5666,7 +5652,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     // Card Header
                     const header = document.createElement('div');
-                    header.style.cssText = 'display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; flex-wrap: wrap; gap: 8px;';
+                    header.style.cssText = 'display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;';
                     header.innerHTML = `
                         <div>
                             <h4 style="margin: 0; font-size: 0.95rem; font-weight: 800; color: var(--text-primary);" title="${order.shopName}">${order.shopName}</h4>
@@ -5774,7 +5760,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Card Header (NO delete button)
                     const header = document.createElement('div');
-                    header.style.cssText = 'display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; flex-wrap: wrap; gap: 8px;';
+                    header.style.cssText = 'display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;';
                     header.innerHTML = `
                         <div>
                             <h4 style="margin: 0; font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">${order.shopName}</h4>
@@ -7462,7 +7448,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function restoreSidebarCollapsedState() {
-        const isCollapsed = localStorage.getItem('wms_sidebar_collapsed') === 'true' || window.innerWidth <= 768;
+        const isCollapsed = localStorage.getItem('wms_sidebar_collapsed') === 'true';
         const appContainer = document.querySelector('.app-container');
         if (isCollapsed && appContainer) {
             appContainer.classList.add('sidebar-collapsed');
