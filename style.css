@@ -550,7 +550,7 @@ a {
 
 @media (max-width: 1024px) {
     .inbound-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr !important;
     }
 }
 

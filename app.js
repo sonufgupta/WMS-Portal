@@ -298,6 +298,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 sec.classList.remove('active');
                 sec.style.display = 'none';
             });
+
+            // Close mobile sidebar drawer on navigation
+            const appSidebar = document.getElementById('appSidebar');
+            if (appSidebar) {
+                appSidebar.classList.remove('active');
+            }
+
+            // Auto-collapse sidebar on Inbound Logs and Outbound Logs pages
+            if (targetSectionId === 'sectionInbound' || targetSectionId === 'sectionOutbound') {
+                const appContainer = document.querySelector('.app-container');
+                if (appContainer) {
+                    appContainer.classList.add('sidebar-collapsed');
+                    localStorage.setItem('wms_sidebar_collapsed', 'true');
+                }
+            }
             
             // Activate and show target section
             const targetSection = document.getElementById(targetSectionId);
@@ -7449,7 +7464,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function restoreSidebarCollapsedState() {
-        const isCollapsed = localStorage.getItem('wms_sidebar_collapsed') === 'true';
+        const isCollapsed = localStorage.getItem('wms_sidebar_collapsed') === 'true' || window.innerWidth <= 768;
         const appContainer = document.querySelector('.app-container');
         if (isCollapsed && appContainer) {
             appContainer.classList.add('sidebar-collapsed');
