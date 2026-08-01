@@ -1356,6 +1356,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderHistoryTable() {
         if (!inboundHistoryBody) return;
         inboundHistoryBody.innerHTML = '';
+        const mobileContainer = document.getElementById('inboundHistoryMobileCards');
+        if (mobileContainer) {
+            mobileContainer.innerHTML = '';
+        }
+        
         const historyData = getHistory();
         let needsUpdate = false;
         
@@ -1432,6 +1437,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 </td>
             `;
             inboundHistoryBody.appendChild(tr);
+
+            // Generate Mobile Card HTML
+            if (mobileContainer) {
+                const card = document.createElement('div');
+                card.className = 'mobile-log-card';
+                
+                const mobileItemsHtml = itemsList.map(item => {
+                    const weight = resolveLogWeight(row, item.name);
+                    const weightLabel = (weight !== undefined) ? ` (${weight} kg)` : ' (Set Weight)';
+                    const badgeStyle = weight 
+                        ? 'background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--accent-emerald);' 
+                        : 'background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--accent-blue);';
+                    
+                    return `
+                        <div class="mobile-log-card-item">
+                            <span class="mobile-log-card-item-bullet">●</span>
+                            <button type="button" class="btn-item-weight-trigger" data-log-id="${row.id}" data-item-name="${escapeHtmlAttr(item.name)}" style="${badgeStyle} padding: 3px 6px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; border-style: solid; text-align: left; white-space: normal; word-break: break-word;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 10px; height: 10px; stroke-width: 2.5; flex-shrink: 0;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1M12 20v1M4 12H3m18 0h-1M6.343 6.343l.707.707M16.95 16.95l.707.707M6.343 17.657l-.707-.707m11.314-11.314l-.707.707M12 7a5 5 0 100 10 5 5 0 000-10z" />
+                                </svg>
+                                <span style="display: inline-block;">${item.name}${weightLabel}</span>
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+
+                card.innerHTML = `
+                    <div class="mobile-log-card-header">
+                        <h4 class="mobile-log-card-title">Vehicle: ${row.vehicle || 'Not Specified'}</h4>
+                        <span class="mobile-log-card-badge">${countDisplay}</span>
+                    </div>
+                    <div class="mobile-log-card-subtitle">
+                        <span>${row.timestamp}</span>
+                        <span style="color: var(--accent-emerald); font-weight: 700;">INBOUND</span>
+                    </div>
+                    <div class="mobile-log-card-items">
+                        ${mobileItemsHtml}
+                    </div>
+                    <div class="mobile-log-card-actions">
+                        <button type="button" class="btn-download-excel btn-mobile-action btn-mobile-excel" data-id="${row.id}">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                            </svg>
+                            <span>Excel</span>
+                        </button>
+                        <button type="button" class="btn-delete-inbound-log btn-mobile-action btn-mobile-delete" data-id="${row.id}">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            <span>Delete</span>
+                        </button>
+                    </div>
+                `;
+                mobileContainer.appendChild(card);
+            }
         });
 
         // Save updated mock logs back to storage only if we modified them
@@ -1529,31 +1589,35 @@ document.addEventListener('DOMContentLoaded', () => {
         renderInventoryPanel();
     }
 
-    // Bind event listener to Completed logs list for Excel downloads and Deletions
-    if (inboundHistoryBody) {
-        inboundHistoryBody.addEventListener('click', (e) => {
-            const btn = e.target.closest('.btn-download-excel');
-            if (btn) {
-                e.stopPropagation();
-                const logId = btn.getAttribute('data-id');
-                const historyData = getHistory();
-                const logItem = historyData.find(item => item.id === logId);
-                
-                if (logItem) {
-                    downloadLogExcel(logItem);
-                } else {
-                    alert('Completed log entry not found.');
+    // Bind event listener to Completed logs list for Excel downloads and Deletions (Both Desktop table and Mobile cards)
+    const inboundTargets = ['inboundHistoryBody', 'inboundHistoryMobileCards'];
+    inboundTargets.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('click', (e) => {
+                const btn = e.target.closest('.btn-download-excel');
+                if (btn) {
+                    e.stopPropagation();
+                    const logId = btn.getAttribute('data-id');
+                    const historyData = getHistory();
+                    const logItem = historyData.find(item => item.id === logId);
+                    
+                    if (logItem) {
+                        downloadLogExcel(logItem);
+                    } else {
+                        alert('Completed log entry not found.');
+                    }
                 }
-            }
 
-            const deleteBtn = e.target.closest('.btn-delete-inbound-log');
-            if (deleteBtn) {
-                e.stopPropagation();
-                const logId = deleteBtn.getAttribute('data-id');
-                deleteInboundSessionFromHistory(logId);
-            }
-        });
-    }
+                const deleteBtn = e.target.closest('.btn-delete-inbound-log');
+                if (deleteBtn) {
+                    e.stopPropagation();
+                    const logId = deleteBtn.getAttribute('data-id');
+                    deleteInboundSessionFromHistory(logId);
+                }
+            });
+        }
+    });
 
     // Render scanned serials grouped by Box Card inside product columns
     function renderBoxCards() {
@@ -3259,9 +3323,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Product Weight Configuration Modal Handlers ---
-    if (inboundHistoryBody) {
-        inboundHistoryBody.addEventListener('click', (e) => {
-            const btn = e.target.closest('.btn-item-weight-trigger');
+    inboundTargets.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('click', (e) => {
+                const btn = e.target.closest('.btn-item-weight-trigger');
             if (btn) {
                 e.stopPropagation();
                 const itemName = btn.getAttribute('data-item-name');
@@ -3293,7 +3359,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-    }
+        }
+    });
 
     function processWeightConfigureQueue() {
         if (weightConfigureQueue.length === 0) {
@@ -4222,6 +4289,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!body) return;
         body.innerHTML = '';
         
+        const mobileContainer = document.getElementById('outboundHistoryMobileCards');
+        if (mobileContainer) {
+            mobileContainer.innerHTML = '';
+        }
+        
         let todayBoxesSum = 0;
         let todayWeightSum = 0;
         
@@ -4313,6 +4385,75 @@ document.addEventListener('DOMContentLoaded', () => {
                 </td>
             `;
             body.appendChild(tr);
+
+            // Generate Mobile Card HTML
+            if (mobileContainer) {
+                const card = document.createElement('div');
+                card.className = 'mobile-log-card';
+                if (rowIsToday) {
+                    card.style.borderLeft = "4px solid var(--accent-emerald)";
+                }
+
+                // Checkbox mark status indicator
+                const mobileCheckIcon = isChecked
+                    ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width: 18px; height: 18px; color: var(--accent-emerald); cursor: pointer;"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd" /></svg>` 
+                    : `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; color: var(--text-muted); cursor: pointer;"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
+
+                // Item pills list
+                const mobileItemsHtml = (row.items || []).map(i => {
+                    const count = (row.serials || []).filter(s => s.itemName === i.name).length;
+                    return `
+                        <div class="mobile-log-card-item">
+                            <span class="mobile-log-card-item-bullet">●</span>
+                            <span>${i.name} (${count} pcs)</span>
+                        </div>
+                    `;
+                }).join('');
+
+                card.innerHTML = `
+                    <div class="mobile-log-card-header">
+                        <h4 class="mobile-log-card-title">${row.shopName}</h4>
+                        <span class="mobile-log-card-badge">${totalPcs} PCs (${totalBoxes} Bx)</span>
+                    </div>
+                    <div class="mobile-log-card-subtitle" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <span>${row.timestamp}</span>
+                            <span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--accent-blue);">${row.invoiceNo}</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Mark:</span>
+                            <span class="btn-toggle-outbound-mark" data-id="${row.id}" style="display: inline-flex; align-items: center; justify-content: center;">
+                                ${mobileCheckIcon}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="mobile-log-card-items">
+                        ${mobileItemsHtml}
+                        <div style="font-size: 0.75rem; color: var(--text-muted); border-top: 1px dashed var(--border-color); padding-top: 6px; margin-top: 4px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>Total Weight:</span>
+                            <span style="font-weight: 700; color: var(--accent-emerald);">${totalWeight.toFixed(3)} kg</span>
+                        </div>
+                    </div>
+                    <div class="mobile-log-card-actions">
+                        <button type="button" class="btn-show-outbound-box-details btn-mobile-action" data-id="${row.id}" style="background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.25); color: var(--accent-blue);">
+                            <span>Boxes (${totalBoxes})</span>
+                        </button>
+                        <button type="button" class="btn-download-outbound-excel btn-mobile-action btn-mobile-excel" data-id="${row.id}">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                            </svg>
+                            <span>Excel</span>
+                        </button>
+                        <button type="button" class="btn-restore-outbound-log btn-mobile-action btn-mobile-delete" data-id="${row.id}" style="color: var(--accent-blue); background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.25);">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                            </svg>
+                            <span>Restore</span>
+                        </button>
+                    </div>
+                `;
+                mobileContainer.appendChild(card);
+            }
         });
 
         const todayOutboundBoxesEl = document.getElementById('todayOutboundBoxes');
@@ -4696,10 +4837,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Bind Excel triggers in Outbound History body
-    const outboundHistoryBody = document.getElementById('outboundHistoryBody');
-    if (outboundHistoryBody) {
-        outboundHistoryBody.addEventListener('click', (e) => {
+    // Bind Excel triggers in Outbound History body (Both Desktop table and Mobile cards)
+    const outboundTargets = ['outboundHistoryBody', 'outboundHistoryMobileCards'];
+    outboundTargets.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('click', (e) => {
             const toggleMarkBtn = e.target.closest('.btn-toggle-outbound-mark');
             if (toggleMarkBtn) {
                 e.stopPropagation();
@@ -4786,7 +4929,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-    }
+        }
+    });
 
     // Close modals on outer click extensions
     window.addEventListener('click', (e) => {
