@@ -5618,8 +5618,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Clear textarea
         if (orderAssignRawText) orderAssignRawText.value = '';
-
-        alert(`Order for "${shopName}" (${soNum}) successfully parsed and added directly to the Queue!`);
     }
 
     function findFuzzyProduct(soItemName, knownProducts) {
