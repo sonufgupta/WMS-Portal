@@ -4401,9 +4401,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     patternStr = `${letters}${item.lockedLength || 15}`;
                 }
 
+                const targetQtyStr = item.targetQty ? ` / ${item.targetQty}` : '';
                 tr.innerHTML = `
                     <td style="font-weight: 700; color: var(--text-primary);">${item.name}</td>
-                    <td class="font-mono" style="font-weight: 700;">${scannedCount}</td>
+                    <td class="font-mono" style="font-weight: 700;">${scannedCount}${targetQtyStr}</td>
                     <td class="font-mono">${subtotalWeight.toFixed(3)} kg</td>
                     <td>
                         <span class="sku-badge font-mono" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--accent-blue); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight:700; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block;" title="${patternStr}">
@@ -5403,9 +5404,310 @@ document.addEventListener('DOMContentLoaded', () => {
         inventorySearchInput.addEventListener('input', debouncedInventorySearch);
     }
 
+    // ==========================================================================
+    // Order Assign Workspace Controller
+    // ==========================================================================
+    let parsedOrderAssignData = { shopName: '', invoiceNo: '', items: [] };
+
+    const orderAssignRawText = document.getElementById('orderAssignRawText');
+    const btnOrderAssignPasteClip = document.getElementById('btnOrderAssignPasteClip');
+    const btnOrderAssignProcess = document.getElementById('btnOrderAssignProcess');
+    const btnOrderAssignSubmit = document.getElementById('btnOrderAssignSubmit');
+    const orderAssignTableBody = document.getElementById('orderAssignTableBody');
+    
+    const orderAssignExtractedShop = document.getElementById('orderAssignExtractedShop');
+    const orderAssignExtractedInvoice = document.getElementById('orderAssignExtractedInvoice');
+
+    if (btnOrderAssignPasteClip) {
+        btnOrderAssignPasteClip.addEventListener('click', () => {
+            navigator.clipboard.readText().then(text => {
+                if (text && orderAssignRawText) {
+                    orderAssignRawText.value = text;
+                    processOrderAssignText(text);
+                }
+            }).catch(err => {
+                alert("Clipboard access denied or not supported by browser.");
+            });
+        });
+    }
+
+    if (btnOrderAssignProcess) {
+        btnOrderAssignProcess.addEventListener('click', () => {
+            if (orderAssignRawText) {
+                processOrderAssignText(orderAssignRawText.value);
+            }
+        });
+    }
+
+    function processOrderAssignText(text) {
+        if (!text.trim()) {
+            alert("Please paste Sales Order text first.");
+            return;
+        }
+
+        // 1. Parse Sales Order No (Invoice No)
+        const soMatch = text.match(/Sales\s+Order#\s*:\s*(.*?)(?=\s+Order\s+Date|Terms|Place\s+Of|\t|\n|$)/i);
+        let soNum = soMatch ? soMatch[1].trim() : '';
+
+        // 2. Parse Shop Name (following Ship To)
+        const lines = text.split('\n').map(l => l.trim());
+        let shipToIndex = lines.findIndex(l => l.toLowerCase() === 'ship to');
+        let shopName = '';
+        if (shipToIndex !== -1) {
+            for (let i = shipToIndex + 1; i < lines.length; i++) {
+                if (lines[i]) {
+                    shopName = lines[i];
+                    break;
+                }
+            }
+        }
+
+        // Fallback for SO number and Shop name if not matched Zoho format
+        if (!soNum) {
+            const genericSoMatch = text.match(/(?:SO|Invoice|InvoiceNo|OrderNo)\s*[:#\-]?\s*([A-Za-z0-9\-\/]+)/i);
+            soNum = genericSoMatch ? genericSoMatch[1].trim() : 'SO-TEMP';
+        }
+        if (!shopName) {
+            shopName = 'Unknown Vendor';
+        }
+
+        // 3. Extract items section and parse
+        let headerIndex = lines.findIndex(l => l.includes('Item & Description') || l.includes('Item and Description'));
+        let footerIndex = lines.findIndex(l => l.includes('Items in Total') || l.includes('Sub Total') || l.includes('SubTotal'));
+
+        if (headerIndex === -1) headerIndex = 0;
+        if (footerIndex === -1) footerIndex = lines.length;
+
+        const itemSectionLines = lines.slice(headerIndex + 1, footerIndex);
+        const parsedItems = [];
+
+        for (let i = 0; i < itemSectionLines.length; i++) {
+            const line = itemSectionLines[i];
+            // If the line is a standalone index number (Zoho Sales Order table pattern)
+            if (/^\d+$/.test(line)) {
+                const itemNameLine = itemSectionLines[i + 1];
+                if (itemNameLine && !/^\d+$/.test(itemNameLine)) {
+                    // Try to find quantity in the lines immediately following
+                    let qty = 0;
+                    for (let k = i + 2; k < Math.min(i + 7, itemSectionLines.length); k++) {
+                        const l = itemSectionLines[k];
+                        const hsnMatch = l.match(/\b\d{6,10}\s+(\d+)\b/);
+                        if (hsnMatch) {
+                            qty = parseInt(hsnMatch[1]);
+                            break;
+                        }
+                        const qtyPcs = l.match(/\b(\d+)\s*pcs\b/i);
+                        if (qtyPcs) {
+                            qty = parseInt(qtyPcs[1]);
+                            break;
+                        }
+                        if (l.toLowerCase() === 'pcs' || l.toLowerCase() === 'pc') {
+                            const prev = itemSectionLines[k - 1];
+                            const prevMatch = prev.match(/\b(\d+)\b/);
+                            if (prevMatch) {
+                                qty = parseInt(prevMatch[1]);
+                                break;
+                            }
+                        }
+                    }
+                    parsedItems.push({
+                        rawName: itemNameLine,
+                        qty: qty || 1
+                    });
+                }
+            }
+        }
+
+        // If no items matched Zoho structure, try line-by-line keyword fallback
+        if (parsedItems.length === 0) {
+            // Find lines containing common product keywords
+            lines.forEach((line, idx) => {
+                if (line.toLowerCase().includes('monitor') || line.toLowerCase().includes('led') || line.toLowerCase().includes('warranty')) {
+                    // Avoid double counting description lines
+                    if (idx > 0 && (lines[idx-1].toLowerCase().includes('monitor') || lines[idx-1].toLowerCase().includes('led'))) {
+                        return; 
+                    }
+                    let qty = 1;
+                    const nextLine = lines[idx + 1] || '';
+                    const qtyMatch = nextLine.match(/\b(\d+)\b/);
+                    if (qtyMatch) qty = parseInt(qtyMatch[1]);
+                    
+                    parsedItems.push({
+                        rawName: line,
+                        qty: qty
+                    });
+                }
+            });
+        }
+
+        // Get unique known products list from history and weight configs
+        const inboundHistory = getHistory();
+        const allInboundProducts = Array.from(new Set(inboundHistory.flatMap(log => (log.serials || []).map(s => s.itemName || log.item))));
+        const weightKeys = Object.keys(getProductWeights());
+        const uniqueProducts = Array.from(new Set([...allInboundProducts, ...weightKeys])).filter(Boolean).sort();
+
+        // Match fuzzy
+        parsedOrderAssignData = {
+            shopName: shopName,
+            invoiceNo: soNum,
+            items: parsedItems.map(item => {
+                const matched = findFuzzyProduct(item.rawName, uniqueProducts);
+                return {
+                    rawName: item.rawName,
+                    matchedName: matched || '',
+                    qty: item.qty
+                };
+            })
+        };
+
+        if (orderAssignExtractedShop) orderAssignExtractedShop.textContent = shopName;
+        if (orderAssignExtractedInvoice) orderAssignExtractedInvoice.textContent = soNum;
+
+        renderOrderAssignTable(uniqueProducts);
+    }
+
+    function findFuzzyProduct(soItemName, knownProducts) {
+        const clean = soItemName.trim().toLowerCase();
+        
+        // 1. Exact match
+        const exact = knownProducts.find(p => p.toLowerCase() === clean);
+        if (exact) return exact;
+        
+        // 2. Contains match
+        const contains = knownProducts.find(p => {
+            const lp = p.toLowerCase();
+            return lp.includes(clean) || clean.includes(lp);
+        });
+        if (contains) return contains;
+        
+        // 3. Partial keywords match
+        const parts = clean.split(/\s+/).filter(p => p.length > 2 && p !== 'led' && p !== 'hdmi');
+        if (parts.length > 0) {
+            const matched = knownProducts.find(p => {
+                const lp = p.toLowerCase();
+                return parts.every(part => lp.includes(part));
+            });
+            if (matched) return matched;
+        }
+
+        return null;
+    }
+
+    function renderOrderAssignTable(knownProducts) {
+        if (!orderAssignTableBody) return;
+        orderAssignTableBody.innerHTML = '';
+
+        if (parsedOrderAssignData.items.length === 0) {
+            orderAssignTableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 24px;">No items parsed. Check your paste format.</td>
+                </tr>
+            `;
+            if (btnOrderAssignSubmit) btnOrderAssignSubmit.disabled = true;
+            return;
+        }
+
+        parsedOrderAssignData.items.forEach((item, index) => {
+            const tr = document.createElement('tr');
+            
+            // Build matched product dropdown options
+            let optionsHtml = `<option value="">-- Choose Database Product --</option>`;
+            knownProducts.forEach(prod => {
+                const selected = (prod === item.matchedName) ? 'selected' : '';
+                optionsHtml += `<option value="${prod}" ${selected}>${prod}</option>`;
+            });
+
+            tr.innerHTML = `
+                <td style="padding: 8px; font-weight: 700; color: var(--text-secondary); text-align: left;">${index + 1}</td>
+                <td style="padding: 8px; color: var(--text-muted); font-size: 0.78rem;" title="${item.rawName}">${item.rawName}</td>
+                <td style="padding: 8px;">
+                    <select class="order-assign-product-select" data-index="${index}" style="background-color: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px; border-radius: var(--radius-sm); font-size: 0.8rem; width: 100%; outline: none;">
+                        ${optionsHtml}
+                    </select>
+                </td>
+                <td style="padding: 8px; text-align: right; font-weight: 700; color: var(--text-primary); font-family: var(--font-mono);">${item.qty}</td>
+                <td style="padding: 8px; text-align: center;">
+                    <button type="button" class="btn-delete-order-assign-row" data-index="${index}" title="Remove Item" style="background: none; border: none; color: var(--accent-rose); cursor: pointer; padding: 4px; display: inline-flex; align-items: center; justify-content: center; transition: var(--transition-smooth); border-radius: 4px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </button>
+                </td>
+            `;
+
+            // Listeners for dropdown
+            const selectEl = tr.querySelector('.order-assign-product-select');
+            selectEl.addEventListener('change', (e) => {
+                parsedOrderAssignData.items[index].matchedName = e.target.value;
+                validateOrderAssignSubmit();
+            });
+
+            // Listeners for delete row
+            const deleteBtn = tr.querySelector('.btn-delete-order-assign-row');
+            deleteBtn.addEventListener('click', () => {
+                parsedOrderAssignData.items.splice(index, 1);
+                renderOrderAssignTable(knownProducts);
+            });
+
+            orderAssignTableBody.appendChild(tr);
+        });
+
+        validateOrderAssignSubmit();
+    }
+
+    function validateOrderAssignSubmit() {
+        if (!btnOrderAssignSubmit) return;
+        // Check if there's at least one item, and all items have matchedName selected
+        const hasItems = parsedOrderAssignData.items.length > 0;
+        const allMatched = parsedOrderAssignData.items.every(item => item.matchedName !== '');
+        
+        btnOrderAssignSubmit.disabled = !(hasItems && allMatched);
+    }
+
+    if (btnOrderAssignSubmit) {
+        btnOrderAssignSubmit.addEventListener('click', () => {
+            if (parsedOrderAssignData.items.length === 0) return;
+
+            // Direct start outbound session with parsed details
+            activeOutboundSession = {
+                shopName: parsedOrderAssignData.shopName,
+                invoiceNo: parsedOrderAssignData.invoiceNo,
+                items: parsedOrderAssignData.items.map(item => ({
+                    name: item.matchedName,
+                    skuAlphabetPattern: null,
+                    lockedLength: null,
+                    allowedPatterns: [],
+                    targetQty: item.qty
+                })),
+                serials: []
+            };
+
+            localStorage.setItem('wms_outbound_joined', 'true');
+            saveActiveOutboundSession();
+            restoreOutboundSessionState();
+            
+            // clear form
+            if (orderAssignRawText) orderAssignRawText.value = '';
+            if (orderAssignExtractedShop) orderAssignExtractedShop.textContent = 'N/A';
+            if (orderAssignExtractedInvoice) orderAssignExtractedInvoice.textContent = 'N/A';
+            if (orderAssignTableBody) {
+                orderAssignTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 24px;">No items parsed yet. Paste text on the left to extract.</td>
+                    </tr>
+                `;
+            }
+            btnOrderAssignSubmit.disabled = true;
+
+            // Redirect to Outbound tab
+            navigateToTab('navOutbound');
+            
+            alert(`Order successfully assigned to Outbound! Outbound session started for "${parsedOrderAssignData.shopName}" (${parsedOrderAssignData.invoiceNo}).`);
+        });
+    }
+
     // --- Without Serial Number Inward Workspace Controllers ---
     const inboundActionsDropdownBtn = document.getElementById('inboundActionsDropdownBtn');
-    const inboundActionsDropdownMenu = document.getElementById('inboundActionsDropdownMenu');
     const btnOpenWithoutSerialInward = document.getElementById('btnOpenWithoutSerialInward');
     const sectionInbound = document.getElementById('sectionInbound');
     const sectionWithoutSerialInbound = document.getElementById('sectionWithoutSerialInbound');
@@ -7079,6 +7381,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (key === 'm') {
             e.preventDefault();
             navigateToTab('navMisReport');
+        } else if (key === 'a') {
+            e.preventDefault();
+            navigateToTab('navOrderAssign');
         } else if (key === 'n') {
             // "o" tabane ke bad (if Outbound section is active), pressing "n" starts a New Outbound Session
             const sectionOutbound = document.getElementById('sectionOutbound');
