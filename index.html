@@ -82,6 +82,12 @@
                     </svg>
                     <span>MIS Report</span>
                 </a>
+                <a href="#" class="nav-link" id="navDamage">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span>Damage Register</span>
+                </a>
             </nav>
 
             <div class="sidebar-footer" style="display: flex; flex-direction: column; gap: 10px; width: 100%; padding: 16px; border-top: 1px solid var(--border-color); box-sizing: border-box;">
@@ -184,6 +190,10 @@
                                 <div style="flex: 1; min-width: 120px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
                                     <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Out of Stock</span>
                                     <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-rose);" id="inventoryOutOfStockCount">0</span>
+                                </div>
+                                <div style="flex: 1; min-width: 120px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.25); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Damaged</span>
+                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-rose);" id="inventoryTotalDamaged">0</span>
                                 </div>
                             </div>
 
@@ -488,7 +498,7 @@
                                     </svg>
                                 </div>
                                 <div class="card-title-group">
-                                    <h2>Active Dispatch Order Queue</h2>
+                                    <h2>Active Dispatch Order Queue <span id="outboundQueueBadge" style="background: var(--accent-blue); color: white; padding: 2px 8px; border-radius: var(--radius-sm); font-size: 0.8rem; margin-left: 6px; font-weight: 800; display: inline-block; vertical-align: middle;">0</span></h2>
                                     <p>Assigned orders waiting to be dispatched</p>
                                 </div>
                             </div>
@@ -726,8 +736,19 @@
                                     </button>
                                 </div>
 
+                                <!-- Drag & Drop PDF Uploader -->
+                                <div id="pdfDragDropArea" style="border: 2px dashed var(--border-color); border-radius: var(--radius-md); padding: 18px; text-align: center; background: rgba(59, 130, 246, 0.01); cursor: pointer; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 32px; height: 32px; color: var(--accent-blue); stroke-width: 2;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                    </svg>
+                                    <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">Drag & Drop Sales Order PDF</span>
+                                    <span style="font-size: 0.72rem; color: var(--text-muted);">or click to browse from device</span>
+                                    <input type="file" id="orderAssignPdfInput" accept="application/pdf" style="display: none;">
+                                    <div id="pdfUploadStatus" style="font-size: 0.72rem; font-weight: 700; color: var(--accent-emerald); display: none;"></div>
+                                </div>
+
                                 <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
-                                    <textarea id="orderAssignRawText" placeholder="Paste Zoho / Tally Sales Order text details here... e.g.&#10;Sales Order# : SO-MH /26-27/299&#10;Ship To&#10;NEW WAY COMMUNICATION&#10;85285200  12 pcs" style="width: 100%; height: 350px; background-color: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; color: var(--text-primary); font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.5; resize: none; outline: none; box-sizing: border-box;"></textarea>
+                                    <textarea id="orderAssignRawText" placeholder="Paste Zoho / Tally Sales Order text details here... e.g.&#10;Sales Order# : SO-MH /26-27/299&#10;Ship To&#10;NEW WAY COMMUNICATION&#10;85285200  12 pcs" style="width: 100%; height: 260px; background-color: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; color: var(--text-primary); font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.5; resize: none; outline: none; box-sizing: border-box;"></textarea>
                                 </div>
 
                                 <button type="button" id="btnOrderAssignProcess" class="btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 0.95rem; font-weight: 700; background-color: var(--accent-emerald); border-color: var(--accent-emerald); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); display: flex; align-items: center; gap: 8px; border-style: solid;">
@@ -741,7 +762,7 @@
                             <!-- Right Side: Active Order Queue -->
                             <div class="dashboard-card" style="padding: 24px; display: flex; flex-direction: column; gap: 20px; justify-content: flex-start; height: auto; max-height: 700px; overflow: hidden;">
                                 <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; width: 100%;">
-                                    <h3 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 0;">Active Dispatch Order Queue</h3>
+                                    <h3 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 0; display: flex; align-items: center; justify-content: space-between;"><span>Active Dispatch Order Queue</span> <span id="orderAssignQueueBadge" style="background: var(--accent-blue); color: white; padding: 2px 8px; border-radius: var(--radius-sm); font-size: 0.72rem; font-weight: 800;">0</span></h3>
                                 </div>
                                 <div id="orderAssignQueueList" style="flex: 1; overflow-y: auto; width: 100%; display: flex; flex-direction: column; gap: 16px; padding-right: 4px;">
                                     <div style="text-align: center; color: var(--text-muted); font-style: italic; padding: 24px;">No active orders in queue.</div>
@@ -965,6 +986,61 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </section>
+                
+                <!-- 6. DAMAGE REGISTER SECTION -->
+                <section class="content-section" id="sectionDamage" style="display: none; padding: 24px; box-sizing: border-box; height: 100%; overflow-y: auto;">
+                    <div style="display: flex; flex-direction: column; gap: 24px; width: 100%;">
+                        
+                        <!-- Top actions / Scan bar -->
+                        <div class="dashboard-card" style="width: 100%; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                                <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--accent-rose); margin: 0; display: flex; align-items: center; gap: 8px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px; stroke-width: 2.5;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <span>Damage Stock Register</span>
+                                </h3>
+                            </div>
+                            
+                            <!-- Scanner Input Row -->
+                            <div style="display: flex; gap: 12px; align-items: center; background: rgba(244, 63, 94, 0.02); border: 1px dashed rgba(244, 63, 94, 0.3); padding: 16px; border-radius: var(--radius-md);">
+                                <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+                                    <label style="font-size: 0.78rem; font-weight: 700; color: var(--text-secondary);">Scan Damaged Product Serial Number</label>
+                                    <input type="text" id="damageSerialInput" placeholder="Scan or enter damaged serial number..." style="width: 100%; padding: 10px 14px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.9rem; font-family: var(--font-mono); outline: none;">
+                                </div>
+                                <div style="display: flex; align-items: flex-end; height: 100%; padding-top: 22px;">
+                                    <button type="button" id="btnMarkAsDamaged" class="btn-primary" style="background: var(--accent-rose); border-color: var(--accent-rose); padding: 10px 20px; font-size: 0.85rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer; color: white;">
+                                        Mark Damaged
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Damaged Items List Table -->
+                        <div class="dashboard-card" style="width: 100%; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                            <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-secondary); margin: 0;">Damaged Products History</h4>
+                            <div class="table-container" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-x: auto;">
+                                <table class="portal-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                                    <thead>
+                                        <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">
+                                            <th style="padding: 10px 8px;">Marked Date</th>
+                                            <th style="padding: 10px 8px;">Product Name</th>
+                                            <th style="padding: 10px 8px;">Serial Number</th>
+                                            <th style="padding: 10px 8px; text-align: right;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="damageTableBody">
+                                        <!-- Populated dynamically -->
+                                        <tr>
+                                            <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">No damaged items recorded.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
                     </div>
                 </section>
             </div>
@@ -1411,6 +1487,8 @@
     <!-- Firebase SDK Compat -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <!-- PDF.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

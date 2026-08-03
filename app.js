@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let cachedOutboundHistory = null;
     let cachedProductWeights = null;
     let weightResolutionCache = null;
+    let cachedProductStockMap = null;
 
     if (window.firebase) {
         try {
@@ -70,11 +71,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (key === 'wms_inbound_history') {
                 cachedInboundHistory = null;
                 weightResolutionCache = null;
+                cachedProductStockMap = null;
             }
-            if (key === 'wms_outbound_history') cachedOutboundHistory = null;
+            if (key === 'wms_outbound_history') {
+                cachedOutboundHistory = null;
+                cachedProductStockMap = null;
+            }
             if (key === 'wms_product_weights') {
                 cachedProductWeights = null;
                 weightResolutionCache = null;
+            }
+            if (key === 'wms_damage_records') {
+                cachedProductStockMap = null;
             }
             return true;
         }
@@ -226,6 +234,24 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        // 7.6. Sync Damage Records
+        db.ref('wms_data/damage_records').on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val === null) {
+                localStorage.setItem('wms_damage_records', '[]');
+                renderDamageUI();
+                renderInventoryPanel();
+                renderOrderQueueUI();
+            } else {
+                if (syncCloudDataToLocal('wms_damage_records', val)) {
+                    renderDamageUI();
+                    renderInventoryPanel();
+                    renderOrderQueueUI();
+                    console.log("Damage Records synchronized.");
+                }
+            }
+        });
+
         // 8. Sync Deleted Serials (Trash Bin)
         db.ref('wms_data/deleted_serials').on('value', (snapshot) => {
             const val = snapshot.val();
@@ -282,6 +308,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     const pwd = prompt("Enter passcode to access Inventory:");
                     if (pwd === '2026' || pwd === '1998') {
                         localStorage.setItem('wms_inventory_unlocked', 'true');
+                    } else {
+                        if (pwd !== null) alert("Incorrect passcode! Access denied.");
+                        return;
+                    }
+                }
+            }
+            if (targetSectionId === 'sectionDamage') {
+                const isUnlocked = localStorage.getItem('wms_damage_unlocked') === 'true';
+                if (!isUnlocked) {
+                    const pwd = prompt("Enter passcode to access Damage Register:");
+                    if (pwd === '2026' || pwd === '1998') {
+                        localStorage.setItem('wms_damage_unlocked', 'true');
                     } else {
                         if (pwd !== null) alert("Incorrect passcode! Access denied.");
                         return;
@@ -1336,6 +1374,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function saveHistory(historyData) {
         cachedInboundHistory = historyData;
         weightResolutionCache = null;
+        cachedProductStockMap = null;
         localStorage.setItem('wms_inbound_history', JSON.stringify(historyData));
         firebaseSet('inbound_history', historyData);
     }
@@ -3849,6 +3888,22 @@ document.addEventListener('DOMContentLoaded', () => {
             return false;
         }
 
+        // Damaged check
+        const damageRecords = getDamageRecords();
+        const isDamaged = damageRecords.some(r => r.serial.trim().toUpperCase() === cleanSerial);
+        if (isDamaged) {
+            showSkuWarningModal(
+                'Damaged Product Alert!',
+                `The scanned serial barcode "${cleanSerial}" is marked as DAMAGED and cannot be dispatched!`,
+                'STATUS:',
+                'DAMAGED',
+                'SCANNED BARCODE:',
+                cleanSerial,
+                false
+            );
+            return false;
+        }
+
         // Already Dispatched check (Outbound History validation)
         const outboundHistory = getOutboundHistory();
         let alreadyDispatchedLog = null;
@@ -4280,6 +4335,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveOutboundHistory(historyData) {
         cachedOutboundHistory = historyData;
+        cachedProductStockMap = null;
         localStorage.setItem('wms_outbound_history', JSON.stringify(historyData));
         firebaseSet('outbound_history', historyData);
     }
@@ -5017,19 +5073,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const availableSerials = [];
         const productStock = {};
         const weights = getProductWeights();
-
+        const damageRecords = getDamageRecords();
+        const damageSerials = new Set(damageRecords.map(r => r.serial.trim().toUpperCase()));
+ 
         // Copy outbound counts to keep track of remaining to deduct for WOS (FIFO)
         const remainingWosOutbound = {};
         Object.keys(outboundCountsByProduct).forEach(key => {
             remainingWosOutbound[key] = outboundCountsByProduct[key];
         });
-
+ 
         // Copy unmatched outbound counts to decrement them as we deduct from inbound logs in FIFO order
         const remainingUnmatchedOutbound = {};
         Object.keys(unmatchedOutboundCounts).forEach(key => {
             remainingUnmatchedOutbound[key] = unmatchedOutboundCounts[key];
         });
-
+ 
         // Process inbound history from oldest to newest (FIFO)
         const inboundHistoryReversed = [...inboundHistory].reverse();
         
@@ -5039,6 +5097,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 log.serials.forEach(s => {
                     const itemName = s.itemName || name; // Fallback if name is missing
                     const cleanInboundSerial = s.serial.trim().toUpperCase();
+
+                    if (damageSerials.has(cleanInboundSerial)) {
+                        return; // Damaged, not available in stock
+                    }
                     const logW = resolveLogWeight(log, itemName);
                     const unitWeight = (logW !== undefined) ? logW : (parseFloat(weights[itemName]) || 0);
 
@@ -5134,6 +5196,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (totalBoxesEl) totalBoxesEl.textContent = totalAvailableBoxes;
         if (totalWeightEl) totalWeightEl.textContent = `${totalAvailableWeight.toFixed(3)} kg`;
         if (outOfStockCountEl) outOfStockCountEl.textContent = outOfStockCount;
+
+        const totalDamagedEl = document.getElementById('inventoryTotalDamaged');
+        if (totalDamagedEl) {
+            totalDamagedEl.textContent = damageRecords.length;
+        }
 
         // Map Colors dynamically to products
         let colorIdx = 0;
@@ -5616,6 +5683,119 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Drag & Drop PDF Uploader integration
+    async function extractTextFromPDF(file) {
+        if (!window.pdfjsLib) {
+            throw new Error("PDF.js library not loaded.");
+        }
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let text = '';
+        
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const items = textContent.items;
+
+            // Sort items vertically (top-to-bottom) then horizontally (left-to-right)
+            items.sort((a, b) => {
+                if (Math.abs(a.transform[5] - b.transform[5]) < 5) {
+                    return a.transform[4] - b.transform[4];
+                }
+                return b.transform[5] - a.transform[5];
+            });
+
+            let pageText = '';
+            let lastY = null;
+            for (const item of items) {
+                if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
+                    pageText += '\n';
+                }
+                pageText += item.str + ' ';
+                lastY = item.transform[5];
+            }
+            text += pageText + '\n';
+        }
+        return text;
+    }
+
+    async function processPdfFile(file) {
+        const pdfUploadStatus = document.getElementById('pdfUploadStatus');
+        if (pdfUploadStatus) {
+            pdfUploadStatus.style.display = 'block';
+            pdfUploadStatus.style.color = 'var(--accent-blue)';
+            pdfUploadStatus.textContent = 'Extracting Sales Order details from PDF...';
+        }
+
+        try {
+            const text = await extractTextFromPDF(file);
+            if (orderAssignRawText) {
+                orderAssignRawText.value = text;
+                orderAssignRawText.dispatchEvent(new Event('input'));
+            }
+
+            if (pdfUploadStatus) {
+                pdfUploadStatus.style.color = 'var(--accent-emerald)';
+                pdfUploadStatus.textContent = `Parsed: "${file.name}" (Processed locally. Removed from memory.)`;
+                setTimeout(() => {
+                    pdfUploadStatus.style.display = 'none';
+                }, 5000);
+            }
+
+            triggerSpeak("P, D, F, details, extracted");
+        } catch (err) {
+            console.error(err);
+            if (pdfUploadStatus) {
+                pdfUploadStatus.style.color = 'var(--accent-rose)';
+                pdfUploadStatus.textContent = 'Error: Failed to parse PDF file!';
+            }
+            alert("Error parsing PDF: " + err.message);
+        }
+    }
+
+    const pdfDragDropArea = document.getElementById('pdfDragDropArea');
+    const orderAssignPdfInput = document.getElementById('orderAssignPdfInput');
+
+    if (pdfDragDropArea && orderAssignPdfInput) {
+        pdfDragDropArea.addEventListener('click', () => {
+            orderAssignPdfInput.click();
+        });
+
+        pdfDragDropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            pdfDragDropArea.style.borderColor = 'var(--accent-blue)';
+            pdfDragDropArea.style.background = 'rgba(59, 130, 246, 0.05)';
+        });
+
+        pdfDragDropArea.addEventListener('dragleave', () => {
+            pdfDragDropArea.style.borderColor = 'var(--border-color)';
+            pdfDragDropArea.style.background = 'rgba(59, 130, 246, 0.01)';
+        });
+
+        pdfDragDropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            pdfDragDropArea.style.borderColor = 'var(--border-color)';
+            pdfDragDropArea.style.background = 'rgba(59, 130, 246, 0.01)';
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                if (files[0].type === 'application/pdf' || files[0].name.toLowerCase().endsWith('.pdf')) {
+                    processPdfFile(files[0]);
+                } else {
+                    alert("Please upload a PDF file.");
+                }
+            }
+        });
+
+        orderAssignPdfInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files.length > 0) {
+                processPdfFile(files[0]);
+            }
+        });
+    }
+
     function processOrderAssignText(text) {
         if (!text.trim()) {
             alert("Please paste Sales Order text first.");
@@ -5843,10 +6023,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getProductStockMap() {
+        if (cachedProductStockMap !== null) {
+            return cachedProductStockMap;
+        }
+
         const outboundHistory = getOutboundHistory();
         const outboundSerialsSet = new Set();
         const outboundCountsByProduct = {};
         const unmatchedOutboundCounts = {};
+
+        const damageRecords = getDamageRecords();
+        const damageSerials = new Set(damageRecords.map(r => r.serial.trim().toUpperCase()));
 
         const inboundSerialsSet = new Set();
         const inboundHistory = getHistory();
@@ -5903,6 +6090,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const itemName = s.itemName || name;
                     const cleanInboundSerial = s.serial.trim().toUpperCase();
 
+                    if (damageSerials.has(cleanInboundSerial)) {
+                        return; // Damaged, not available in stock
+                    }
+
                     if (!productStock[itemName]) {
                         productStock[itemName] = {
                             name: itemName,
@@ -5944,11 +6135,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        return productStock;
+        cachedProductStockMap = productStock;
+        return cachedProductStockMap;
     }
 
     function renderOrderQueueUI() {
         const queue = getOrderQueue();
+
+        // Update total queue SO count badge elements
+        const outboundQueueBadge = document.getElementById('outboundQueueBadge');
+        if (outboundQueueBadge) outboundQueueBadge.textContent = queue.length;
+        const orderAssignQueueBadge = document.getElementById('orderAssignQueueBadge');
+        if (orderAssignQueueBadge) orderAssignQueueBadge.textContent = queue.length;
         
         // Get unique products database list
         const inboundHistory = getHistory();
@@ -8079,6 +8277,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (key === 'a') {
             e.preventDefault();
             navigateToTab('navOrderAssign');
+        } else if (key === 'd') {
+            e.preventDefault();
+            navigateToTab('navDamage');
         } else if (key === 'n') {
             // "o" tabane ke bad (if Outbound section is active), pressing "n" starts a New Outbound Session
             const sectionOutbound = document.getElementById('sectionOutbound');
@@ -8102,10 +8303,154 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // -------------------------------------------------------------
+    // DAMAGE REGISTER MODULE
+    // -------------------------------------------------------------
+    function getDamageRecords() {
+        const data = localStorage.getItem('wms_damage_records');
+        try {
+            return data ? JSON.parse(data) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveDamageRecords(records) {
+        localStorage.setItem('wms_damage_records', JSON.stringify(records));
+        cachedProductStockMap = null;
+        firebaseSet('damage_records', records);
+    }
+
+    function markItemAsDamaged(serial) {
+        const cleanSerial = serial.trim().toUpperCase();
+        if (!cleanSerial) return;
+
+        // Verify if it's already marked as damaged
+        const records = getDamageRecords();
+        const isDup = records.some(r => r.serial.trim().toUpperCase() === cleanSerial);
+        if (isDup) {
+            alert(`Error: Serial number "${cleanSerial}" is already marked as damaged!`);
+            return;
+        }
+
+        // Verify if serial number exists in Inbound logs
+        const inboundHistory = getHistory();
+        let foundInbound = null;
+        for (const log of inboundHistory) {
+            if (log.serials) {
+                const sObj = log.serials.find(s => s.serial && s.serial.trim().toUpperCase() === cleanSerial);
+                if (sObj) {
+                    foundInbound = {
+                        itemName: sObj.itemName || log.item,
+                        inboundLogId: log.id
+                    };
+                    break;
+                }
+            }
+        }
+
+        if (!foundInbound) {
+            alert(`Error: Serial number "${cleanSerial}" not found in Inbound logs. Damage registration rejected!`);
+            return;
+        }
+
+        // Add to damage records
+        records.push({
+            serial: cleanSerial,
+            itemName: foundInbound.itemName,
+            inboundLogId: foundInbound.inboundLogId,
+            timestamp: new Date().toLocaleString()
+        });
+
+        saveDamageRecords(records);
+        renderDamageUI();
+        renderInventoryPanel();
+        renderOrderQueueUI();
+
+        alert(`Success: Product "${foundInbound.itemName}" with Serial "${cleanSerial}" marked as DAMAGED and removed from stock.`);
+    }
+
+    function removeDamageRecord(serial) {
+        if (!confirm(`Are you sure you want to restore serial number "${serial}" back to available stock?`)) return;
+        
+        let records = getDamageRecords();
+        records = records.filter(r => r.serial.trim().toUpperCase() !== serial.trim().toUpperCase());
+        saveDamageRecords(records);
+
+        renderDamageUI();
+        renderInventoryPanel();
+        renderOrderQueueUI();
+    }
+
+    function renderDamageUI() {
+        const records = getDamageRecords();
+        const body = document.getElementById('damageTableBody');
+        if (!body) return;
+
+        body.innerHTML = '';
+        if (records.length === 0) {
+            body.innerHTML = `
+                <tr>
+                    <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">No damaged items recorded.</td>
+                </tr>
+            `;
+            return;
+        }
+
+        // Render reversed so latest damaged items appear first
+        records.slice().reverse().forEach(r => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding: 10px 8px; font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary);">${r.timestamp}</td>
+                <td style="padding: 10px 8px; font-weight: 700; color: var(--text-primary);">${r.itemName}</td>
+                <td style="padding: 10px 8px; font-family: var(--font-mono); font-weight: 700; color: var(--accent-rose);">${r.serial}</td>
+                <td style="padding: 10px 8px; text-align: right;">
+                    <button class="btn-restore-damaged btn-primary" data-serial="${r.serial}" style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.72rem; font-weight: 700; cursor: pointer; border-style: solid;">
+                        Restore Stock
+                    </button>
+                </td>
+            `;
+            
+            tr.querySelector('.btn-restore-damaged').addEventListener('click', (e) => {
+                const serial = e.currentTarget.getAttribute('data-serial');
+                removeDamageRecord(serial);
+            });
+
+            body.appendChild(tr);
+        });
+    }
+
+    // Damage input scanner triggers
+    const damageSerialInput = document.getElementById('damageSerialInput');
+    const btnMarkAsDamaged = document.getElementById('btnMarkAsDamaged');
+
+    if (damageSerialInput) {
+        damageSerialInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const val = damageSerialInput.value.trim();
+                if (val) {
+                    markItemAsDamaged(val);
+                    damageSerialInput.value = '';
+                }
+            }
+        });
+    }
+
+    if (btnMarkAsDamaged && damageSerialInput) {
+        btnMarkAsDamaged.addEventListener('click', () => {
+            const val = damageSerialInput.value.trim();
+            if (val) {
+                markItemAsDamaged(val);
+                damageSerialInput.value = '';
+            }
+        });
+    }
+
     // Initial load: Restore states on page load/reload
     restoreSidebarCollapsedState();
     restoreSessionState();
     restoreOutboundSessionState();
+    renderDamageUI();
     renderInventoryPanel();
     renderDeletedSerialsPanel();
     populateMisProductsDropdown();
