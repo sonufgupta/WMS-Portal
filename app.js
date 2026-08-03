@@ -5724,8 +5724,75 @@ document.addEventListener('DOMContentLoaded', () => {
         const weightKeys = Object.keys(getProductWeights());
         const uniqueProducts = Array.from(new Set([...allInboundProducts, ...weightKeys])).filter(Boolean).sort();
 
+        // Parse City, State, and Pincode from client details
+        let customerText = text;
+        const billToIdx = text.toLowerCase().indexOf('bill to');
+        const shipToIdx = text.toLowerCase().indexOf('ship to');
+        const searchStartIdx = Math.max(billToIdx, shipToIdx);
+        if (searchStartIdx !== -1) {
+            customerText = text.substring(searchStartIdx);
+        }
+
+        // Pincode (6-digit number)
+        const pinMatch = customerText.match(/\b\d{6}\b/);
+        const pincode = pinMatch ? pinMatch[0] : '';
+
+        // State (matching list of Indian States)
+        const statesList = [
+            "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", 
+            "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", 
+            "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", 
+            "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", 
+            "Uttarakhand", "West Bengal", "Delhi", "Jammu and Kashmir", "Ladakh", "Puducherry"
+        ];
+        let foundState = '';
+        for (const state of statesList) {
+            const regex = new RegExp('\\b' + state + '\\b', 'i');
+            if (regex.test(customerText)) {
+                foundState = state;
+                break;
+            }
+        }
+
+        // City (split comma token right before state/pincode)
+        let foundCity = '';
+        if (foundState) {
+            const escapedState = foundState.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+            const pattern1 = new RegExp(`(?:\\b)([A-Za-z\\s\\.\\-\\(\\)]+),\\s*${escapedState}\\s*,?\\s*\\b\\d{6}\\b`, 'i');
+            const match1 = customerText.match(pattern1);
+            if (match1) {
+                foundCity = match1[1].trim();
+            } else {
+                const pattern2 = new RegExp(`(?:\\b)([A-Za-z\\s\\.\\-\\(\\)]+),\\s*${escapedState}\\b`, 'i');
+                const match2 = customerText.match(pattern2);
+                if (match2) {
+                    foundCity = match2[1].trim();
+                }
+            }
+        }
+        if (foundCity) {
+            const cityParts = foundCity.split(',');
+            foundCity = cityParts[cityParts.length - 1].trim();
+        }
+        if (!foundCity && foundState) {
+            const escapedState = foundState.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+            const patternFallback = new RegExp(`(\\b[A-Za-z]+)\\s+${escapedState}\\b`, 'i');
+            const matchFallback = customerText.match(patternFallback);
+            if (matchFallback) {
+                foundCity = matchFallback[1].trim();
+            }
+        }
+
         // Push directly to queue
         const queue = getOrderQueue();
+
+        // Duplicate check on soNum (invoiceNo / Sales Order No)
+        const isDuplicate = queue.some(order => order.invoiceNo && order.invoiceNo.trim().toLowerCase() === soNum.trim().toLowerCase());
+        if (isDuplicate) {
+            alert(`Duplicate Order Alert!\nSales Order "${soNum}" already exists in the Active Queue.`);
+            return;
+        }
+        
         const orderId = "q_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
         
         queue.push({
@@ -5740,7 +5807,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     qty: item.qty
                 };
             }),
-            timestamp: new Date().toLocaleString()
+            timestamp: new Date().toLocaleString(),
+            city: foundCity || 'Unknown City',
+            state: foundState || 'Unknown State',
+            pincode: pincode || 'Unknown PIN'
         });
 
         saveOrderQueue(queue);
@@ -5781,6 +5851,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const weightKeys = Object.keys(getProductWeights());
         const uniqueProducts = Array.from(new Set([...allInboundProducts, ...weightKeys])).filter(Boolean).sort();
 
+        // Save currently focused element information to prevent focus loss during typing
+        let activeInputId = null;
+        let activeItemIdx = null;
+        let isSelect = false;
+        
+        if (document.activeElement) {
+            if (document.activeElement.classList.contains('queue-item-qty-input')) {
+                activeInputId = document.activeElement.getAttribute('data-order-id');
+                activeItemIdx = document.activeElement.getAttribute('data-item-idx');
+                isSelect = false;
+            } else if (document.activeElement.classList.contains('queue-item-product-select')) {
+                activeInputId = document.activeElement.getAttribute('data-order-id');
+                activeItemIdx = document.activeElement.getAttribute('data-item-idx');
+                isSelect = true;
+            }
+        }
+
+        // Slice and reverse order queue so the latest details are displayed first
+        const displayQueue = queue.slice().reverse();
+
         // 1. Render on Order Assign Tab (right side column list)
         const assignQueueList = document.getElementById('orderAssignQueueList');
         if (assignQueueList) {
@@ -5790,17 +5880,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="text-align: center; color: var(--text-muted); font-style: italic; padding: 24px;">No active orders in queue.</div>
                 `;
             } else {
-                queue.forEach(order => {
+                displayQueue.forEach(order => {
                     const card = document.createElement('div');
                     card.style.cssText = 'border: 1px solid var(--border-color); border-radius: var(--radius-md); background: rgba(255,255,255,0.01); padding: 16px; display: flex; flex-direction: column; gap: 14px;';
                     
+                    const totalPcs = order.items.reduce((sum, item) => sum + item.qty, 0);
+
                     // Card Header
                     const header = document.createElement('div');
                     header.style.cssText = 'display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;';
                     header.innerHTML = `
                         <div>
                             <h4 style="margin: 0; font-size: 0.95rem; font-weight: 800; color: var(--text-primary);" title="${order.shopName}">${order.shopName}</h4>
-                            <span style="font-size: 0.8rem; color: var(--accent-blue); font-weight: 700; font-family: var(--font-mono);">${order.invoiceNo}</span>
+                            <div style="display: flex; gap: 8px; align-items: center; margin-top: 2px;">
+                                <span style="font-size: 0.8rem; color: var(--accent-blue); font-weight: 700; font-family: var(--font-mono);">${order.invoiceNo}</span>
+                                <span style="font-size: 0.72rem; color: var(--text-muted);">| Total PCs: <span style="font-weight: 800; color: var(--accent-emerald);">${totalPcs}</span></span>
+                            </div>
                         </div>
                         <div style="display: flex; gap: 8px; align-items: center;">
                             <button type="button" class="btn-start-queue-session btn-primary" data-id="${order.id}" style="background-color: var(--accent-emerald); border-color: var(--accent-emerald); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; border-style: solid;">
@@ -5814,6 +5909,26 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     `;
                     card.appendChild(header);
+
+                    // Card Location Details Row
+                    const locationRow = document.createElement('div');
+                    locationRow.style.cssText = 'display: flex; gap: 8px; flex-wrap: wrap; margin-top: -6px; margin-bottom: 2px;';
+                    locationRow.innerHTML = `
+                        <span style="font-size: 0.7rem; font-weight: 700; color: var(--accent-blue); background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.15); padding: 2px 6px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 4px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 10px; height: 10px; stroke-width: 2.5;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                            </svg>
+                            <span>${order.city || 'Unknown City'}</span>
+                        </span>
+                        <span style="font-size: 0.7rem; font-weight: 700; color: var(--accent-amber); background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.15); padding: 2px 6px; border-radius: var(--radius-sm);">
+                            <span>${order.state || 'Unknown State'}</span>
+                        </span>
+                        <span style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); padding: 2px 6px; border-radius: var(--radius-sm); font-family: var(--font-mono);">
+                            <span>PIN: ${order.pincode || 'Unknown PIN'}</span>
+                        </span>
+                    `;
+                    card.appendChild(locationRow);
 
                     // Card Items List
                     const itemsList = document.createElement('div');
@@ -5835,7 +5950,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const isInvalid = isMonitor && (item.qty % 5 !== 0);
                         const warningStyle = isInvalid ? 'border: 2px solid var(--accent-rose); background: rgba(244, 63, 94, 0.05);' : '';
                         const warningMsgHtml = isInvalid
-                            ? `<div style="color: var(--accent-rose); font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; gap: 2px; margin-top: 4px; justify-content: flex-end;" title="Monitors must be multiple of 5">
+                            ? `<div class="qty-error-msg" style="color: var(--accent-rose); font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; gap: 2px; margin-top: 4px; justify-content: flex-end;" title="Monitors must be multiple of 5">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 10px; height: 10px;">
                                     <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
                                 </svg>
@@ -5862,11 +5977,55 @@ document.addEventListener('DOMContentLoaded', () => {
                             updateQueueItemValue(order.id, idx, 'name', e.target.value);
                         });
 
-                        // Add listeners for quantity
+                        // Add fluid typing listeners for quantity
                         const qtyInput = itemRow.querySelector('.queue-item-qty-input');
                         qtyInput.addEventListener('input', (e) => {
-                            const val = parseInt(e.target.value) || 1;
-                            updateQueueItemValue(order.id, idx, 'qty', val);
+                            const val = parseInt(qtyInput.value) || 0;
+                            
+                            // Instantly update validation styles on the fly without full UI redraw
+                            const currentProdName = selectEl.value;
+                            const isMonitorLive = (currentProdName.toLowerCase().includes('18.5') || currentProdName.toLowerCase().includes('19.5')) && currentProdName.toLowerCase().includes('monitor');
+                            const isInvalidLive = isMonitorLive && (val % 5 !== 0);
+                            
+                            if (isInvalidLive) {
+                                qtyInput.style.border = '2px solid var(--accent-rose)';
+                                qtyInput.style.background = 'rgba(244, 63, 94, 0.05)';
+                                let errorEl = qtyInput.parentElement.querySelector('.qty-error-msg');
+                                if (!errorEl) {
+                                    errorEl = document.createElement('div');
+                                    errorEl.className = 'qty-error-msg';
+                                    errorEl.style.cssText = 'color: var(--accent-rose); font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; gap: 2px; margin-top: 4px; justify-content: flex-end;';
+                                    errorEl.title = 'Monitors must be multiple of 5';
+                                    errorEl.innerHTML = `
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 10px; height: 10px;">
+                                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                        </svg>
+                                        <span>Pack of 5 Error!</span>
+                                    `;
+                                    qtyInput.parentElement.appendChild(errorEl);
+                                }
+                            } else {
+                                qtyInput.style.border = '1px solid var(--border-color)';
+                                qtyInput.style.background = 'var(--bg-primary)';
+                                const errorEl = qtyInput.parentElement.querySelector('.qty-error-msg');
+                                if (errorEl) {
+                                    errorEl.remove();
+                                }
+                            }
+
+                            // Silently update database and local storage without triggering render UI
+                            const currentQueue = getOrderQueue();
+                            const currentOrder = currentQueue.find(q => q.id === order.id);
+                            if (currentOrder && currentOrder.items[idx]) {
+                                currentOrder.items[idx].qty = val || 1;
+                                localStorage.setItem('wms_order_queue', JSON.stringify(currentQueue));
+                                firebaseSet('order_queue', currentQueue);
+                            }
+                        });
+
+                        qtyInput.addEventListener('change', (e) => {
+                            // Fully sync UI and other dependencies when done editing
+                            renderOrderQueueUI();
                         });
 
                         itemsList.appendChild(itemRow);
@@ -5896,7 +6055,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (outboundQueueContainer) outboundQueueContainer.style.display = 'none';
             } else {
                 if (outboundQueueContainer) outboundQueueContainer.style.display = 'block';
-                queue.forEach(order => {
+                displayQueue.forEach(order => {
                     const card = document.createElement('div');
                     card.style.cssText = 'border: 1px solid var(--border-color); border-radius: var(--radius-md); background: rgba(255,255,255,0.01); padding: 16px; display: flex; flex-direction: column; gap: 12px;';
                     
@@ -5908,13 +6067,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     header.innerHTML = `
                         <div>
                             <h4 style="margin: 0; font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">${order.shopName}</h4>
-                            <span style="font-size: 0.8rem; color: var(--accent-blue); font-weight: 700; font-family: var(--font-mono);">${order.invoiceNo}</span>
+                            <div style="display: flex; gap: 8px; align-items: center; margin-top: 2px;">
+                                <span style="font-size: 0.8rem; color: var(--accent-blue); font-weight: 700; font-family: var(--font-mono);">${order.invoiceNo}</span>
+                                <span style="font-size: 0.72rem; color: var(--text-muted);">| Total PCs: <span style="font-weight: 800; color: var(--accent-emerald);">${totalPcs}</span></span>
+                            </div>
                         </div>
                         <button type="button" class="btn-start-outbound-queue-session btn-primary" data-id="${order.id}" style="background-color: var(--accent-emerald); border-color: var(--accent-emerald); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; border-style: solid;">
                             Start Session
                         </button>
                     `;
                     card.appendChild(header);
+
+                    // Card Location Details Row
+                    const locationRow = document.createElement('div');
+                    locationRow.style.cssText = 'display: flex; gap: 8px; flex-wrap: wrap; margin-top: -4px; margin-bottom: 2px;';
+                    locationRow.innerHTML = `
+                        <span style="font-size: 0.7rem; font-weight: 700; color: var(--accent-blue); background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.15); padding: 2px 6px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 4px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 10px; height: 10px; stroke-width: 2.5;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                            </svg>
+                            <span>${order.city || 'Unknown City'}</span>
+                        </span>
+                        <span style="font-size: 0.7rem; font-weight: 700; color: var(--accent-amber); background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.15); padding: 2px 6px; border-radius: var(--radius-sm);">
+                            <span>${order.state || 'Unknown State'}</span>
+                        </span>
+                        <span style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); padding: 2px 6px; border-radius: var(--radius-sm); font-family: var(--font-mono);">
+                            <span>PIN: ${order.pincode || 'Unknown PIN'}</span>
+                        </span>
+                    `;
+                    card.appendChild(locationRow);
 
                     // Items display list (Read-Only)
                     const itemsDesc = document.createElement('div');
@@ -5954,6 +6136,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     outboundQueueList.appendChild(card);
                 });
+            }
+        }
+
+        // Restore cursor focus dynamically to keep keyboard typing fluidly
+        if (activeInputId !== null && activeItemIdx !== null) {
+            const selector = isSelect 
+                ? `.queue-item-product-select[data-order-id="${activeInputId}"][data-item-idx="${activeItemIdx}"]`
+                : `.queue-item-qty-input[data-order-id="${activeInputId}"][data-item-idx="${activeItemIdx}"]`;
+            const elToFocus = document.querySelector(selector);
+            if (elToFocus) {
+                elToFocus.focus();
+                if (!isSelect) {
+                    const val = elToFocus.value;
+                    elToFocus.value = '';
+                    elToFocus.value = val;
+                }
             }
         }
     }
