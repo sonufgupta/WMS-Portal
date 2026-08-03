@@ -5842,6 +5842,111 @@ document.addEventListener('DOMContentLoaded', () => {
         return null;
     }
 
+    function getProductStockMap() {
+        const outboundHistory = getOutboundHistory();
+        const outboundSerialsSet = new Set();
+        const outboundCountsByProduct = {};
+        const unmatchedOutboundCounts = {};
+
+        const inboundSerialsSet = new Set();
+        const inboundHistory = getHistory();
+        inboundHistory.forEach(log => {
+            if (log.serials) {
+                log.serials.forEach(s => {
+                    if (s && s.serial) {
+                        inboundSerialsSet.add(s.serial.trim().toUpperCase());
+                    }
+                });
+            }
+        });
+
+        outboundHistory.forEach(log => {
+            if (log.serials) {
+                log.serials.forEach(s => {
+                    const cleanSerial = s.serial.trim().toUpperCase();
+                    outboundSerialsSet.add(cleanSerial);
+                    const itemName = s.itemName;
+                    if (!outboundCountsByProduct[itemName]) {
+                        outboundCountsByProduct[itemName] = 0;
+                    }
+                    outboundCountsByProduct[itemName]++;
+
+                    if (!inboundSerialsSet.has(cleanSerial) && !cleanSerial.includes('WOS-OUT-')) {
+                        if (!unmatchedOutboundCounts[itemName]) {
+                            unmatchedOutboundCounts[itemName] = 0;
+                        }
+                        unmatchedOutboundCounts[itemName]++;
+                    }
+                });
+            }
+        });
+
+        const productStock = {};
+        const weights = getProductWeights();
+
+        const remainingWosOutbound = {};
+        Object.keys(outboundCountsByProduct).forEach(key => {
+            remainingWosOutbound[key] = outboundCountsByProduct[key];
+        });
+
+        const remainingUnmatchedOutbound = {};
+        Object.keys(unmatchedOutboundCounts).forEach(key => {
+            remainingUnmatchedOutbound[key] = unmatchedOutboundCounts[key];
+        });
+
+        const inboundHistoryReversed = [...inboundHistory].reverse();
+        
+        inboundHistoryReversed.forEach(log => {
+            const name = log.item;
+            if (log.serials && log.serials.length > 0) {
+                log.serials.forEach(s => {
+                    const itemName = s.itemName || name;
+                    const cleanInboundSerial = s.serial.trim().toUpperCase();
+
+                    if (!productStock[itemName]) {
+                        productStock[itemName] = {
+                            name: itemName,
+                            serialsCount: 0
+                        };
+                    }
+                    
+                    let isDispatched = false;
+                    if (outboundSerialsSet.has(cleanInboundSerial)) {
+                        isDispatched = true;
+                    } else if (remainingUnmatchedOutbound[itemName] && remainingUnmatchedOutbound[itemName] > 0) {
+                        isDispatched = true;
+                        remainingUnmatchedOutbound[itemName]--;
+                    }
+
+                    if (!isDispatched) {
+                        productStock[itemName].serialsCount++;
+                    }
+                });
+            } else {
+                if (name && log.count > 0) {
+                    if (!productStock[name]) {
+                        productStock[name] = {
+                            name: name,
+                            serialsCount: 0
+                        };
+                    }
+                    
+                    const inboundQty = log.count;
+                    const remOut = remainingWosOutbound[name] || 0;
+                    if (remOut >= inboundQty) {
+                        remainingWosOutbound[name] -= inboundQty;
+                    } else {
+                        const availableQty = inboundQty - remOut;
+                        remainingWosOutbound[name] = 0;
+                        productStock[name].serialsCount += availableQty;
+                    }
+                }
+            }
+        });
+
+        return productStock;
+    }
+
     function renderOrderQueueUI() {
         const queue = getOrderQueue();
         
@@ -5870,6 +5975,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Slice and reverse order queue so the latest details are displayed first
         const displayQueue = queue.slice().reverse();
+
+        // Get calculated stock register map
+        const stockMap = getProductStockMap();
 
         // 1. Render on Order Assign Tab (right side column list)
         const assignQueueList = document.getElementById('orderAssignQueueList');
@@ -5945,18 +6053,37 @@ document.addEventListener('DOMContentLoaded', () => {
                             selectOptions += `<option value="${prod}" ${selected}>${prod}</option>`;
                         });
 
+                        // Available stock lookup
+                        const availableStock = item.name && stockMap[item.name] ? (stockMap[item.name].serialsCount || 0) : 0;
+                        const isStockShort = item.name && (item.qty > availableStock);
+
                         // 5 monitor packing rule validation warning
                         const isMonitor = (item.name.toLowerCase().includes('18.5') || item.name.toLowerCase().includes('19.5')) && item.name.toLowerCase().includes('monitor');
                         const isInvalid = isMonitor && (item.qty % 5 !== 0);
-                        const warningStyle = isInvalid ? 'border: 2px solid var(--accent-rose); background: rgba(244, 63, 94, 0.05);' : '';
-                        const warningMsgHtml = isInvalid
-                            ? `<div class="qty-error-msg" style="color: var(--accent-rose); font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; gap: 2px; margin-top: 4px; justify-content: flex-end;" title="Monitors must be multiple of 5">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 10px; height: 10px;">
-                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                                </svg>
-                                <span>Pack of 5 Error!</span>
-                               </div>`
-                            : '';
+
+                        const warningStyle = (isInvalid || isStockShort) ? 'border: 2px solid var(--accent-rose); background: rgba(244, 63, 94, 0.05);' : '';
+                        
+                        let warningMsgHtml = '';
+                        if (isInvalid) {
+                            warningMsgHtml += `
+                                <div class="qty-error-msg" style="color: var(--accent-rose); font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; gap: 2px; margin-top: 4px; justify-content: flex-end;" title="Monitors must be multiple of 5">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 10px; height: 10px;">
+                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span>Pack of 5 Error!</span>
+                                </div>
+                            `;
+                        }
+                        if (isStockShort) {
+                            warningMsgHtml += `
+                                <div class="qty-stock-warning" style="color: var(--accent-rose); font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; gap: 2px; margin-top: 4px; justify-content: flex-end;" title="Insufficient stock available in warehouse">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 10px; height: 10px;">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span class="stock-warn-text">${availableStock === 0 ? 'Out of Stock!' : `Stock Short: ${availableStock} Left!`}</span>
+                                </div>
+                            `;
+                        }
 
                         itemRow.innerHTML = `
                             <div>
@@ -5967,7 +6094,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                             <div style="display: flex; flex-direction: column; align-items: flex-end;">
                                 <input type="number" class="queue-item-qty-input" data-order-id="${order.id}" data-item-idx="${idx}" value="${item.qty}" min="1" style="background-color: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px; border-radius: var(--radius-sm); font-size: 0.8rem; width: 75px; text-align: right; font-weight: 700; font-family: var(--font-mono); outline: none; border-style: solid; ${warningStyle}">
-                                ${warningMsgHtml}
+                                <div class="warn-msgs-container" style="display: flex; flex-direction: column; gap: 2px;">
+                                    ${warningMsgHtml}
+                                </div>
                             </div>
                         `;
 
@@ -5986,31 +6115,66 @@ document.addEventListener('DOMContentLoaded', () => {
                             const currentProdName = selectEl.value;
                             const isMonitorLive = (currentProdName.toLowerCase().includes('18.5') || currentProdName.toLowerCase().includes('19.5')) && currentProdName.toLowerCase().includes('monitor');
                             const isInvalidLive = isMonitorLive && (val % 5 !== 0);
+
+                            const stockMapLive = getProductStockMap();
+                            const availLive = currentProdName && stockMapLive[currentProdName] ? (stockMapLive[currentProdName].serialsCount || 0) : 0;
+                            const isStockShortLive = currentProdName && (val > availLive);
                             
-                            if (isInvalidLive) {
+                            const msgsContainer = qtyInput.parentElement.querySelector('.warn-msgs-container');
+                            
+                            if (isInvalidLive || isStockShortLive) {
                                 qtyInput.style.border = '2px solid var(--accent-rose)';
                                 qtyInput.style.background = 'rgba(244, 63, 94, 0.05)';
-                                let errorEl = qtyInput.parentElement.querySelector('.qty-error-msg');
-                                if (!errorEl) {
-                                    errorEl = document.createElement('div');
-                                    errorEl.className = 'qty-error-msg';
-                                    errorEl.style.cssText = 'color: var(--accent-rose); font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; gap: 2px; margin-top: 4px; justify-content: flex-end;';
-                                    errorEl.title = 'Monitors must be multiple of 5';
-                                    errorEl.innerHTML = `
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 10px; height: 10px;">
-                                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                                        </svg>
-                                        <span>Pack of 5 Error!</span>
-                                    `;
-                                    qtyInput.parentElement.appendChild(errorEl);
+                                
+                                // Handle monitor pack-of-5 live warn HTML
+                                let errorEl = msgsContainer.querySelector('.qty-error-msg');
+                                if (isInvalidLive) {
+                                    if (!errorEl) {
+                                        errorEl = document.createElement('div');
+                                        errorEl.className = 'qty-error-msg';
+                                        errorEl.style.cssText = 'color: var(--accent-rose); font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; gap: 2px; margin-top: 4px; justify-content: flex-end;';
+                                        errorEl.title = 'Monitors must be multiple of 5';
+                                        errorEl.innerHTML = `
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 10px; height: 10px;">
+                                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                            </svg>
+                                            <span>Pack of 5 Error!</span>
+                                        `;
+                                        msgsContainer.appendChild(errorEl);
+                                    }
+                                } else {
+                                    if (errorEl) errorEl.remove();
+                                }
+
+                                // Handle insufficient stock live warn HTML
+                                let stockWarnEl = msgsContainer.querySelector('.qty-stock-warning');
+                                if (isStockShortLive) {
+                                    if (!stockWarnEl) {
+                                        stockWarnEl = document.createElement('div');
+                                        stockWarnEl.className = 'qty-stock-warning';
+                                        stockWarnEl.style.cssText = 'color: var(--accent-rose); font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; gap: 2px; margin-top: 4px; justify-content: flex-end;';
+                                        stockWarnEl.title = 'Insufficient stock available in warehouse';
+                                        stockWarnEl.innerHTML = `
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 10px; height: 10px;">
+                                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                            </svg>
+                                            <span class="stock-warn-text">${availLive === 0 ? 'Out of Stock!' : `Stock Short: ${availLive} Left!`}</span>
+                                        `;
+                                        msgsContainer.appendChild(stockWarnEl);
+                                    } else {
+                                        const t = stockWarnEl.querySelector('.stock-warn-text');
+                                        if (t) t.textContent = availLive === 0 ? 'Out of Stock!' : `Stock Short: ${availLive} Left!`;
+                                    }
+                                } else {
+                                    if (stockWarnEl) stockWarnEl.remove();
                                 }
                             } else {
                                 qtyInput.style.border = '1px solid var(--border-color)';
                                 qtyInput.style.background = 'var(--bg-primary)';
-                                const errorEl = qtyInput.parentElement.querySelector('.qty-error-msg');
-                                if (errorEl) {
-                                    errorEl.remove();
-                                }
+                                const errorEl = msgsContainer.querySelector('.qty-error-msg');
+                                if (errorEl) errorEl.remove();
+                                const stockWarnEl = msgsContainer.querySelector('.qty-stock-warning');
+                                if (stockWarnEl) stockWarnEl.remove();
                             }
 
                             // Silently update database and local storage without triggering render UI
@@ -6176,6 +6340,31 @@ document.addEventListener('DOMContentLoaded', () => {
         if (hasUnmapped) {
             alert("Error: Please select a database product mapping for all items before starting the session!");
             return;
+        }
+
+        // Validation check: Check if any item has insufficient stock!
+        const stockMap = getProductStockMap();
+        const shortStockItems = [];
+        order.items.forEach(it => {
+            if (it.name) {
+                const avail = stockMap[it.name] ? (stockMap[it.name].serialsCount || 0) : 0;
+                if (it.qty > avail) {
+                    shortStockItems.push({
+                        name: it.name,
+                        ordered: it.qty,
+                        available: avail
+                    });
+                }
+            }
+        });
+
+        if (shortStockItems.length > 0) {
+            const warningMsg = shortStockItems.map(item => 
+                `- ${item.name}: Ordered ${item.ordered} pcs, but only ${item.available} pcs are available in stock.`
+            ).join('\n');
+            
+            const proceed = confirm(`⚠️ INSUFFICIENT STOCK WARNING!\n\nThe following items have insufficient stock:\n\n${warningMsg}\n\nDo you want to proceed with the session anyway?`);
+            if (!proceed) return;
         }
 
         // Start active outbound session prefilled
