@@ -220,19 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // 7.5. Sync Dispatch Order Queue (Real-Time Multi-Terminal sync)
-        db.ref('wms_data/order_queue').on('value', (snapshot) => {
-            const val = snapshot.val();
-            if (val === null) {
-                localStorage.setItem('wms_order_queue', '[]');
-                renderOrderQueueUI();
-            } else {
-                if (syncCloudDataToLocal('wms_order_queue', val)) {
-                    renderOrderQueueUI();
-                    console.log("Order Queue synchronized.");
-                }
-            }
-        });
+
 
         // 7.6. Sync Damage Records
         db.ref('wms_data/damage_records').on('value', (snapshot) => {
@@ -3546,6 +3534,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const saved = localStorage.getItem('wms_active_outbound_session');
         if (saved) {
             activeOutboundSession = JSON.parse(saved);
+
+            // Self-healing check: if this active session is already saved in Completed Outbound History, clear it!
+            if (activeOutboundSession) {
+                const history = getOutboundHistory();
+                const alreadySaved = history.some(log => log.invoiceNo === activeOutboundSession.invoiceNo && log.shopName === activeOutboundSession.shopName);
+                if (alreadySaved) {
+                    console.log("Self-healing: Active session already exists in completed history. Clearing it.");
+                    localStorage.removeItem('wms_active_outbound_session');
+                    localStorage.removeItem('wms_outbound_joined');
+                    activeOutboundSession = null;
+                    saveActiveOutboundSession(); // Wipes it from Firebase node
+                    
+                    if (outboundActiveState) outboundActiveState.style.display = 'none';
+                    if (outboundInactiveState) outboundInactiveState.style.display = 'block';
+                    const banner = document.getElementById('outboundAlreadyWorkingBanner');
+                    const welcome = document.getElementById('outboundWelcomeContainer');
+                    if (banner) banner.style.display = 'none';
+                    if (welcome) welcome.style.display = 'flex';
+                    renderOutboundHistoryTable();
+                    return;
+                }
+            }
+
             if (activeOutboundSession && !activeOutboundSession.items) {
                 activeOutboundSession.items = [];
             }
@@ -4519,67 +4530,83 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function downloadOutboundLogExcel(log) {
-        if (!window.XLSX) {
-            alert('Excel library not loaded.');
-            return;
-        }
-        const wb = XLSX.utils.book_new();
-        const items = log.items || [];
-        const serials = log.serials || [];
+        try {
+            if (!window.XLSX) {
+                alert('Excel library not loaded.');
+                return;
+            }
+            const wb = XLSX.utils.book_new();
+            const items = log.items || [];
+            const serials = log.serials || [];
 
-        // Extract last digits of Invoice/SO No.
-        let lastIdPart = log.invoiceNo || '';
-        const idMatch = lastIdPart.trim().match(/\/([^\/]+)$/);
-        if (idMatch) {
-            lastIdPart = idMatch[1].trim();
-        } else {
-            lastIdPart = lastIdPart.trim();
-        }
-
-        const now = new Date();
-        const dateStr = now.toLocaleDateString('en-GB').replace(/\//g, '-'); // DD-MM-YYYY
-        const timeStr = now.toLocaleTimeString('en-US', { hour12: false });
-        
-        // Header text inside cell A1 of every sheet
-        const headerText = `${log.shopName} - ${lastIdPart} - ${dateStr} ${timeStr}`;
-
-        items.forEach(item => {
-            const itemSerials = serials.filter(s => s.itemName === item.name);
-
-            const sheetRows = itemSerials.map((s, idx) => ({
-                "S.No.": idx + 1,
-                "Box Number": `Box ${s.boxNo}`,
-                "Serial Number": s.serial.startsWith("Without Serial Number") ? "Without Serial Number" : s.serial,
-                "Product Name": s.itemName
-            }));
-
-            if (sheetRows.length === 0) {
-                sheetRows.push({
-                    "S.No.": 1,
-                    "Box Number": "N/A",
-                    "Serial Number": "No serial numbers packed",
-                    "Product Name": item.name
-                });
+            // Extract last digits of Invoice/SO No.
+            let lastIdPart = log.invoiceNo || '';
+            const idMatch = lastIdPart.trim().match(/\/([^\/]+)$/);
+            if (idMatch) {
+                lastIdPart = idMatch[1].trim();
+            } else {
+                lastIdPart = lastIdPart.trim();
             }
 
-            // Create sheet with A1 header, then append JSON starting at A3
-            const ws = XLSX.utils.aoa_to_sheet([[headerText]]);
-            XLSX.utils.sheet_add_json(ws, sheetRows, { origin: "A3" });
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-GB').replace(/\//g, '-'); // DD-MM-YYYY
+            const timeStr = now.toLocaleTimeString('en-US', { hour12: false });
+            
+            // Header text inside cell A1 of every sheet
+            const headerText = `${log.shopName} - ${lastIdPart} - ${dateStr} ${timeStr}`;
 
-            let sheetName = item.name.replace(/[\\\/\?\*\[\]\:]/g, "").substring(0, 30);
-            if (!sheetName.trim()) sheetName = "Packed Serials";
+            const seenSheetNames = new Set();
 
-            XLSX.utils.book_append_sheet(wb, ws, sheetName);
-        });
+            items.forEach(item => {
+                const itemSerials = serials.filter(s => s.itemName === item.name);
 
-        // Safe Filename format: SHOPNAME + last ID digit + Date + Time
-        const safeShop = (log.shopName || 'Outbound').replace(/[^a-zA-Z0-9]/g, '_');
-        const safeId = lastIdPart.replace(/[^a-zA-Z0-9]/g, '_');
-        const fileDate = now.toISOString().slice(0, 10).replace(/-/g, '_');
-        const fileTime = now.toLocaleTimeString('en-US', { hour12: false }).replace(/:/g, '-');
-        
-        const filename = `${safeShop}_${safeId}_${fileDate}_${fileTime}`.toUpperCase() + ".xlsx";
-        XLSX.writeFile(wb, filename);
+                const sheetRows = itemSerials.map((s, idx) => ({
+                    "S.No.": idx + 1,
+                    "Box Number": `Box ${s.boxNo}`,
+                    "Serial Number": s.serial.startsWith("Without Serial Number") ? "Without Serial Number" : s.serial,
+                    "Product Name": s.itemName
+                }));
+
+                if (sheetRows.length === 0) {
+                    sheetRows.push({
+                        "S.No.": 1,
+                        "Box Number": "N/A",
+                        "Serial Number": "No serial numbers packed",
+                        "Product Name": item.name
+                    });
+                }
+
+                // Create sheet with A1 header, then append JSON starting at A3
+                const ws = XLSX.utils.aoa_to_sheet([[headerText]]);
+                XLSX.utils.sheet_add_json(ws, sheetRows, { origin: "A3" });
+
+                let baseSheetName = item.name.replace(/[\\\/\?\*\[\]\:]/g, "").substring(0, 25).trim();
+                if (!baseSheetName) baseSheetName = "Packed Serials";
+
+                let sheetName = baseSheetName;
+                let counter = 1;
+                while (seenSheetNames.has(sheetName.toLowerCase())) {
+                    const suffix = `_${counter}`;
+                    sheetName = baseSheetName.substring(0, 31 - suffix.length) + suffix;
+                    counter++;
+                }
+                seenSheetNames.add(sheetName.toLowerCase());
+
+                XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            });
+
+            // Safe Filename format: SHOPNAME + last ID digit + Date + Time
+            const safeShop = (log.shopName || 'Outbound').replace(/[^a-zA-Z0-9]/g, '_');
+            const safeId = lastIdPart.replace(/[^a-zA-Z0-9]/g, '_');
+            const fileDate = now.toISOString().slice(0, 10).replace(/-/g, '_');
+            const fileTime = now.toLocaleTimeString('en-US', { hour12: false }).replace(/:/g, '-');
+            
+            const filename = `${safeShop}_${safeId}_${fileDate}_${fileTime}`.toUpperCase() + ".xlsx";
+            XLSX.writeFile(wb, filename);
+        } catch (excelErr) {
+            console.error("Excel download failed but operation was saved:", excelErr);
+            alert("Excel export encountered an error, but log details have been saved successfully.");
+        }
     }
 
     // --- Outbound Progress UI and Live Count Calculators ---
@@ -5098,9 +5125,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const itemName = s.itemName || name; // Fallback if name is missing
                     const cleanInboundSerial = s.serial.trim().toUpperCase();
 
-                    if (damageSerials.has(cleanInboundSerial)) {
-                        return; // Damaged, not available in stock
-                    }
                     const logW = resolveLogWeight(log, itemName);
                     const unitWeight = (logW !== undefined) ? logW : (parseFloat(weights[itemName]) || 0);
 
@@ -5134,7 +5158,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             serial: s.serial,
                             itemName: itemName,
                             inboundTime: log.timestamp,
-                            vehicle: log.vehicle || 'N/A'
+                            vehicle: log.vehicle || 'N/A',
+                            isDamaged: damageSerials.has(cleanInboundSerial)
                         });
                     }
                 });
@@ -5260,7 +5285,7 @@ document.addEventListener('DOMContentLoaded', () => {
             filteredList = availableSerials.map(s => ({
                 serial: s.serial,
                 itemName: s.itemName,
-                status: 'In Stock',
+                status: s.isDamaged ? 'Damaged' : 'In Stock',
                 details: `Inwarded: ${s.inboundTime} | Vehicle: ${s.vehicle}`
             }));
         } else {
@@ -5271,12 +5296,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         const name = s.itemName || log.item;
                         if (s.serial.toLowerCase().includes(query) || name.toLowerCase().includes(query)) {
                             const isDispatched = outboundSerialsSet.has(s.serial);
+                            const isDamaged = damageSerials.has(s.serial.trim().toUpperCase());
                             const outDetails = outboundDetailsMap[s.serial];
                             
+                            let status = 'In Stock';
+                            if (isDispatched) status = 'Dispatched';
+                            else if (isDamaged) status = 'Damaged';
+
                             filteredList.push({
                                 serial: s.serial,
                                 itemName: name,
-                                status: isDispatched ? 'Dispatched' : 'In Stock',
+                                status: status,
                                 details: isDispatched 
                                     ? `Out to: ${outDetails.shopName} | Invoice: ${outDetails.invoiceNo} (${outDetails.timestamp})`
                                     : `Inwarded: ${log.timestamp} | Vehicle: ${log.vehicle || 'N/A'}`
@@ -5319,6 +5349,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 borderStyle = 'border: 1px solid rgba(244, 63, 94, 0.25); background: rgba(244, 63, 94, 0.04);';
                 badgeBg = 'rgba(244, 63, 94, 0.15)';
                 badgeColor = 'var(--accent-rose)';
+                isBlinkingClass = '';
+            } else if (s.status === 'Damaged') {
+                borderStyle = 'border: 1px solid var(--accent-rose); background: rgba(244, 63, 94, 0.08);';
+                badgeBg = 'var(--accent-rose)';
+                badgeColor = '#ffffff';
                 isBlinkingClass = '';
             } else {
                 card.style.background = theme.bg;
@@ -6137,468 +6172,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         cachedProductStockMap = productStock;
         return cachedProductStockMap;
-    }
-
-    function renderOrderQueueUI() {
-        const queue = getOrderQueue();
-
-        // Update total queue SO count badge elements
-        const outboundQueueBadge = document.getElementById('outboundQueueBadge');
-        if (outboundQueueBadge) outboundQueueBadge.textContent = queue.length;
-        const orderAssignQueueBadge = document.getElementById('orderAssignQueueBadge');
-        if (orderAssignQueueBadge) orderAssignQueueBadge.textContent = queue.length;
-        
-        // Get unique products database list
-        const inboundHistory = getHistory();
-        const allInboundProducts = Array.from(new Set(inboundHistory.flatMap(log => (log.serials || []).map(s => s.itemName || log.item))));
-        const weightKeys = Object.keys(getProductWeights());
-        const uniqueProducts = Array.from(new Set([...allInboundProducts, ...weightKeys])).filter(Boolean).sort();
-
-        // Save currently focused element information to prevent focus loss during typing
-        let activeInputId = null;
-        let activeItemIdx = null;
-        let isSelect = false;
-        
-        if (document.activeElement) {
-            if (document.activeElement.classList.contains('queue-item-qty-input')) {
-                activeInputId = document.activeElement.getAttribute('data-order-id');
-                activeItemIdx = document.activeElement.getAttribute('data-item-idx');
-                isSelect = false;
-            } else if (document.activeElement.classList.contains('queue-item-product-select')) {
-                activeInputId = document.activeElement.getAttribute('data-order-id');
-                activeItemIdx = document.activeElement.getAttribute('data-item-idx');
-                isSelect = true;
-            }
-        }
-
-        // Slice and reverse order queue so the latest details are displayed first
-        const displayQueue = queue.slice().reverse();
-
-        // Get calculated stock register map
-        const stockMap = getProductStockMap();
-
-        // 1. Render on Order Assign Tab (right side column list)
-        const assignQueueList = document.getElementById('orderAssignQueueList');
-        if (assignQueueList) {
-            assignQueueList.innerHTML = '';
-            if (queue.length === 0) {
-                assignQueueList.innerHTML = `
-                    <div style="text-align: center; color: var(--text-muted); font-style: italic; padding: 24px;">No active orders in queue.</div>
-                `;
-            } else {
-                displayQueue.forEach(order => {
-                    const card = document.createElement('div');
-                    card.style.cssText = 'border: 1px solid var(--border-color); border-radius: var(--radius-md); background: rgba(255,255,255,0.01); padding: 16px; display: flex; flex-direction: column; gap: 14px;';
-                    
-                    const totalPcs = order.items.reduce((sum, item) => sum + item.qty, 0);
-
-                    // Card Header
-                    const header = document.createElement('div');
-                    header.style.cssText = 'display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;';
-                    header.innerHTML = `
-                        <div>
-                            <h4 style="margin: 0; font-size: 0.95rem; font-weight: 800; color: var(--text-primary);" title="${order.shopName}">${order.shopName}</h4>
-                            <div style="display: flex; gap: 8px; align-items: center; margin-top: 2px;">
-                                <span style="font-size: 0.8rem; color: var(--accent-blue); font-weight: 700; font-family: var(--font-mono);">${order.invoiceNo}</span>
-                                <span style="font-size: 0.72rem; color: var(--text-muted);">| Total PCs: <span style="font-weight: 800; color: var(--accent-emerald);">${totalPcs}</span></span>
-                            </div>
-                        </div>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <button type="button" class="btn-start-queue-session btn-primary" data-id="${order.id}" style="background-color: var(--accent-emerald); border-color: var(--accent-emerald); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; border-style: solid;">
-                                Start Session
-                            </button>
-                            <button type="button" class="btn-delete-queue-order" data-id="${order.id}" style="background: none; border: none; color: var(--accent-rose); cursor: pointer; padding: 4px; display: inline-flex; align-items: center; justify-content: center;">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                            </button>
-                        </div>
-                    `;
-                    card.appendChild(header);
-
-                    // Card Location Details Row
-                    const locationRow = document.createElement('div');
-                    locationRow.style.cssText = 'display: flex; gap: 8px; flex-wrap: wrap; margin-top: -6px; margin-bottom: 2px;';
-                    locationRow.innerHTML = `
-                        <span style="font-size: 0.7rem; font-weight: 700; color: var(--accent-blue); background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.15); padding: 2px 6px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 4px;">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 10px; height: 10px; stroke-width: 2.5;">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                            </svg>
-                            <span>${order.city || 'Unknown City'}</span>
-                        </span>
-                        <span style="font-size: 0.7rem; font-weight: 700; color: var(--accent-amber); background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.15); padding: 2px 6px; border-radius: var(--radius-sm);">
-                            <span>${order.state || 'Unknown State'}</span>
-                        </span>
-                        <span style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); padding: 2px 6px; border-radius: var(--radius-sm); font-family: var(--font-mono);">
-                            <span>PIN: ${order.pincode || 'Unknown PIN'}</span>
-                        </span>
-                    `;
-                    card.appendChild(locationRow);
-
-                    // Card Items List
-                    const itemsList = document.createElement('div');
-                    itemsList.style.cssText = 'display: flex; flex-direction: column; gap: 10px;';
-                    
-                    order.items.forEach((item, idx) => {
-                        const itemRow = document.createElement('div');
-                        itemRow.style.cssText = 'display: grid; grid-template-columns: 1fr 110px; gap: 12px; align-items: center; background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 8px 12px; border-radius: var(--radius-sm);';
-                        
-                        // Select dropdown for matched product name
-                        let selectOptions = `<option value="">-- Map Product --</option>`;
-                        uniqueProducts.forEach(prod => {
-                            const selected = (prod === item.name) ? 'selected' : '';
-                            selectOptions += `<option value="${prod}" ${selected}>${prod}</option>`;
-                        });
-
-                        // Available stock lookup
-                        const availableStock = item.name && stockMap[item.name] ? (stockMap[item.name].serialsCount || 0) : 0;
-                        const isStockShort = item.name && (item.qty > availableStock);
-
-                        // 5 monitor packing rule validation warning
-                        const isMonitor = (item.name.toLowerCase().includes('18.5') || item.name.toLowerCase().includes('19.5')) && item.name.toLowerCase().includes('monitor');
-                        const isInvalid = isMonitor && (item.qty % 5 !== 0);
-
-                        const warningStyle = (isInvalid || isStockShort) ? 'border: 2px solid var(--accent-rose); background: rgba(244, 63, 94, 0.05);' : '';
-                        
-                        let warningMsgHtml = '';
-                        if (isInvalid) {
-                            warningMsgHtml += `
-                                <div class="qty-error-msg" style="color: var(--accent-rose); font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; gap: 2px; margin-top: 4px; justify-content: flex-end;" title="Monitors must be multiple of 5">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 10px; height: 10px;">
-                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                                    </svg>
-                                    <span>Pack of 5 Error!</span>
-                                </div>
-                            `;
-                        }
-                        if (isStockShort) {
-                            warningMsgHtml += `
-                                <div class="qty-stock-warning" style="color: var(--accent-rose); font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; gap: 2px; margin-top: 4px; justify-content: flex-end;" title="Insufficient stock available in warehouse">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 10px; height: 10px;">
-                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                                    </svg>
-                                    <span class="stock-warn-text">${availableStock === 0 ? 'Out of Stock!' : `Stock Short: ${availableStock} Left!`}</span>
-                                </div>
-                            `;
-                        }
-
-                        itemRow.innerHTML = `
-                            <div>
-                                <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 4px; word-break: break-all;" title="${item.rawName}">Raw: ${item.rawName}</div>
-                                <select class="queue-item-product-select" data-order-id="${order.id}" data-item-idx="${idx}" style="background-color: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px; border-radius: var(--radius-sm); font-size: 0.8rem; width: 100%; outline: none; border-style: solid;">
-                                    ${selectOptions}
-                                </select>
-                            </div>
-                            <div style="display: flex; flex-direction: column; align-items: flex-end;">
-                                <input type="number" class="queue-item-qty-input" data-order-id="${order.id}" data-item-idx="${idx}" value="${item.qty}" min="1" style="background-color: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px; border-radius: var(--radius-sm); font-size: 0.8rem; width: 75px; text-align: right; font-weight: 700; font-family: var(--font-mono); outline: none; border-style: solid; ${warningStyle}">
-                                <div class="warn-msgs-container" style="display: flex; flex-direction: column; gap: 2px;">
-                                    ${warningMsgHtml}
-                                </div>
-                            </div>
-                        `;
-
-                        // Add listeners for select
-                        const selectEl = itemRow.querySelector('.queue-item-product-select');
-                        selectEl.addEventListener('change', (e) => {
-                            updateQueueItemValue(order.id, idx, 'name', e.target.value);
-                        });
-
-                        // Add fluid typing listeners for quantity
-                        const qtyInput = itemRow.querySelector('.queue-item-qty-input');
-                        qtyInput.addEventListener('input', (e) => {
-                            const val = parseInt(qtyInput.value) || 0;
-                            
-                            // Instantly update validation styles on the fly without full UI redraw
-                            const currentProdName = selectEl.value;
-                            const isMonitorLive = (currentProdName.toLowerCase().includes('18.5') || currentProdName.toLowerCase().includes('19.5')) && currentProdName.toLowerCase().includes('monitor');
-                            const isInvalidLive = isMonitorLive && (val % 5 !== 0);
-
-                            const stockMapLive = getProductStockMap();
-                            const availLive = currentProdName && stockMapLive[currentProdName] ? (stockMapLive[currentProdName].serialsCount || 0) : 0;
-                            const isStockShortLive = currentProdName && (val > availLive);
-                            
-                            const msgsContainer = qtyInput.parentElement.querySelector('.warn-msgs-container');
-                            
-                            if (isInvalidLive || isStockShortLive) {
-                                qtyInput.style.border = '2px solid var(--accent-rose)';
-                                qtyInput.style.background = 'rgba(244, 63, 94, 0.05)';
-                                
-                                // Handle monitor pack-of-5 live warn HTML
-                                let errorEl = msgsContainer.querySelector('.qty-error-msg');
-                                if (isInvalidLive) {
-                                    if (!errorEl) {
-                                        errorEl = document.createElement('div');
-                                        errorEl.className = 'qty-error-msg';
-                                        errorEl.style.cssText = 'color: var(--accent-rose); font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; gap: 2px; margin-top: 4px; justify-content: flex-end;';
-                                        errorEl.title = 'Monitors must be multiple of 5';
-                                        errorEl.innerHTML = `
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 10px; height: 10px;">
-                                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                                            </svg>
-                                            <span>Pack of 5 Error!</span>
-                                        `;
-                                        msgsContainer.appendChild(errorEl);
-                                    }
-                                } else {
-                                    if (errorEl) errorEl.remove();
-                                }
-
-                                // Handle insufficient stock live warn HTML
-                                let stockWarnEl = msgsContainer.querySelector('.qty-stock-warning');
-                                if (isStockShortLive) {
-                                    if (!stockWarnEl) {
-                                        stockWarnEl = document.createElement('div');
-                                        stockWarnEl.className = 'qty-stock-warning';
-                                        stockWarnEl.style.cssText = 'color: var(--accent-rose); font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; gap: 2px; margin-top: 4px; justify-content: flex-end;';
-                                        stockWarnEl.title = 'Insufficient stock available in warehouse';
-                                        stockWarnEl.innerHTML = `
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 10px; height: 10px;">
-                                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                                            </svg>
-                                            <span class="stock-warn-text">${availLive === 0 ? 'Out of Stock!' : `Stock Short: ${availLive} Left!`}</span>
-                                        `;
-                                        msgsContainer.appendChild(stockWarnEl);
-                                    } else {
-                                        const t = stockWarnEl.querySelector('.stock-warn-text');
-                                        if (t) t.textContent = availLive === 0 ? 'Out of Stock!' : `Stock Short: ${availLive} Left!`;
-                                    }
-                                } else {
-                                    if (stockWarnEl) stockWarnEl.remove();
-                                }
-                            } else {
-                                qtyInput.style.border = '1px solid var(--border-color)';
-                                qtyInput.style.background = 'var(--bg-primary)';
-                                const errorEl = msgsContainer.querySelector('.qty-error-msg');
-                                if (errorEl) errorEl.remove();
-                                const stockWarnEl = msgsContainer.querySelector('.qty-stock-warning');
-                                if (stockWarnEl) stockWarnEl.remove();
-                            }
-
-                            // Silently update database and local storage without triggering render UI
-                            const currentQueue = getOrderQueue();
-                            const currentOrder = currentQueue.find(q => q.id === order.id);
-                            if (currentOrder && currentOrder.items[idx]) {
-                                currentOrder.items[idx].qty = val || 1;
-                                localStorage.setItem('wms_order_queue', JSON.stringify(currentQueue));
-                                firebaseSet('order_queue', currentQueue);
-                            }
-                        });
-
-                        qtyInput.addEventListener('change', (e) => {
-                            // Fully sync UI and other dependencies when done editing
-                            renderOrderQueueUI();
-                        });
-
-                        itemsList.appendChild(itemRow);
-                    });
-                    
-                    card.appendChild(itemsList);
-
-                    // Bind start & delete actions
-                    card.querySelector('.btn-start-queue-session').addEventListener('click', () => {
-                        startSessionFromQueue(order.id);
-                    });
-                    card.querySelector('.btn-delete-queue-order').addEventListener('click', () => {
-                        deleteOrderFromQueue(order.id);
-                    });
-
-                    assignQueueList.appendChild(card);
-                });
-            }
-        }
-
-        // 2. Render on Outbound Logs Tab (top area card queue)
-        const outboundQueueList = document.getElementById('outboundQueueList');
-        const outboundQueueContainer = document.getElementById('outboundQueueContainer');
-        if (outboundQueueList) {
-            outboundQueueList.innerHTML = '';
-            if (queue.length === 0) {
-                if (outboundQueueContainer) outboundQueueContainer.style.display = 'none';
-            } else {
-                if (outboundQueueContainer) outboundQueueContainer.style.display = 'block';
-                displayQueue.forEach(order => {
-                    const card = document.createElement('div');
-                    card.style.cssText = 'border: 1px solid var(--border-color); border-radius: var(--radius-md); background: rgba(255,255,255,0.01); padding: 16px; display: flex; flex-direction: column; gap: 12px;';
-                    
-                    const totalPcs = order.items.reduce((sum, item) => sum + item.qty, 0);
-
-                    // Card Header (NO delete button)
-                    const header = document.createElement('div');
-                    header.style.cssText = 'display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;';
-                    header.innerHTML = `
-                        <div>
-                            <h4 style="margin: 0; font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">${order.shopName}</h4>
-                            <div style="display: flex; gap: 8px; align-items: center; margin-top: 2px;">
-                                <span style="font-size: 0.8rem; color: var(--accent-blue); font-weight: 700; font-family: var(--font-mono);">${order.invoiceNo}</span>
-                                <span style="font-size: 0.72rem; color: var(--text-muted);">| Total PCs: <span style="font-weight: 800; color: var(--accent-emerald);">${totalPcs}</span></span>
-                            </div>
-                        </div>
-                        <button type="button" class="btn-start-outbound-queue-session btn-primary" data-id="${order.id}" style="background-color: var(--accent-emerald); border-color: var(--accent-emerald); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; border-style: solid;">
-                            Start Session
-                        </button>
-                    `;
-                    card.appendChild(header);
-
-                    // Card Location Details Row
-                    const locationRow = document.createElement('div');
-                    locationRow.style.cssText = 'display: flex; gap: 8px; flex-wrap: wrap; margin-top: -4px; margin-bottom: 2px;';
-                    locationRow.innerHTML = `
-                        <span style="font-size: 0.7rem; font-weight: 700; color: var(--accent-blue); background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.15); padding: 2px 6px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 4px;">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 10px; height: 10px; stroke-width: 2.5;">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                            </svg>
-                            <span>${order.city || 'Unknown City'}</span>
-                        </span>
-                        <span style="font-size: 0.7rem; font-weight: 700; color: var(--accent-amber); background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.15); padding: 2px 6px; border-radius: var(--radius-sm);">
-                            <span>${order.state || 'Unknown State'}</span>
-                        </span>
-                        <span style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); padding: 2px 6px; border-radius: var(--radius-sm); font-family: var(--font-mono);">
-                            <span>PIN: ${order.pincode || 'Unknown PIN'}</span>
-                        </span>
-                    `;
-                    card.appendChild(locationRow);
-
-                    // Items display list (Read-Only)
-                    const itemsDesc = document.createElement('div');
-                    itemsDesc.style.cssText = 'display: flex; flex-direction: column; gap: 6px;';
-                    
-                    order.items.forEach(it => {
-                        const isMonitor = (it.name.toLowerCase().includes('18.5') || it.name.toLowerCase().includes('19.5')) && it.name.toLowerCase().includes('monitor');
-                        const isInvalid = isMonitor && (it.qty % 5 !== 0);
-                        const warningBadgeHtml = isInvalid
-                            ? `<span style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.2); color: var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; display: inline-flex; align-items: center; gap: 2px;">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 10px; height: 10px;">
-                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                                </svg>
-                                <span>Pack of 5 Error</span>
-                               </span>`
-                            : '';
-
-                        const dispName = it.name ? it.name : `<span style="color: var(--accent-rose); font-style: italic;">(Unmapped: ${it.rawName})</span>`;
-                        
-                        const itemRow = document.createElement('div');
-                        itemRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: var(--text-secondary);';
-                        itemRow.innerHTML = `
-                            <span>${dispName}</span>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                ${warningBadgeHtml}
-                                <span style="font-weight: 700; font-family: var(--font-mono);">${it.qty} pcs</span>
-                            </div>
-                        `;
-                        itemsDesc.appendChild(itemRow);
-                    });
-
-                    card.appendChild(itemsDesc);
-
-                    card.querySelector('.btn-start-outbound-queue-session').addEventListener('click', () => {
-                        startSessionFromQueue(order.id);
-                    });
-
-                    outboundQueueList.appendChild(card);
-                });
-            }
-        }
-
-        // Restore cursor focus dynamically to keep keyboard typing fluidly
-        if (activeInputId !== null && activeItemIdx !== null) {
-            const selector = isSelect 
-                ? `.queue-item-product-select[data-order-id="${activeInputId}"][data-item-idx="${activeItemIdx}"]`
-                : `.queue-item-qty-input[data-order-id="${activeInputId}"][data-item-idx="${activeItemIdx}"]`;
-            const elToFocus = document.querySelector(selector);
-            if (elToFocus) {
-                elToFocus.focus();
-                if (!isSelect) {
-                    const val = elToFocus.value;
-                    elToFocus.value = '';
-                    elToFocus.value = val;
-                }
-            }
-        }
-    }
-
-    function updateQueueItemValue(orderId, itemIdx, field, newValue) {
-        const queue = getOrderQueue();
-        const order = queue.find(q => q.id === orderId);
-        if (order && order.items[itemIdx]) {
-            order.items[itemIdx][field] = newValue;
-            saveOrderQueue(queue);
-            renderOrderQueueUI();
-        }
-    }
-
-    function startSessionFromQueue(orderId) {
-        const queue = getOrderQueue();
-        const order = queue.find(q => q.id === orderId);
-        if (!order) return;
-
-        // Validation check: Make sure all items have a matched product mapped!
-        const hasUnmapped = order.items.some(it => !it.name);
-        if (hasUnmapped) {
-            alert("Error: Please select a database product mapping for all items before starting the session!");
-            return;
-        }
-
-        // Validation check: Check if any item has insufficient stock!
-        const stockMap = getProductStockMap();
-        const shortStockItems = [];
-        order.items.forEach(it => {
-            if (it.name) {
-                const avail = stockMap[it.name] ? (stockMap[it.name].serialsCount || 0) : 0;
-                if (it.qty > avail) {
-                    shortStockItems.push({
-                        name: it.name,
-                        ordered: it.qty,
-                        available: avail
-                    });
-                }
-            }
-        });
-
-        if (shortStockItems.length > 0) {
-            const warningMsg = shortStockItems.map(item => 
-                `- ${item.name}: Ordered ${item.ordered} pcs, but only ${item.available} pcs are available in stock.`
-            ).join('\n');
-            
-            const proceed = confirm(`⚠️ INSUFFICIENT STOCK WARNING!\n\nThe following items have insufficient stock:\n\n${warningMsg}\n\nDo you want to proceed with the session anyway?`);
-            if (!proceed) return;
-        }
-
-        // Start active outbound session prefilled
-        activeOutboundSession = {
-            shopName: order.shopName,
-            invoiceNo: order.invoiceNo,
-            items: order.items.map(item => ({
-                name: item.name,
-                skuAlphabetPattern: null,
-                lockedLength: null,
-                allowedPatterns: [],
-                targetQty: item.qty
-            })),
-            serials: [],
-            originalQueuedOrder: order // Saved for cancel rollback support
-        };
-
-        localStorage.setItem('wms_outbound_joined', 'true');
-        saveActiveOutboundSession();
-        restoreOutboundSessionState();
-
-        // Remove from queue
-        const newQueue = queue.filter(q => q.id !== orderId);
-        saveOrderQueue(newQueue);
-        renderOrderQueueUI();
-
-        navigateToTab('navOutbound');
-        alert(`Outbound Session started for "${order.shopName}" (${order.invoiceNo}).`);
-    }
-
-    function deleteOrderFromQueue(orderId) {
-        if (!confirm("Are you sure you want to delete this order from the queue?")) return;
-        const queue = getOrderQueue();
-        const newQueue = queue.filter(q => q.id !== orderId);
-        saveOrderQueue(newQueue);
-        renderOrderQueueUI();
+    }    function renderOrderQueueUI() {
+        // No-op since Order Assign has been removed
     }
 
     // --- Without Serial Number Inward Workspace Controllers ---
@@ -8274,9 +7849,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (key === 'm') {
             e.preventDefault();
             navigateToTab('navMisReport');
-        } else if (key === 'a') {
-            e.preventDefault();
-            navigateToTab('navOrderAssign');
         } else if (key === 'd') {
             e.preventDefault();
             navigateToTab('navDamage');

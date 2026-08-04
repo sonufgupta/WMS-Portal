@@ -64,12 +64,7 @@
                     </svg>
                     <span>Outbound Logs</span>
                 </a>
-                <a href="#" class="nav-link" id="navOrderAssign">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <span>Order Assign</span>
-                </a>
+
                 <a href="#" class="nav-link" id="navInventory">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
@@ -706,71 +701,7 @@
                     </div>
                 </section>
 
-                <!-- 2.5. ORDER ASSIGN SECTION -->
-                <section class="content-section" id="sectionOrderAssign" style="display: none; padding: 24px; height: 100%; width: 100%; box-sizing: border-box; overflow-y: auto;">
-                    <div style="display: flex; flex-direction: column; gap: 24px; width: 100%;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 16px; width: 100%;">
-                            <div style="display: flex; align-items: center; gap: 16px;">
-                                <div class="card-icon blue" style="background: rgba(59, 130, 246, 0.1); color: var(--accent-blue); padding: 8px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 24px; height: 24px; stroke-width: 2;">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
-                                </div>
-                                <div class="header-title">
-                                    <h1 style="font-size: 1.25rem; font-weight: 800; color: var(--text-primary); margin: 0;">Order Assign</h1>
-                                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Paste Sales Order text to automatically extract details and start outbound dispatch</p>
-                                </div>
-                            </div>
-                        </div>
 
-                        <div class="inbound-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; width: 100%;">
-                            <!-- Left Side: Paste Form Card -->
-                            <div class="dashboard-card" style="padding: 24px; display: flex; flex-direction: column; gap: 20px; justify-content: flex-start; height: auto;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; width: 100%;">
-                                    <h3 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 0;">Paste Sales Order Data</h3>
-                                    <button type="button" id="btnOrderAssignPasteClip" class="btn-primary" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--accent-blue); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                        </svg>
-                                        <span>Paste Clipboard</span>
-                                    </button>
-                                </div>
-
-                                <!-- Drag & Drop PDF Uploader -->
-                                <div id="pdfDragDropArea" style="border: 2px dashed var(--border-color); border-radius: var(--radius-md); padding: 18px; text-align: center; background: rgba(59, 130, 246, 0.01); cursor: pointer; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 32px; height: 32px; color: var(--accent-blue); stroke-width: 2;">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                    </svg>
-                                    <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">Drag & Drop Sales Order PDF</span>
-                                    <span style="font-size: 0.72rem; color: var(--text-muted);">or click to browse from device</span>
-                                    <input type="file" id="orderAssignPdfInput" accept="application/pdf" style="display: none;">
-                                    <div id="pdfUploadStatus" style="font-size: 0.72rem; font-weight: 700; color: var(--accent-emerald); display: none;"></div>
-                                </div>
-
-                                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
-                                    <textarea id="orderAssignRawText" placeholder="Paste Zoho / Tally Sales Order text details here... e.g.&#10;Sales Order# : SO-MH /26-27/299&#10;Ship To&#10;NEW WAY COMMUNICATION&#10;85285200  12 pcs" style="width: 100%; height: 260px; background-color: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; color: var(--text-primary); font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.5; resize: none; outline: none; box-sizing: border-box;"></textarea>
-                                </div>
-
-                                <button type="button" id="btnOrderAssignProcess" class="btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 0.95rem; font-weight: 700; background-color: var(--accent-emerald); border-color: var(--accent-emerald); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); display: flex; align-items: center; gap: 8px; border-style: solid;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <span>Process & Add to Queue</span>
-                                </button>
-                            </div>
-
-                            <!-- Right Side: Active Order Queue -->
-                            <div class="dashboard-card" style="padding: 24px; display: flex; flex-direction: column; gap: 20px; justify-content: flex-start; height: auto; max-height: 700px; overflow: hidden;">
-                                <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; width: 100%;">
-                                    <h3 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 0; display: flex; align-items: center; justify-content: space-between;"><span>Active Dispatch Order Queue</span> <span id="orderAssignQueueBadge" style="background: var(--accent-blue); color: white; padding: 2px 8px; border-radius: var(--radius-sm); font-size: 0.72rem; font-weight: 800;">0</span></h3>
-                                </div>
-                                <div id="orderAssignQueueList" style="flex: 1; overflow-y: auto; width: 100%; display: flex; flex-direction: column; gap: 16px; padding-right: 4px;">
-                                    <div style="text-align: center; color: var(--text-muted); font-style: italic; padding: 24px;">No active orders in queue.</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
 
                 <!-- 3. WITHOUT SERIAL NUMBER INWARD SECTION -->
                 <section class="content-section" id="sectionWithoutSerialInbound" style="display: none; padding: 24px; box-sizing: border-box; height: 100%; overflow-y: auto; width: 100%;">
