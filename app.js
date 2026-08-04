@@ -7373,6 +7373,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let firstSerialsViewMode = 'list'; // 'list' or 'barcode'
     let currentOutboundHistoryRow = null;
     let archivedSequenceKeys = new Set();
+    let archivedSequenceStack = [];
 
     // Inject custom animation styles for barcode pulsing border
     if (!document.getElementById('barcode-animation-style')) {
@@ -7659,13 +7660,23 @@ document.addEventListener('DOMContentLoaded', () => {
                             </p>
                         </div>
 
-                        <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="width: 100%; padding: 14px; background: #0f172a; border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span>Start ${seq.count} PC Sequence</span>
-                        </button>
+                        <div style="display: flex; gap: 8px; width: 100%;">
+                            ${currentIndex > 1 ? `
+                                <button type="button" class="btn-prev-seq-barcode" style="flex: 1; padding: 14px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: var(--radius-sm); color: #475569; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5; color: #475569;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                    <span>Back</span>
+                                </button>
+                            ` : ''}
+                            <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="flex: 2; padding: 14px; background: #0f172a; border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>Start ${seq.count} PC Sequence</span>
+                            </button>
+                        </div>
                     `;
                     body.appendChild(card);
 
@@ -7727,12 +7738,22 @@ document.addEventListener('DOMContentLoaded', () => {
                             <canvas id="activeQrCanvas" style="width: 160px; height: 160px;"></canvas>
                         </div>
 
-                        <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="width: 100%; padding: 14px; background: ${theme.color}; border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                            <span>Archive QR Code</span>
-                        </button>
+                        <div style="display: flex; gap: 8px; width: 100%;">
+                            ${currentIndex > 1 ? `
+                                <button type="button" class="btn-prev-seq-barcode" style="flex: 1; padding: 14px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                    <span>Back</span>
+                                </button>
+                            ` : ''}
+                            <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="flex: 2; padding: 14px; background: ${theme.color}; border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span>Archive QR Code</span>
+                            </button>
+                        </div>
                     `;
                     body.appendChild(card);
 
@@ -7759,9 +7780,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0; line-height: 1.4; max-width: 320px;">
                             You have successfully archived all sequence barcode cards for this dispatch session.
                         </p>
-                        <button type="button" id="btnResetBarcodeArchives" style="background: rgba(59, 130, 246, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 10px 20px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth); margin-top: 8px;">
-                            Reset & View All
-                        </button>
+                        <div style="display: flex; gap: 8px; margin-top: 8px; width: 100%; justify-content: center;">
+                            <button type="button" class="btn-prev-seq-barcode" style="padding: 10px 20px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; gap: 6px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                                </svg>
+                                <span>Back</span>
+                            </button>
+                            <button type="button" id="btnResetBarcodeArchives" style="background: rgba(59, 130, 246, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 10px 20px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth);">
+                                Reset & View All
+                            </button>
+                        </div>
                     </div>
                 `;
             }
@@ -7772,6 +7801,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentOutboundHistoryRow = row;
         firstSerialsViewMode = 'list'; // Reset view mode to default List view when opened
         archivedSequenceKeys.clear(); // Clear any cached archives
+        archivedSequenceStack = [];
         
         renderFirstSerialsModalContent();
         
@@ -7808,6 +7838,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (archiveBtn) {
                 const key = archiveBtn.getAttribute('data-key');
                 archivedSequenceKeys.add(key);
+                archivedSequenceStack.push(key);
+                renderFirstSerialsModalContent();
+                return;
+            }
+
+            const prevBtn = e.target.closest('.btn-prev-seq-barcode');
+            if (prevBtn) {
+                const lastKey = archivedSequenceStack.pop();
+                if (lastKey) {
+                    archivedSequenceKeys.delete(lastKey);
+                }
                 renderFirstSerialsModalContent();
                 return;
             }
@@ -7815,6 +7856,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const resetBtn = e.target.closest('#btnResetBarcodeArchives');
             if (resetBtn) {
                 archivedSequenceKeys.clear();
+                archivedSequenceStack = [];
                 renderFirstSerialsModalContent();
                 return;
             }
