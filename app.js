@@ -4629,15 +4629,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const tr = document.createElement('tr');
                 
-                let patternStr = 'None';
-                if (item.allowedPatterns && item.allowedPatterns.length > 0) {
-                    patternStr = item.allowedPatterns.map(cfg => {
-                        const letters = Object.keys(cfg.pattern).sort((a,b)=>a-b).map(k=>cfg.pattern[k]).join('');
-                        return `${letters}${cfg.length}`;
-                    }).join(' / ');
-                } else if (item.skuAlphabetPattern) {
-                    const letters = Object.keys(item.skuAlphabetPattern).sort((a,b)=>a-b).map(k=>item.skuAlphabetPattern[k]).join('');
-                    patternStr = `${letters}${item.lockedLength || 15}`;
+                // Initialize allowedPatterns if missing (legacy recovery)
+                if (!item.allowedPatterns) {
+                    item.allowedPatterns = item.skuAlphabetPattern ? [{
+                        pattern: item.skuAlphabetPattern,
+                        length: item.lockedLength || 15
+                    }] : [];
+                }
+
+                const patternStyle = 'background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: var(--accent-blue); padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.8rem; font-family: var(--font-mono); display: block; margin-bottom: 4px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+
+                let patternCellHtml = '';
+                if (item.allowedPatterns.length > 0) {
+                    const badgesHtml = item.allowedPatterns.map(cfg => {
+                        const patStr = formatAlphabetPattern(cfg.pattern, cfg.length);
+                        return `<span style="${patternStyle}" title="${patStr}">${patStr}</span>`;
+                    }).join('');
+                    
+                    patternCellHtml = `
+                        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: 250px; overflow: hidden;">
+                            ${badgesHtml}
+                            <button type="button" class="btn-outbound-add-alternative-sku" title="Add alternative accepted SKU pattern structure" style="background: rgba(59, 130, 246, 0.15); border: 1px solid var(--accent-blue); color: var(--accent-blue); cursor: pointer; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; transition: var(--transition-smooth); white-space: nowrap; margin-top: 2px;">
+                                + SKU
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    patternCellHtml = `
+                        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">
+                            <span style="color: var(--text-muted); font-style: italic; font-size: 0.85rem;">Not Locked Yet</span>
+                            <button type="button" class="btn-outbound-add-alternative-sku" title="Add alternative accepted SKU pattern structure" style="background: rgba(59, 130, 246, 0.15); border: 1px solid var(--accent-blue); color: var(--accent-blue); cursor: pointer; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; transition: var(--transition-smooth); white-space: nowrap; margin-top: 2px;">
+                                + SKU
+                            </button>
+                        </div>
+                    `;
                 }
 
                 const targetQtyStr = item.targetQty ? ` / ${item.targetQty}` : '';
@@ -4645,13 +4670,58 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td style="font-weight: 700; color: var(--text-primary);">${item.name}</td>
                     <td class="font-mono" style="font-weight: 700;">${scannedCount}${targetQtyStr}</td>
                     <td class="font-mono">${subtotalWeight.toFixed(3)} kg</td>
-                    <td>
-                        <span class="sku-badge font-mono" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--accent-blue); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight:700; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block;" title="${patternStr}">
-                            ${patternStr}
-                        </span>
+                    <td style="padding: 12px 8px;">
+                        ${patternCellHtml}
                     </td>
                 `;
                 container.appendChild(tr);
+
+                // Bind add alternative SKU pattern button click
+                const addSkuBtn = tr.querySelector('.btn-outbound-add-alternative-sku');
+                if (addSkuBtn) {
+                    addSkuBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        
+                        const pwd = prompt(`Enter password to authorize adding a new SKU pattern structure (e.g. 2026):`);
+                        if (pwd === '2026') {
+                            const refSerial = prompt(`Scan or enter a reference serial number representing the new SKU format for "${item.name}":`);
+                            if (refSerial) {
+                                const cleanRef = refSerial.trim();
+                                if (cleanRef) {
+                                    const newPattern = extractAlphabetPattern(cleanRef);
+                                    const newConfig = { pattern: newPattern, length: cleanRef.length };
+                                    
+                                    if (!item.allowedPatterns) {
+                                        item.allowedPatterns = item.skuAlphabetPattern ? [{
+                                            pattern: item.skuAlphabetPattern,
+                                            length: item.lockedLength || 15
+                                        }] : [];
+                                    }
+                                    
+                                    // Avoid duplicates
+                                    const exists = item.allowedPatterns.some(cfg => {
+                                        return cfg.length === cleanRef.length && matchesAlphabetPattern(cleanRef, cfg.pattern);
+                                    });
+                                    
+                                    if (!exists) {
+                                        item.allowedPatterns.push(newConfig);
+                                        // update legacy fields for safety
+                                        item.skuAlphabetPattern = newPattern;
+                                        item.lockedLength = cleanRef.length;
+                                        
+                                        saveActiveOutboundSession();
+                                        updateOutboundSessionProgress();
+                                        alert(`Success! Registered new SKU format of ${cleanRef.length} characters.`);
+                                    } else {
+                                        alert('This exact SKU format/length is already registered.');
+                                    }
+                                }
+                            }
+                        } else if (pwd !== null) {
+                            alert('Incorrect password! Access denied.');
+                        }
+                    });
+                }
             });
         }
 
