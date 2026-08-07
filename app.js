@@ -370,6 +370,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderInventoryPanel();
             } else if (targetSectionId === 'sectionMisReport') {
                 populateMisProductsDropdown();
+            } else if (targetSectionId === 'sectionInbound') {
+                renderHistoryTable();
+            } else if (targetSectionId === 'sectionOutbound') {
+                renderOutboundHistoryTable();
             }
             
             console.log(`Navigated to section: ${targetSectionId}`);
@@ -1933,7 +1937,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (banner) banner.style.display = 'none';
             if (welcome) welcome.style.display = 'flex';
         }
-        renderHistoryTable();
+        const isInboundJoined = localStorage.getItem('wms_inbound_joined') === 'true';
+        if (!isInboundJoined) {
+            renderHistoryTable();
+        }
     }
 
     // --- Modal Configuration Handlers ---
@@ -3682,7 +3689,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (banner) banner.style.display = 'none';
             if (welcome) welcome.style.display = 'flex';
         }
-        renderOutboundHistoryTable();
+        const isOutboundJoined = localStorage.getItem('wms_outbound_joined') === 'true';
+        if (!isOutboundJoined) {
+            renderOutboundHistoryTable();
+        }
     }
 
     // Modal Control triggers or block if active session exists on another device
