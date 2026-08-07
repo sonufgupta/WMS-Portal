@@ -3615,8 +3615,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 fetchLiveDistanceKm(activeOutboundSession.pincode, (liveKm) => {
                     if (activeOutboundSession && liveKm) {
                         activeOutboundSession.distanceKm = liveKm;
+                        saveActiveOutboundSession();
                         const pEl = document.getElementById('activeOutboundPincode');
                         if (pEl) pEl.textContent = `${activeOutboundSession.pincode} (${liveKm.toLocaleString('en-IN')} KM)`;
+
+                        const badgeEl = document.getElementById('odaIndicatorBadge');
+                        if (badgeEl && badgeEl.textContent && badgeEl.textContent.includes('🚗')) {
+                            badgeEl.textContent = badgeEl.textContent.replace(/🚗 [\d,]+ KM/, `🚗 ${liveKm.toLocaleString('en-IN')} KM`);
+                        }
                     }
                 });
             }
@@ -8565,37 +8571,62 @@ document.addEventListener('DOMContentLoaded', () => {
         return Math.round(aerialKm * NIC_EWAY_BILL_HIGHWAY_FACTOR);
     }
 
-    // Dynamic Asynchronous Pincode Geocoding Fetcher (Zippopotam / India Post API)
+    const roadDistanceCache = new Map();
+
+    // Dynamic OSRM Turn-by-Turn Road Distance Fetcher (Matches Govt ewaybillgst.gov.in)
     async function fetchLiveDistanceKm(destPincode, onResult) {
         if (!destPincode) return null;
         const pinStr = String(destPincode).trim().replace(/\D/g, '');
         if (pinStr.length !== 6) return null;
 
+        if (roadDistanceCache.has(pinStr)) {
+            const cachedKm = roadDistanceCache.get(pinStr);
+            if (onResult) onResult(cachedKm);
+            return cachedKm;
+        }
+
         const instantKm = calculateDistanceKm(pinStr);
         if (onResult && instantKm) onResult(instantKm);
 
-        if (!dynamicPinCoordsCache.has(pinStr)) {
+        try {
+            const prefix3 = pinStr.substring(0, 3);
+            const prefix2 = pinStr.substring(0, 2);
+            let coords = PINCODE_PREFIX_COORDS[prefix3] || PINCODE_PREFIX_COORDS[prefix2];
+
             try {
-                const res = await fetch(`https://api.zippopotam.us/in/${pinStr}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data && data.places && data.places.length > 0) {
-                        const lat = parseFloat(data.places[0].latitude);
-                        const lon = parseFloat(data.places[0].longitude);
+                const zipRes = await fetch(`https://api.zippopotam.us/in/${pinStr}`);
+                if (zipRes.ok) {
+                    const zipData = await zipRes.json();
+                    if (zipData && zipData.places && zipData.places.length > 0) {
+                        const lat = parseFloat(zipData.places[0].latitude);
+                        const lon = parseFloat(zipData.places[0].longitude);
                         if (!isNaN(lat) && !isNaN(lon)) {
-                            dynamicPinCoordsCache.set(pinStr, [lat, lon]);
-                            const exactKm = calculateDistanceKm(pinStr);
-                            if (onResult && exactKm && exactKm !== instantKm) {
-                                onResult(exactKm);
-                            }
-                            return exactKm;
+                            coords = [lat, lon];
                         }
                     }
                 }
-            } catch (e) {
-                // Silently fallback to built-in prefix coordinates
+            } catch(e) {}
+
+            if (coords) {
+                const [destLat, destLon] = coords;
+                const osrmUrl = `https://router.project-osrm.org/route/v1/driving/73.0631,19.2968;${destLon},${destLat}?overview=false`;
+                const osrmRes = await fetch(osrmUrl);
+                if (osrmRes.ok) {
+                    const osrmData = await osrmRes.json();
+                    if (osrmData && osrmData.routes && osrmData.routes.length > 0) {
+                        const meters = osrmData.routes[0].distance;
+                        const roadKm = Math.round(meters / 1000);
+                        roadDistanceCache.set(pinStr, roadKm);
+                        console.log(`OSRM Govt E-Way Bill Road Distance for ${pinStr}: ${roadKm} KM`);
+                        if (onResult) onResult(roadKm);
+                        return roadKm;
+                    }
+                }
             }
+        } catch (err) {
+            console.log("OSRM Road API fetch error:", err);
         }
+
         return instantKm;
     }
 
