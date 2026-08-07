@@ -3572,27 +3572,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (saved) {
             activeOutboundSession = JSON.parse(saved);
 
-            // Self-healing check: if this active session is already saved in Completed Outbound History, clear it!
-            if (activeOutboundSession) {
-                const history = getOutboundHistory();
-                const alreadySaved = history.some(log => log.invoiceNo === activeOutboundSession.invoiceNo && log.shopName === activeOutboundSession.shopName);
-                if (alreadySaved) {
-                    console.log("Self-healing: Active session already exists in completed history. Clearing it.");
-                    localStorage.removeItem('wms_active_outbound_session');
-                    localStorage.removeItem('wms_outbound_joined');
-                    activeOutboundSession = null;
-                    saveActiveOutboundSession(); // Wipes it from Firebase node
-                    
-                    if (outboundActiveState) outboundActiveState.style.display = 'none';
-                    if (outboundInactiveState) outboundInactiveState.style.display = 'block';
-                    const banner = document.getElementById('outboundAlreadyWorkingBanner');
-                    const welcome = document.getElementById('outboundWelcomeContainer');
-                    if (banner) banner.style.display = 'none';
-                    if (welcome) welcome.style.display = 'flex';
-                    renderOutboundHistoryTable();
-                    return;
-                }
-            }
+            if (!activeOutboundSession) return;
 
             if (activeOutboundSession && !activeOutboundSession.items) {
                 activeOutboundSession.items = [];
