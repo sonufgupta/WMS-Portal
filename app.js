@@ -3604,50 +3604,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeOutboundSession.serials = activeOutboundSession.serials.filter(s => s && s.serial && s.serial.length <= 50);
             }
 
-            const distKm = activeOutboundSession.distanceKm || calculateDistanceKm(activeOutboundSession.pincode);
-            const distText = distKm ? ` (${distKm.toLocaleString('en-IN')} KM)` : '';
-
             document.getElementById('activeOutboundShop').textContent = activeOutboundSession.shopName;
             document.getElementById('activeOutboundInvoice').textContent = activeOutboundSession.invoiceNo;
-            document.getElementById('activeOutboundPincode').textContent = (activeOutboundSession.pincode || 'N/A') + distText;
-
-            if (activeOutboundSession.pincode) {
-                fetchLiveDistanceKm(activeOutboundSession.pincode, (liveKm) => {
-                    if (activeOutboundSession && liveKm) {
-                        activeOutboundSession.distanceKm = liveKm;
-                        saveActiveOutboundSession();
-                        const pEl = document.getElementById('activeOutboundPincode');
-                        if (pEl) pEl.textContent = `${activeOutboundSession.pincode} (${liveKm.toLocaleString('en-IN')} KM)`;
-
-                        const badgeEl = document.getElementById('odaIndicatorBadge');
-                        if (badgeEl && badgeEl.textContent && badgeEl.textContent.includes('🚗')) {
-                            badgeEl.textContent = badgeEl.textContent.replace(/🚗 [\d,]+ KM/, `🚗 ${liveKm.toLocaleString('en-IN')} KM`);
-                        }
-                    }
-                });
-            }
             
             const odaBadge = document.getElementById('odaIndicatorBadge');
             if (odaBadge) {
-                if (activeOutboundSession.pincode) {
-                    const pincode = activeOutboundSession.pincode;
-                    const records = getOdaRecords();
-                    const matched = records.filter(r => String(r.pincode) === String(pincode));
-                    
-                    let statusText = '';
-                    let isOda = false;
-                    
-                    if (matched.length > 0) {
-                        isOda = matched.some(r => isOdaRemark(r.remark));
-                        const courierDetails = matched.map(r => `${r.courier}: ${r.remark}`).join(', ');
-                        statusText = isOda ? `⚠️ ODA (${courierDetails})` : `✅ NORMAL (${courierDetails})`;
-                    } else {
-                        statusText = `✅ NORMAL (No Data)`;
-                    }
-
-                    if (distKm) {
-                        statusText += ` • 🚗 ${distKm.toLocaleString('en-IN')} KM`;
-                    }
+                const pincode = activeOutboundSession.pincode;
+                const records = getOdaRecords();
+                const matched = pincode ? records.filter(r => String(r.pincode) === String(pincode)) : [];
+                
+                if (matched.length > 0) {
+                    const isOda = matched.some(r => isOdaRemark(r.remark));
+                    const courierDetails = matched.map(r => `${r.courier}: ${r.remark}`).join(', ');
+                    const statusText = isOda ? `⚠️ ODA (${courierDetails})` : `✅ NORMAL (${courierDetails})`;
                     
                     odaBadge.style.display = 'flex';
                     odaBadge.textContent = statusText;
@@ -3739,7 +3708,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             document.getElementById('configShopName').value = activeOutboundSession.shopName || '';
             document.getElementById('configInvoiceNo').value = activeOutboundSession.invoiceNo || '';
-            document.getElementById('configPincode').value = activeOutboundSession.pincode || '';
             
             outboundConfigModal.classList.add('active');
         });
@@ -3773,45 +3741,19 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const shopVal = document.getElementById('configShopName').value.trim();
             const invoiceVal = document.getElementById('configInvoiceNo').value.trim();
-            const pinVal = document.getElementById('configPincode').value.trim().replace(/\D/g, ''); // Numeric only
 
             if (!shopVal || !invoiceVal) {
                 alert('Please enter both Shop Name and Invoice Number.');
                 return;
             }
 
-            if (pinVal && pinVal.length !== 6) {
-                alert('Pincode must be exactly a 6-digit number.');
-                return;
-            }
-
-            // ODA status check helper
-            const checkOdaStatusForPincode = (pincode) => {
-                if (!pincode) return 'Normal';
-                const records = getOdaRecords();
-                const matched = records.filter(r => String(r.pincode) === String(pincode));
-                if (matched.length === 0) return 'Normal';
-                
-                const hasOda = matched.some(r => isOdaRemark(r.remark));
-                return hasOda ? 'ODA' : 'Normal';
-            };
-
-            const odaStatus = checkOdaStatusForPincode(pinVal);
-            const distKm = calculateDistanceKm(pinVal);
-
             if (isEditingOutboundSession && activeOutboundSession) {
                 activeOutboundSession.shopName = shopVal;
                 activeOutboundSession.invoiceNo = invoiceVal;
-                activeOutboundSession.pincode = pinVal || '';
-                activeOutboundSession.odaStatus = odaStatus;
-                activeOutboundSession.distanceKm = distKm;
             } else {
                 activeOutboundSession = {
                     shopName: shopVal,
                     invoiceNo: invoiceVal,
-                    pincode: pinVal || '',
-                    odaStatus: odaStatus,
-                    distanceKm: distKm,
                     items: [],
                     serials: []
                 };
@@ -3899,12 +3841,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             
-            // 3. Extract Shipping Pincode (last 6-digit number in the document)
-            const pincodes = val.match(/\b\d{6}\b/g) || [];
-            if (pincodes.length > 0) {
-                pincode = pincodes[pincodes.length - 1];
-            }
-            
             // Populate form fields if extracted successfully
             let filled = false;
             if (shopName) {
@@ -3913,10 +3849,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (invoiceNo) {
                 document.getElementById('configInvoiceNo').value = invoiceNo;
-                filled = true;
-            }
-            if (pincode) {
-                document.getElementById('configPincode').value = pincode;
                 filled = true;
             }
             
@@ -4651,17 +4583,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="font-mono">${row.invoiceNo}</td>
                 <td>
                     ${(() => {
-                        if (!row.pincode) return '<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>';
                         const isOda = row.odaStatus === 'ODA';
                         const badge = isOda 
                             ? `<span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">⚠️ ODA</span>`
                             : `<span style="background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">Normal</span>`;
-                        const dist = row.distanceKm || calculateDistanceKm(row.pincode);
-                        const distText = dist ? ` • ${dist.toLocaleString('en-IN')} km` : '';
-                        return `<div style="display: flex; flex-direction: column; gap: 2px;">
-                                    ${badge}
-                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">${row.pincode}${distText}</span>
-                                </div>`;
+                        return badge;
                     })()}
                 </td>
                 <td>${itemNames}</td>
@@ -4808,10 +4734,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Header text inside cell A1 of every sheet
             let headerText = `${log.shopName} - ${lastIdPart} - ${dateStr} ${timeStr}`;
-            if (log.pincode) {
-                const dist = log.distanceKm || calculateDistanceKm(log.pincode);
-                const distStr = dist ? ` - ${dist} KM` : '';
-                headerText += ` - PIN: ${log.pincode} (${log.odaStatus || 'Normal'}${distStr})`;
+            if (log.odaStatus && log.odaStatus !== 'Normal') {
+                headerText += ` - (${log.odaStatus})`;
             }
 
             const seenSheetNames = new Set();
@@ -8531,14 +8455,14 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // -------------------------------------------------------------
-    // UNIVERSAL DYNAMIC NIC GST E-WAY BILL DISTANCE ENGINE (BHIWANDI 421302)
-    // Official NIC E-Way Bill Formula: Haversine Aerial Distance * 1.256x Highway Factor
+    // PINTOPINDISTANCE.TOOLS API DISTANCE ENGINE (BHIWANDI 421302)
+    // Direct integration with pintopindistance.tools API & 1.35x GST Formula
     // -------------------------------------------------------------
     const BHIWANDI_LAT = 19.2968;
     const BHIWANDI_LNG = 73.0631;
-    const NIC_EWAY_BILL_HIGHWAY_FACTOR = 1.256;
+    const GST_PIN_DISTANCE_FACTOR = 1.35; // pintopindistance.tools official factor
 
-    const dynamicPinCoordsCache = new Map();
+    const pinToPinApiCache = new Map();
 
     function calculateDistanceKm(destPincode) {
         if (!destPincode) return null;
@@ -8549,7 +8473,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (prefix3 === '421') return 15; // Local Bhiwandi/Kalyan
         if (prefix3 === '400' || prefix3 === '401') return 35; // Thane/Mumbai
 
-        let coords = dynamicPinCoordsCache.get(pinStr);
+        let coords = pinToPinApiCache.get(pinStr);
 
         if (!coords) {
             const prefix2 = pinStr.substring(0, 2);
@@ -8566,65 +8490,54 @@ document.addEventListener('DOMContentLoaded', () => {
                   Math.cos(BHIWANDI_LAT * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
                   Math.sin(dLon/2) * Math.sin(dLon/2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        const aerialKm = R * c;
+        const airDistance = R * c;
         
-        return Math.round(aerialKm * NIC_EWAY_BILL_HIGHWAY_FACTOR);
+        // Exact pintopindistance.tools GST distance formula
+        return Math.round(airDistance * GST_PIN_DISTANCE_FACTOR);
     }
 
-    const roadDistanceCache = new Map();
-
-    // Dynamic OSRM Turn-by-Turn Road Distance Fetcher (Matches Govt ewaybillgst.gov.in)
+    // Dynamic pintopindistance.tools API Fetcher
     async function fetchLiveDistanceKm(destPincode, onResult) {
         if (!destPincode) return null;
         const pinStr = String(destPincode).trim().replace(/\D/g, '');
         if (pinStr.length !== 6) return null;
 
-        if (roadDistanceCache.has(pinStr)) {
-            const cachedKm = roadDistanceCache.get(pinStr);
-            if (onResult) onResult(cachedKm);
-            return cachedKm;
-        }
-
         const instantKm = calculateDistanceKm(pinStr);
         if (onResult && instantKm) onResult(instantKm);
 
         try {
-            const prefix3 = pinStr.substring(0, 3);
-            const prefix2 = pinStr.substring(0, 2);
-            let coords = PINCODE_PREFIX_COORDS[prefix3] || PINCODE_PREFIX_COORDS[prefix2];
+            // Call official pintopindistance.tools API endpoint
+            const res = await fetch("https://pintopindistance.tools/api/get-pin.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ from: "421302", to: pinStr })
+            });
 
-            try {
-                const zipRes = await fetch(`https://api.zippopotam.us/in/${pinStr}`);
-                if (zipRes.ok) {
-                    const zipData = await zipRes.json();
-                    if (zipData && zipData.places && zipData.places.length > 0) {
-                        const lat = parseFloat(zipData.places[0].latitude);
-                        const lon = parseFloat(zipData.places[0].longitude);
-                        if (!isNaN(lat) && !isNaN(lon)) {
-                            coords = [lat, lon];
-                        }
-                    }
-                }
-            } catch(e) {}
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.from && data.to) {
+                    const [lat1, lon1] = data.from;
+                    const [lat2, lon2] = data.to;
+                    pinToPinApiCache.set(pinStr, [lat2, lon2]);
 
-            if (coords) {
-                const [destLat, destLon] = coords;
-                const osrmUrl = `https://router.project-osrm.org/route/v1/driving/73.0631,19.2968;${destLon},${destLat}?overview=false`;
-                const osrmRes = await fetch(osrmUrl);
-                if (osrmRes.ok) {
-                    const osrmData = await osrmRes.json();
-                    if (osrmData && osrmData.routes && osrmData.routes.length > 0) {
-                        const meters = osrmData.routes[0].distance;
-                        const roadKm = Math.round(meters / 1000);
-                        roadDistanceCache.set(pinStr, roadKm);
-                        console.log(`OSRM Govt E-Way Bill Road Distance for ${pinStr}: ${roadKm} KM`);
-                        if (onResult) onResult(roadKm);
-                        return roadKm;
+                    const R = 6371;
+                    const dLat = (lat2 - lat1) * Math.PI / 180;
+                    const dLon = (lon2 - lon1) * Math.PI / 180;
+                    const a = Math.sin(dLat / 2) ** 2 +
+                              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                              Math.sin(dLon / 2) ** 2;
+                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                    const airDistance = R * c;
+                    const gstDistance = Math.round(airDistance * 1.35);
+
+                    if (onResult && gstDistance) {
+                        onResult(gstDistance);
                     }
+                    return gstDistance;
                 }
             }
         } catch (err) {
-            console.log("OSRM Road API fetch error:", err);
+            console.log("pintopindistance.tools API fallback:", err);
         }
 
         return instantKm;
