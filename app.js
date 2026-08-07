@@ -240,6 +240,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        // 7.7. Sync ODA Pincode Records
+        db.ref('wms_data/oda_records').on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val === null) {
+                localStorage.setItem('wms_oda_records', '[]');
+                renderOdaUI();
+            } else {
+                if (syncCloudDataToLocal('wms_oda_records', val)) {
+                    renderOdaUI();
+                    console.log("ODA Pincode Records synchronized.");
+                }
+            }
+        });
+
         // 8. Sync Deleted Serials (Trash Bin)
         db.ref('wms_data/deleted_serials').on('value', (snapshot) => {
             const val = snapshot.val();
@@ -308,6 +322,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     const pwd = prompt("Enter passcode to access Damage Register:");
                     if (pwd === '2026' || pwd === '1998') {
                         localStorage.setItem('wms_damage_unlocked', 'true');
+                    } else {
+                        if (pwd !== null) alert("Incorrect passcode! Access denied.");
+                        return;
+                    }
+                }
+            }
+            if (targetSectionId === 'sectionOda') {
+                const isUnlocked = localStorage.getItem('wms_oda_unlocked') === 'true';
+                if (!isUnlocked) {
+                    const pwd = prompt("Enter passcode to access ODA Register:");
+                    if (pwd === '2026' || pwd === '1998') {
+                        localStorage.setItem('wms_oda_unlocked', 'true');
                     } else {
                         if (pwd !== null) alert("Incorrect passcode! Access denied.");
                         return;
@@ -3589,6 +3615,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
             document.getElementById('activeOutboundShop').textContent = activeOutboundSession.shopName;
             document.getElementById('activeOutboundInvoice').textContent = activeOutboundSession.invoiceNo;
+            document.getElementById('activeOutboundPincode').textContent = activeOutboundSession.pincode || 'N/A';
+            
+            const odaBadge = document.getElementById('odaIndicatorBadge');
+            if (odaBadge) {
+                if (activeOutboundSession.pincode) {
+                    const pincode = activeOutboundSession.pincode;
+                    const records = getOdaRecords();
+                    const matched = records.filter(r => String(r.pincode) === String(pincode));
+                    
+                    let statusText = '';
+                    let isOda = false;
+                    
+                    if (matched.length > 0) {
+                        isOda = matched.some(r => isOdaRemark(r.remark));
+                        const courierDetails = matched.map(r => `${r.courier}: ${r.remark}`).join(', ');
+                        statusText = isOda ? `⚠️ ODA (${courierDetails})` : `✅ NORMAL (${courierDetails})`;
+                    } else {
+                        statusText = `✅ NORMAL (No Data)`;
+                    }
+                    
+                    odaBadge.style.display = 'flex';
+                    odaBadge.textContent = statusText;
+                    
+                    if (isOda) {
+                        odaBadge.style.backgroundColor = 'rgba(244, 63, 94, 0.15)';
+                        odaBadge.style.borderColor = 'var(--accent-rose)';
+                        odaBadge.style.color = 'var(--accent-rose)';
+                        odaBadge.style.animation = 'pulseOda 1.5s infinite';
+                    } else {
+                        odaBadge.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
+                        odaBadge.style.borderColor = 'var(--accent-emerald)';
+                        odaBadge.style.color = 'var(--accent-emerald)';
+                        odaBadge.style.animation = 'pulseOdaNormal 2s infinite';
+                    }
+                } else {
+                    odaBadge.style.display = 'none';
+                }
+            }
             
             compactOutboundBoxNumbers();
             updateOutboundSessionProgress();
@@ -3658,6 +3722,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             document.getElementById('configShopName').value = activeOutboundSession.shopName || '';
             document.getElementById('configInvoiceNo').value = activeOutboundSession.invoiceNo || '';
+            document.getElementById('configPincode').value = activeOutboundSession.pincode || '';
             
             outboundConfigModal.classList.add('active');
         });
@@ -3691,19 +3756,42 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const shopVal = document.getElementById('configShopName').value.trim();
             const invoiceVal = document.getElementById('configInvoiceNo').value.trim();
+            const pinVal = document.getElementById('configPincode').value.trim().replace(/\D/g, ''); // Numeric only
 
             if (!shopVal || !invoiceVal) {
                 alert('Please enter both Shop Name and Invoice Number.');
                 return;
             }
 
+            if (pinVal && pinVal.length !== 6) {
+                alert('Pincode must be exactly a 6-digit number.');
+                return;
+            }
+
+            // ODA status check helper
+            const checkOdaStatusForPincode = (pincode) => {
+                if (!pincode) return 'Normal';
+                const records = getOdaRecords();
+                const matched = records.filter(r => String(r.pincode) === String(pincode));
+                if (matched.length === 0) return 'Normal';
+                
+                const hasOda = matched.some(r => isOdaRemark(r.remark));
+                return hasOda ? 'ODA' : 'Normal';
+            };
+
+            const odaStatus = checkOdaStatusForPincode(pinVal);
+
             if (isEditingOutboundSession && activeOutboundSession) {
                 activeOutboundSession.shopName = shopVal;
                 activeOutboundSession.invoiceNo = invoiceVal;
+                activeOutboundSession.pincode = pinVal || '';
+                activeOutboundSession.odaStatus = odaStatus;
             } else {
                 activeOutboundSession = {
                     shopName: shopVal,
                     invoiceNo: invoiceVal,
+                    pincode: pinVal || '',
+                    odaStatus: odaStatus,
                     items: [],
                     serials: []
                 };
@@ -4428,6 +4516,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="font-mono">${timestampHtml}</td>
                 <td>${row.shopName}</td>
                 <td class="font-mono">${row.invoiceNo}</td>
+                <td>
+                    ${(() => {
+                        if (!row.pincode) return '<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>';
+                        const isOda = row.odaStatus === 'ODA';
+                        const badge = isOda 
+                            ? `<span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">⚠️ ODA</span>`
+                            : `<span style="background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">Normal</span>`;
+                        return `<div style="display: flex; flex-direction: column; gap: 2px;">
+                                    ${badge}
+                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">${row.pincode}</span>
+                                </div>`;
+                    })()}
+                </td>
                 <td>${itemNames}</td>
                 <td class="font-mono">${totalWeight.toFixed(3)} kg</td>
                 <td class="font-mono" style="font-weight: 700;">${totalPcs}</td>
@@ -4477,6 +4578,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                 }).join('');
 
+                let mobileOdaBadge = '';
+                if (row.pincode) {
+                    const isOda = row.odaStatus === 'ODA';
+                    const odaLabel = isOda ? 'ODA' : 'Normal';
+                    const odaColor = isOda ? 'var(--accent-rose)' : 'var(--accent-emerald)';
+                    const odaBg = isOda ? 'rgba(244, 63, 94, 0.15)' : 'rgba(16, 185, 129, 0.1)';
+                    mobileOdaBadge = `<span style="background: ${odaBg}; color: ${odaColor}; border: 1px solid ${odaColor}; padding: 1px 4px; border-radius: 3px; font-size: 0.65rem; font-weight: 800; margin-left: 6px; text-transform: uppercase;">${odaLabel}</span>`;
+                }
+
                 card.innerHTML = `
                     <div class="mobile-log-card-header">
                         <h4 class="mobile-log-card-title">${row.shopName}</h4>
@@ -4485,7 +4595,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="mobile-log-card-subtitle" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
                         <div style="display: flex; flex-direction: column; gap: 2px;">
                             <span>${row.timestamp}</span>
-                            <span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--accent-blue);">${row.invoiceNo}</span>
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                <span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--accent-blue);">${row.invoiceNo}</span>
+                                ${row.pincode ? `<span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted);">(${row.pincode})</span>` : ''}
+                                ${mobileOdaBadge}
+                            </div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Mark:</span>
@@ -4553,7 +4667,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const timeStr = now.toLocaleTimeString('en-US', { hour12: false });
             
             // Header text inside cell A1 of every sheet
-            const headerText = `${log.shopName} - ${lastIdPart} - ${dateStr} ${timeStr}`;
+            let headerText = `${log.shopName} - ${lastIdPart} - ${dateStr} ${timeStr}`;
+            if (log.pincode) {
+                headerText += ` - PIN: ${log.pincode} (${log.odaStatus || 'Normal'})`;
+            }
 
             const seenSheetNames = new Set();
 
@@ -4954,6 +5071,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     timestamp: timeStr,
                     shopName: activeOutboundSession.shopName,
                     invoiceNo: activeOutboundSession.invoiceNo,
+                    pincode: activeOutboundSession.pincode || '',
+                    odaStatus: activeOutboundSession.odaStatus || 'Normal',
                     items: activeOutboundSession.items,
                     serials: frozenSerials
                 };
@@ -7964,6 +8083,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (key === 'd') {
             e.preventDefault();
             navigateToTab('navDamage');
+        } else if (key === 'g') {
+            e.preventDefault();
+            navigateToTab('navOda');
         } else if (key === 'n') {
             // "o" tabane ke bad (if Outbound section is active), pressing "n" starts a New Outbound Session
             const sectionOutbound = document.getElementById('sectionOutbound');
@@ -8130,11 +8252,253 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // -------------------------------------------------------------
+    // ODA REGISTER MODULE
+    // -------------------------------------------------------------
+    let uploadedOdaRecords = [];
+
+    function getOdaRecords() {
+        const data = localStorage.getItem('wms_oda_records');
+        try {
+            return data ? JSON.parse(data) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveOdaRecords(records) {
+        localStorage.setItem('wms_oda_records', JSON.stringify(records));
+        firebaseSet('oda_records', records);
+    }
+
+    function isOdaRemark(remark) {
+        const text = String(remark || '').toLowerCase().trim();
+        if (text.includes('non-oda') || text.includes('non oda') || text.includes('no-oda') || text.includes('no_oda') || text.includes('not oda')) {
+            return false;
+        }
+        return text.includes('oda') || text.includes('out of delivery') || text === 'yes' || text.includes('out-of-delivery') || text.includes('out of area');
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function renderOdaUI() {
+        const records = getOdaRecords();
+        
+        const countSpan = document.getElementById('odaRecordsCount');
+        if (countSpan) countSpan.textContent = records.length;
+        
+        const searchInput = document.getElementById('odaSearchInput');
+        const filterText = searchInput ? searchInput.value.trim().toLowerCase() : '';
+        
+        const filtered = records.filter(r => {
+            return String(r.pincode).toLowerCase().includes(filterText) || 
+                   String(r.courier).toLowerCase().includes(filterText) ||
+                   String(r.remark).toLowerCase().includes(filterText);
+        });
+        
+        const body = document.getElementById('odaTableBody');
+        if (!body) return;
+        body.innerHTML = '';
+        
+        if (filtered.length === 0) {
+            body.innerHTML = `
+                <tr>
+                    <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                        ${records.length === 0 ? 'No ODA pincode records loaded. Please upload a file above.' : 'No records match search query.'}
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        const displayLimit = 150;
+        const displayList = filtered.slice(0, displayLimit);
+        
+        displayList.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding: 10px 8px; font-family: var(--font-mono); font-weight: 700; color: var(--text-primary);">${r.pincode}</td>
+                <td style="padding: 10px 8px; color: var(--text-secondary);">${escapeHtml(r.courier)}</td>
+                <td style="padding: 10px 8px;"><span style="color: ${isOdaRemark(r.remark) ? 'var(--accent-rose)' : 'var(--accent-emerald)'}; font-weight: 700;">${escapeHtml(r.remark)}</span></td>
+            `;
+            body.appendChild(tr);
+        });
+        
+        if (filtered.length > displayLimit) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td colspan="3" style="text-align: center; color: var(--text-muted); font-size: 0.75rem; font-style: italic; padding: 12px 8px;">
+                    Showing first ${displayLimit} of ${filtered.length} matching records. Use search above to narrow down.
+                </td>
+            </tr>
+            `;
+            body.appendChild(tr);
+        }
+    }
+
+    function handleOdaFileUpload(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = e.target.result;
+                let workbook;
+                if (file.name.endsWith('.csv')) {
+                    const text = new TextDecoder("utf-8").decode(data);
+                    workbook = XLSX.read(text, { type: 'string' });
+                } else {
+                    const bytes = new Uint8Array(data);
+                    workbook = XLSX.read(bytes, { type: 'array' });
+                }
+                
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                
+                if (jsonData.length < 2) {
+                    alert("The uploaded sheet appears to be empty or does not have headers.");
+                    return;
+                }
+                
+                const headers = jsonData[0].map(h => String(h || '').trim().toLowerCase());
+                
+                let courierIdx = headers.findIndex(h => h.includes('courier'));
+                let pincodeIdx = headers.findIndex(h => h.includes('pincode') || h.includes('pin_code') || h === 'pin');
+                let remarkIdx = headers.findIndex(h => h.includes('remark') || h.includes('oda') || h.includes('status'));
+                
+                if (courierIdx === -1) courierIdx = 0;
+                if (pincodeIdx === -1) pincodeIdx = 1;
+                if (remarkIdx === -1) remarkIdx = 2;
+                
+                const parsedRecords = [];
+                for (let i = 1; i < jsonData.length; i++) {
+                    const row = jsonData[i];
+                    if (!row || row.length === 0) continue;
+                    
+                    const courier = String(row[courierIdx] || '').trim();
+                    const pincode = String(row[pincodeIdx] || '').trim().replace(/\D/g, '');
+                    const remark = String(row[remarkIdx] || '').trim();
+                    
+                    if (pincode) {
+                        parsedRecords.push({
+                            courier: courier || 'Generic',
+                            pincode: pincode,
+                            remark: remark || 'ODA'
+                        });
+                    }
+                }
+                
+                if (parsedRecords.length === 0) {
+                    alert("Could not parse any valid pincode records from the file.");
+                    return;
+                }
+                
+                uploadedOdaRecords = parsedRecords;
+                const progressText = document.getElementById('odaUploadProgressText');
+                const progressContainer = document.getElementById('odaUploadProgress');
+                
+                if (progressText) progressText.textContent = `Successfully parsed ${parsedRecords.length} records. Ready to save.`;
+                if (progressContainer) progressContainer.style.display = 'flex';
+                
+            } catch (err) {
+                console.error("Error reading file:", err);
+                alert("Failed to parse the file: " + err.message);
+            }
+        };
+        
+        reader.readAsArrayBuffer(file);
+    }
+
+    // Bind event listeners for ODA module
+    const odaDropZone = document.getElementById('odaDropZone');
+    const odaFileInput = document.getElementById('odaFileInput');
+    const btnSaveUploadedOda = document.getElementById('btnSaveUploadedOda');
+    const btnClearOdaDatabase = document.getElementById('btnClearOdaDatabase');
+    const odaSearchInput = document.getElementById('odaSearchInput');
+
+    if (odaDropZone && odaFileInput) {
+        odaDropZone.addEventListener('click', () => {
+            odaFileInput.click();
+        });
+        
+        odaFileInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files.length > 0) {
+                handleOdaFileUpload(files[0]);
+            }
+        });
+        
+        odaDropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            odaDropZone.style.borderColor = 'var(--accent-emerald)';
+            odaDropZone.style.background = 'rgba(16, 185, 129, 0.04)';
+        });
+        
+        odaDropZone.addEventListener('dragleave', () => {
+            odaDropZone.style.borderColor = 'rgba(59, 130, 246, 0.3)';
+            odaDropZone.style.background = 'rgba(59, 130, 246, 0.02)';
+        });
+        
+        odaDropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            odaDropZone.style.borderColor = 'rgba(59, 130, 246, 0.3)';
+            odaDropZone.style.background = 'rgba(59, 130, 246, 0.02)';
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleOdaFileUpload(files[0]);
+            }
+        });
+    }
+
+    if (btnSaveUploadedOda) {
+        btnSaveUploadedOda.addEventListener('click', () => {
+            if (uploadedOdaRecords && uploadedOdaRecords.length > 0) {
+                if (confirm(`Are you sure you want to replace the current database with ${uploadedOdaRecords.length} new records?`)) {
+                    saveOdaRecords(uploadedOdaRecords);
+                    uploadedOdaRecords = [];
+                    const progressContainer = document.getElementById('odaUploadProgress');
+                    if (progressContainer) progressContainer.style.display = 'none';
+                    alert("ODA database updated successfully!");
+                    renderOdaUI();
+                }
+            }
+        });
+    }
+
+    if (btnClearOdaDatabase) {
+        btnClearOdaDatabase.addEventListener('click', () => {
+            if (confirm("Are you sure you want to clear the entire ODA database? This will disable ODA warnings during dispatch.")) {
+                const pwd = prompt("Enter passcode to confirm clearing ODA database:");
+                if (pwd === '2026' || pwd === '1998') {
+                    saveOdaRecords([]);
+                    renderOdaUI();
+                    alert("ODA database cleared.");
+                } else if (pwd !== null) {
+                    alert("Incorrect passcode! Action denied.");
+                }
+            }
+        });
+    }
+
+    if (odaSearchInput) {
+        odaSearchInput.addEventListener('input', () => {
+            renderOdaUI();
+        });
+    }
+
     // Initial load: Restore states on page load/reload
     restoreSidebarCollapsedState();
     restoreSessionState();
     restoreOutboundSessionState();
     renderDamageUI();
+    renderOdaUI();
     renderInventoryPanel();
     renderDeletedSerialsPanel();
     populateMisProductsDropdown();

@@ -25,6 +25,18 @@
             errDiv.innerHTML += '<div><b>Runtime Error:</b> ' + e.message + ' at ' + e.filename + ':' + e.lineno + '</div>';
         });
     </script>
+    <style>
+        @keyframes pulseOda {
+            0% { transform: scale(1); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
+            50% { transform: scale(1.05); box-shadow: 0 4px 20px rgba(239, 68, 68, 0.5); }
+            100% { transform: scale(1); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
+        }
+        @keyframes pulseOdaNormal {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+            100% { transform: scale(1); }
+        }
+    </style>
 </head>
 <body>
     <div class="app-container">
@@ -82,6 +94,12 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                     <span>Damage Register</span>
+                </a>
+                <a href="#" class="nav-link" id="navOda">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                    </svg>
+                    <span>ODA Register</span>
                 </a>
             </nav>
 
@@ -538,6 +556,7 @@
                                             <th>Timestamp</th>
                                             <th>Shop Name</th>
                                             <th>Invoice No.</th>
+                                            <th>ODA Status</th>
                                             <th>Total Items</th>
                                             <th>Total Weight</th>
                                             <th>Total PCs</th>
@@ -569,6 +588,10 @@
                                         <span class="detail-val" id="activeOutboundInvoice">INV-XXXX</span>
                                     </div>
                                     <div class="session-detail-item">
+                                        <span class="detail-label">PINCODE</span>
+                                        <span class="detail-val font-mono" id="activeOutboundPincode" style="color: var(--accent-blue);">N/A</span>
+                                    </div>
+                                    <div class="session-detail-item">
                                         <span class="detail-label">TOTAL DISPATCH WEIGHT</span>
                                         <span class="detail-val font-mono" id="activeOutboundWeight" style="color: var(--accent-emerald);">0.000 kg</span>
                                     </div>
@@ -578,6 +601,9 @@
                                     </div>
                                 </div>
                                 <div style="display: flex; gap: 12px; align-items: center;">
+                                    <div id="odaIndicatorBadge" style="display: none; align-items: center; justify-content: center; font-weight: 800; font-size: 0.82rem; padding: 10px 18px; border-radius: var(--radius-sm); border-style: solid; border-width: 2px; text-transform: uppercase;">
+                                        <!-- Will be populated dynamically -->
+                                    </div>
                                     <button type="button" class="btn-primary" id="btnEditOutboundSessionInfo" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); padding: 10px 18px; display: flex; align-items: center; gap: 8px; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -974,6 +1000,87 @@
 
                     </div>
                 </section>
+
+                <!-- 7. ODA REGISTER SECTION -->
+                <section class="content-section" id="sectionOda" style="display: none; padding: 24px; box-sizing: border-box; height: 100%; overflow-y: auto;">
+                    <div style="display: flex; flex-direction: column; gap: 24px; width: 100%;">
+                        
+                        <!-- Top actions / File Upload -->
+                        <div class="dashboard-card" style="width: 100%; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                                <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--accent-blue); margin: 0; display: flex; align-items: center; gap: 8px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px; stroke-width: 2.5;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                    </svg>
+                                    <span>ODA Pincode Register</span>
+                                </h3>
+                                <button type="button" id="btnClearOdaDatabase" class="btn-primary" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose); padding: 8px 16px; font-size: 0.8rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
+                                    Clear Database
+                                </button>
+                            </div>
+                            
+                            <!-- File Upload Area -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                                <div id="odaDropZone" style="border: 2px dashed rgba(59, 130, 246, 0.3); background: rgba(59, 130, 246, 0.02); padding: 32px 16px; border-radius: var(--radius-md); text-align: center; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; transition: var(--transition-smooth);">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 40px; height: 40px; color: var(--accent-blue);">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                    </svg>
+                                    <div>
+                                        <p style="margin: 0; font-size: 0.9rem; font-weight: 700; color: var(--text-primary);">Drag & Drop ODA Sheet Here</p>
+                                        <p style="margin: 4px 0 0 0; font-size: 0.78rem; color: var(--text-muted);">Supports Excel (.xlsx, .xls) and CSV (.csv)</p>
+                                    </div>
+                                    <input type="file" id="odaFileInput" accept=".xlsx, .xls, .csv" style="display: none;">
+                                </div>
+                                <div style="display: flex; flex-direction: column; justify-content: space-between; background: rgba(255, 255, 255, 0.01); border: 1px solid var(--border-color); padding: 16px; border-radius: var(--radius-md);">
+                                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                                        <h4 style="margin: 0; font-size: 0.88rem; font-weight: 700; color: var(--text-secondary);">Sheet Structure Requirement</h4>
+                                        <p style="margin: 0; font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
+                                            Your file must contain the following columns (headers must match approximately):
+                                        </p>
+                                        <ul style="margin: 4px 0; padding-left: 20px; font-size: 0.78rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 2px;">
+                                            <li><strong>Courier Name</strong> (e.g. Courier, courier_name)</li>
+                                            <li><strong>Pincode</strong> (e.g. Pincode, pin_code, pin)</li>
+                                            <li><strong>Remark / ODA Status</strong> (e.g. Remark, ODA, status)</li>
+                                        </ul>
+                                    </div>
+                                    <div id="odaUploadProgress" style="display: none; flex-direction: column; gap: 6px; margin-top: 10px;">
+                                        <span id="odaUploadProgressText" style="font-size: 0.8rem; font-weight: 700; color: var(--accent-emerald);">Processing 0 rows...</span>
+                                        <button type="button" id="btnSaveUploadedOda" class="btn-primary" style="background: var(--accent-emerald); border-color: var(--accent-emerald); color: white; width: 100%; font-weight: 700; font-size: 0.85rem; padding: 8px; border-radius: var(--radius-sm); cursor: pointer;">
+                                            Save & Sync ODA Database
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ODA Database View Table -->
+                        <div class="dashboard-card" style="width: 100%; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
+                                <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-secondary); margin: 0;">
+                                    Active ODA Database (<span id="odaRecordsCount">0</span> records)
+                                </h4>
+                                <input type="text" id="odaSearchInput" placeholder="Search pincode or courier name..." style="padding: 8px 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.8rem; outline: none; width: 220px;">
+                            </div>
+                            <div class="table-container" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-x: auto; max-height: 400px;">
+                                <table class="portal-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                                    <thead>
+                                        <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">
+                                            <th style="padding: 10px 8px;">Pincode</th>
+                                            <th style="padding: 10px 8px;">Courier Name</th>
+                                            <th style="padding: 10px 8px;">Remark</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="odaTableBody">
+                                        <tr>
+                                            <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 24px;">No ODA pincode records loaded. Please upload a file above.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                    </div>
+                </section>
             </div>
         </main>
     </div>
@@ -1243,6 +1350,11 @@
                 <div class="form-group">
                     <label for="configInvoiceNo">Sales Order / Invoice Number</label>
                     <input type="text" id="configInvoiceNo" placeholder="e.g. SO-2026-0081" required autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label for="configPincode">Destination Pincode (Optional)</label>
+                    <input type="text" id="configPincode" placeholder="e.g. 110001 (6 digits)" maxlength="6" autocomplete="off">
                 </div>
 
                 <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end; width: 100%;">
