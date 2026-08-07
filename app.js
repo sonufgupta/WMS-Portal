@@ -3630,6 +3630,16 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('activeOutboundShop').textContent = activeOutboundSession.shopName;
             document.getElementById('activeOutboundInvoice').textContent = activeOutboundSession.invoiceNo;
             document.getElementById('activeOutboundPincode').textContent = (activeOutboundSession.pincode || 'N/A') + distText;
+
+            if (activeOutboundSession.pincode) {
+                fetchLiveDistanceKm(activeOutboundSession.pincode, (liveKm) => {
+                    if (activeOutboundSession && liveKm) {
+                        activeOutboundSession.distanceKm = liveKm;
+                        const pEl = document.getElementById('activeOutboundPincode');
+                        if (pEl) pEl.textContent = `${activeOutboundSession.pincode} (${liveKm.toLocaleString('en-IN')} KM)`;
+                    }
+                });
+            }
             
             const odaBadge = document.getElementById('odaIndicatorBadge');
             if (odaBadge) {
@@ -8410,75 +8420,128 @@ document.addEventListener('DOMContentLoaded', () => {
     // PINCODE DISTANCE CALCULATOR FROM BHIWANDI (421302)
     // -------------------------------------------------------------
     const PINCODE_PREFIX_COORDS = {
-        "11": [28.6139, 77.2090], // Delhi NCR
-        "12": [28.4595, 77.0266], // Haryana (Gurgaon/Faridabad)
-        "13": [29.6857, 76.9905], // Haryana (Karnal/Ambala)
-        "14": [30.9010, 75.8573], // Punjab (Ludhiana)
-        "15": [30.2110, 74.9455], // Punjab (Bhatinda)
-        "16": [30.7333, 76.7794], // Chandigarh
-        "17": [31.1048, 77.1734], // Himachal Pradesh
-        "18": [32.7266, 74.8570], // Jammu
-        "19": [34.0837, 74.7973], // Srinagar / Kashmir
-        "20": [28.5355, 77.3910], // UP (Noida/Ghaziabad/Meerut)
-        "21": [25.4358, 81.8463], // UP (Allahabad/Kanpur)
-        "22": [26.8467, 80.9462], // UP (Lucknow/Faizabad)
-        "23": [25.3176, 82.9739], // UP (Varanasi/Mirzapur)
-        "24": [28.9845, 77.7064], // UP (Bareilly/Moradabad)
-        "25": [29.4727, 77.7085], // UP (Muzaffarnagar)
-        "26": [29.2183, 79.5130], // Uttarakhand (Haldwani)
-        "27": [26.7606, 83.3732], // UP (Gorakhpur)
-        "28": [27.1767, 78.0081], // UP (Agra/Jhansi)
-        "30": [26.9124, 75.7873], // Rajasthan (Jaipur)
-        "31": [24.5854, 73.7125], // Rajasthan (Udaipur)
-        "32": [25.2138, 75.8648], // Rajasthan (Kota)
-        "33": [28.0229, 73.3119], // Rajasthan (Bikaner)
-        "34": [26.2389, 73.0243], // Rajasthan (Jodhpur)
-        "36": [22.3039, 70.8022], // Gujarat (Rajkot)
-        "37": [23.2420, 69.6669], // Gujarat (Kutch/Bhuj)
-        "38": [23.0225, 72.5714], // Gujarat (Ahmedabad/Gandhinagar)
-        "39": [21.1702, 72.8311], // Gujarat (Surat/Vadodara/Vapi)
-        "40": [19.0760, 72.8777], // Mumbai / Navi Mumbai
-        "41": [18.5204, 73.8567], // Pune / Satara / Kolhapur
-        "42": [19.9975, 73.7898], // Nashik / Thane / Bhiwandi
-        "43": [19.8762, 75.3433], // Chhatrapati Sambhajinagar (Aurangabad) / Nanded
-        "44": [21.1458, 79.0882], // Nagpur / Amravati / Akola
-        "45": [22.7196, 75.8577], // MP (Indore/Ujjain)
-        "46": [23.2599, 77.4126], // MP (Bhopal)
-        "47": [26.2183, 78.1828], // MP (Gwalior)
-        "48": [23.1815, 79.9864], // MP (Jabalpur)
-        "49": [21.2514, 81.6296], // Chhattisgarh (Raipur)
-        "50": [17.3850, 78.4867], // Telangana (Hyderabad)
-        "51": [13.6288, 79.4192], // AP (Tirupati/Chittoor)
-        "52": [16.5062, 80.6480], // AP (Vijayawada)
-        "53": [17.6868, 83.2185], // AP (Visakhapatnam)
-        "56": [12.9716, 77.5946], // Karnataka (Bengaluru)
-        "57": [12.9141, 74.8560], // Karnataka (Mangalore/Mysore)
-        "58": [15.3647, 75.1240], // Karnataka (Hubli/Belgaum)
-        "59": [15.8497, 74.4977], // Karnataka (Belagavi)
-        "60": [13.0827, 80.2707], // Tamil Nadu (Chennai)
-        "61": [10.7905, 78.7047], // Tamil Nadu (Trichy/Tanjore)
-        "62": [9.9252, 78.1198],  // Tamil Nadu (Madurai)
-        "63": [12.9165, 79.1325], // Tamil Nadu (Vellore/Salem)
-        "64": [11.0168, 76.9558], // Tamil Nadu (Coimbatore)
-        "67": [10.7867, 76.6548], // Kerala (Palakkad/Calicut/Kozhikode)
-        "68": [9.9312, 76.2673],  // Kerala (Kochi/Ernakulam)
-        "69": [8.5241, 76.9366],  // Kerala (Trivandrum)
-        "70": [22.5726, 88.3639], // Kolkata
-        "71": [23.2324, 87.8615], // West Bengal (Bardhaman)
-        "72": [22.4257, 87.3199], // West Bengal (Kharagpur)
-        "73": [26.7271, 88.3953], // West Bengal (Siliguri)
-        "74": [24.0983, 88.2514], // West Bengal (Murshidabad)
-        "75": [20.2961, 85.8245], // Odisha (Bhubaneswar)
-        "76": [19.3149, 84.7941], // Odisha (Berhampur)
-        "77": [21.4669, 83.9812], // Odisha (Sambalpur)
-        "78": [26.1445, 91.7362], // Assam (Guwahati)
-        "79": [23.8315, 91.2868], // Tripura / Meghalaya / Nagaland / Manipur
-        "80": [25.5941, 85.1376], // Bihar (Patna)
-        "81": [25.2425, 86.9842], // Bihar (Bhagalpur)
-        "82": [24.7914, 85.0002], // Bihar (Gaya)
-        "83": [23.3441, 85.3096], // Jharkhand (Ranchi/Jamshedpur)
-        "84": [26.1542, 85.8918], // Bihar (Darbhanga/Muzaffarpur)
-        "85": [25.7711, 87.4822]  // Bihar (Purnea)
+        // MAHARASHTRA & GOA (Zone 4)
+        "400": [18.9388, 72.8353], // Mumbai South
+        "401": [19.3919, 72.8397], // Thane Rural / Palghar / Vasai
+        "402": [18.4646, 72.8789], // Raigad / Alibag / Roha
+        "403": [15.2993, 74.1240], // Goa
+        "410": [18.7557, 73.4091], // Lonavala / Talegaon / Khopoli
+        "411": [18.5204, 73.8567], // Pune City
+        "412": [18.4529, 73.9634], // Pune Rural / Hadapsar / Shirur
+        "413": [17.6599, 75.9064], // Solapur / Osmanabad / Pandharpur / Baramati
+        "414": [19.0948, 74.7480], // Ahmednagar
+        "415": [17.6805, 74.0183], // Satara / Karad / Chiplun
+        "416": [16.7050, 74.2433], // Kolhapur / Sangli / Miraj / Ratnagiri
+        "421": [19.2968, 73.0631], // Bhiwandi / Kalyan / Dombivli / Ulhasnagar
+        "422": [19.9975, 73.7898], // Nashik
+        "423": [20.5579, 74.5089], // Malegaon / Manmad
+        "424": [20.9042, 74.7749], // Dhule
+        "425": [21.0077, 75.5626], // Jalgaon / Bhusawal
+        "431": [19.8762, 75.3433], // Chhatrapati Sambhajinagar (Aurangabad) / Nanded / Latur
+        "440": [21.1458, 79.0882], // Nagpur City
+        "441": [21.1833, 79.2500], // Nagpur Rural / Bhandara / Gondia
+        "442": [20.7453, 78.6022], // Wardha / Chandrapur
+        "443": [20.5294, 76.1843], // Buldhana
+        "444": [20.9374, 77.7796], // Amravati / Akola
+        "445": [20.3888, 78.1204], // Yavatmal
+
+        // GUJARAT (Zone 3)
+        "360": [22.3039, 70.8022], // Rajkot
+        "361": [22.4707, 70.0577], // Jamnagar
+        "362": [21.5222, 70.4579], // Junagadh
+        "363": [22.7215, 71.6384], // Surendranagar
+        "364": [21.7645, 72.1519], // Bhavnagar
+        "365": [21.6032, 71.2221], // Amreli
+        "370": [23.2420, 69.6669], // Bhuj / Kutch
+        "380": [23.0225, 72.5714], // Ahmedabad
+        "382": [23.2156, 72.6369], // Gandhinagar
+        "383": [23.5977, 72.9698], // Himatnagar
+        "384": [23.6000, 72.4000], // Mehsana / Patan
+        "385": [24.1724, 72.4346], // Palanpur
+        "387": [22.6916, 72.8634], // Nadiad / Anand
+        "388": [22.5645, 72.9289], // Anand
+        "390": [22.3072, 73.1812], // Vadodara
+        "391": [22.4000, 73.3000], // Vadodara Rural
+        "392": [21.7051, 72.9959], // Bharuch
+        "393": [21.6264, 73.0152], // Ankleshwar
+        "394": [21.2000, 72.8800], // Surat Suburbs
+        "395": [21.1702, 72.8311], // Surat City
+        "396": [20.6100, 72.9300], // Valsad / Vapi / Navsari
+
+        // RAJASTHAN (Zone 3)
+        "302": [26.9124, 75.7873], // Jaipur
+        "303": [26.8500, 75.9000], // Jaipur Rural
+        "305": [26.4499, 74.6399], // Ajmer
+        "313": [24.5854, 73.7125], // Udaipur
+        "324": [25.2138, 75.8648], // Kota
+        "334": [28.0229, 73.3119], // Bikaner
+        "342": [26.2389, 73.0243], // Jodhpur
+
+        // MP & CHHATTISGARH (Zone 4)
+        "452": [22.7196, 75.8577], // Indore
+        "456": [23.1765, 75.7885], // Ujjain
+        "462": [23.2599, 77.4126], // Bhopal
+        "474": [26.2183, 78.1828], // Gwalior
+        "482": [23.1815, 79.9864], // Jabalpur
+        "492": [21.2514, 81.6296], // Raipur
+
+        // DELHI NCR, HARYANA, PUNJAB, UP (Zone 1 & 2)
+        "110": [28.6139, 77.2090], // Delhi
+        "121": [28.4089, 77.3178], // Faridabad
+        "122": [28.4595, 77.0266], // Gurgaon
+        "132": [29.6857, 76.9905], // Karnal
+        "141": [30.9010, 75.8573], // Ludhiana
+        "143": [31.6340, 74.8723], // Amritsar
+        "160": [30.7333, 76.7794], // Chandigarh
+        "201": [28.5355, 77.3910], // Noida / Ghaziabad
+        "208": [26.4499, 80.3319], // Kanpur
+        "226": [26.8467, 80.9462], // Lucknow
+        "282": [27.1767, 78.0081], // Agra
+
+        // SOUTH INDIA (Zone 5 & 6)
+        "500": [17.3850, 78.4867], // Hyderabad
+        "520": [16.5062, 80.6480], // Vijayawada
+        "530": [17.6868, 83.2185], // Visakhapatnam
+        "560": [12.9716, 77.5946], // Bengaluru
+        "570": [12.2958, 76.6394], // Mysore
+        "575": [12.9141, 74.8560], // Mangalore
+        "580": [15.3647, 75.1240], // Hubli
+        "590": [15.8497, 74.4977], // Belgaum
+        "600": [13.0827, 80.2707], // Chennai
+        "620": [10.7905, 78.7047], // Trichy
+        "625": [9.9252, 78.1198],  // Madurai
+        "641": [11.0168, 76.9558], // Coimbatore
+        "673": [11.2588, 75.7804], // Kozhikode / Calicut
+        "678": [10.7867, 76.6548], // Palakkad
+        "682": [9.9312, 76.2673],  // Kochi / Ernakulam
+        "695": [8.5241, 76.9366],  // Trivandrum
+
+        // EAST INDIA (Zone 7 & 8)
+        "700": [22.5726, 88.3639], // Kolkata
+        "751": [20.2961, 85.8245], // Bhubaneswar
+        "781": [26.1445, 91.7362], // Guwahati
+        "800": [25.5941, 85.1376], // Patna
+        "834": [23.3441, 85.3096], // Ranchi
+
+        // Fallback 2-digit defaults
+        "11": [28.6139, 77.2090], "12": [28.4595, 77.0266], "13": [29.6857, 76.9905], "14": [30.9010, 75.8573],
+        "15": [30.2110, 74.9455], "16": [30.7333, 76.7794], "17": [31.1048, 77.1734], "18": [32.7266, 74.8570],
+        "19": [34.0837, 74.7973], "20": [28.5355, 77.3910], "21": [25.4358, 81.8463], "22": [26.8467, 80.9462],
+        "23": [25.3176, 82.9739], "24": [28.9845, 77.7064], "25": [29.4727, 77.7085], "26": [29.2183, 79.5130],
+        "27": [26.7606, 83.3732], "28": [27.1767, 78.0081], "30": [26.9124, 75.7873], "31": [24.5854, 73.7125],
+        "32": [25.2138, 75.8648], "33": [28.0229, 73.3119], "34": [26.2389, 73.0243], "36": [22.3039, 70.8022],
+        "37": [23.2420, 69.6669], "38": [23.0225, 72.5714], "39": [21.1702, 72.8311], "40": [19.0760, 72.8777],
+        "41": [18.5204, 73.8567], "42": [19.9975, 73.7898], "43": [19.8762, 75.3433], "44": [21.1458, 79.0882],
+        "45": [22.7196, 75.8577], "46": [23.2599, 77.4126], "47": [26.2183, 78.1828], "48": [23.1815, 79.9864],
+        "49": [21.2514, 81.6296], "50": [17.3850, 78.4867], "51": [13.6288, 79.4192], "52": [16.5062, 80.6480],
+        "53": [17.6868, 83.2185], "56": [12.9716, 77.5946], "57": [12.9141, 74.8560], "58": [15.3647, 75.1240],
+        "59": [15.8497, 74.4977], "60": [13.0827, 80.2707], "61": [10.7905, 78.7047], "62": [9.9252, 78.1198],
+        "63": [12.9165, 79.1325], "64": [11.0168, 76.9558], "67": [10.7867, 76.6548], "68": [9.9312, 76.2673],
+        "69": [8.5241, 76.9366], "70": [22.5726, 88.3639], "71": [23.2324, 87.8615], "72": [22.4257, 87.3199],
+        "73": [26.7271, 88.3953], "74": [24.0983, 88.2514], "75": [20.2961, 85.8245], "76": [19.3149, 84.7941],
+        "77": [21.4669, 83.9812], "78": [26.1445, 91.7362], "79": [23.8315, 91.2868], "80": [25.5941, 85.1376],
+        "81": [25.2425, 86.9842], "82": [24.7914, 85.0002], "83": [23.3441, 85.3096], "84": [26.1542, 85.8918],
+        "85": [25.7711, 87.4822]
     };
 
     const BHIWANDI_LAT = 19.2968;
@@ -8494,7 +8557,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (prefix3 === '400' || prefix3 === '401') return 35; // Thane/Mumbai
 
         const prefix2 = pinStr.substring(0, 2);
-        const coords = PINCODE_PREFIX_COORDS[prefix2];
+        const coords = PINCODE_PREFIX_COORDS[prefix3] || PINCODE_PREFIX_COORDS[prefix2];
         if (!coords) return null;
 
         const [lat2, lon2] = coords;
@@ -8507,8 +8570,55 @@ document.addEventListener('DOMContentLoaded', () => {
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         const aerialKm = R * c;
         
-        // Add 1.25x road curvature factor for driving distance approximation
-        return Math.round(aerialKm * 1.25);
+        // Use 1.33x Indian highway road factor for long distances (>200 km) and 1.25x for short distances
+        const roadFactor = aerialKm > 200 ? 1.33 : 1.25;
+        return Math.round(aerialKm * roadFactor);
+    }
+
+    // Asynchronous Live Routing API Distance Fetcher
+    const distanceApiCache = new Map();
+
+    async function fetchLiveDistanceKm(destPincode, onResult) {
+        if (!destPincode) return;
+        const pinStr = String(destPincode).trim().replace(/\D/g, '');
+        if (pinStr.length !== 6) return;
+
+        if (distanceApiCache.has(pinStr)) {
+            const cachedKm = distanceApiCache.get(pinStr);
+            if (onResult) onResult(cachedKm);
+            return cachedKm;
+        }
+
+        // Return fallback instantly
+        const instantKm = calculateDistanceKm(pinStr);
+        if (instantKm && onResult) onResult(instantKm);
+
+        try {
+            const prefix3 = pinStr.substring(0, 3);
+            const prefix2 = pinStr.substring(0, 2);
+            const coords = PINCODE_PREFIX_COORDS[prefix3] || PINCODE_PREFIX_COORDS[prefix2];
+            
+            if (coords) {
+                const [lat2, lon2] = coords;
+                const osrmUrl = `https://router.project-osrm.org/route/v1/driving/73.0631,19.2968;${lon2},${lat2}?overview=false`;
+                const osrmRes = await fetch(osrmUrl);
+                const osrmData = await osrmRes.json();
+
+                if (osrmData && osrmData.routes && osrmData.routes.length > 0) {
+                    const distanceMeters = osrmData.routes[0].distance;
+                    const liveKm = Math.round(distanceMeters / 1000);
+                    distanceApiCache.set(pinStr, liveKm);
+                    console.log(`Live OSRM Driving Distance for Pincode ${pinStr}: ${liveKm} KM`);
+                    if (onResult) onResult(liveKm);
+                    return liveKm;
+                }
+            }
+        } catch (err) {
+            console.log("Live distance API fetch fallback:", err);
+        }
+
+        if (instantKm) distanceApiCache.set(pinStr, instantKm);
+        return instantKm;
     }
 
     // -------------------------------------------------------------
