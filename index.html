@@ -1342,6 +1342,19 @@
                 <button type="button" class="close-modal" id="closeOutboundConfigModalBtn" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
             </div>
             <form id="outboundConfigForm" style="display: flex; flex-direction: column; gap: 20px; margin-top: 16px;">
+                <div class="form-group" style="background: rgba(59, 130, 246, 0.03); border: 1px dashed rgba(59, 130, 246, 0.25); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                    <label for="outboundInvoicePasteArea" style="font-weight: 800; color: var(--accent-blue); display: flex; align-items: center; gap: 6px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer;">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                        </svg>
+                        ⚡ Smart Auto-Fill (Paste Invoice Text)
+                    </label>
+                    <textarea id="outboundInvoicePasteArea" placeholder="Paste invoice, SO details, or ship-to text here..." style="width: 100%; height: 75px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.8rem; padding: 8px; resize: none; outline: none; font-family: var(--font-sans);"></textarea>
+                    <span style="font-size: 0.68rem; color: var(--text-muted); line-height: 1.2;">
+                        System will automatically extract the Shop Name (Ship To), Sales Order (SO) Number, and Shipping Pincode.
+                    </span>
+                </div>
+
                 <div class="form-group">
                     <label for="configShopName">Shop Name</label>
                     <input type="text" id="configShopName" placeholder="e.g. Geeta Electronics" required autocomplete="off">

@@ -3817,6 +3817,96 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Auto-fill parsing handler for outboundInvoicePasteArea
+    const outboundInvoicePasteArea = document.getElementById('outboundInvoicePasteArea');
+    if (outboundInvoicePasteArea) {
+        outboundInvoicePasteArea.addEventListener('input', () => {
+            const val = outboundInvoicePasteArea.value;
+            if (!val.trim()) return;
+
+            // Parser logic
+            const lines = val.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            
+            let shopName = '';
+            let invoiceNo = '';
+            let pincode = '';
+            
+            // 1. Extract Invoice / Sales Order Number
+            const invoiceRegexes = [
+                /(?:Sales\s*Order|Invoice|SO|Order)\s*(?:No\.?|#)?\s*[:\-]?\s*([A-Za-z0-9\-\_\/]+(?:\s*[A-Za-z0-9\-\_\/]+)*)/i,
+                /\b(SO-[A-Za-z0-9\-\_\/]+)\b/i,
+                /\b(INV-[A-Za-z0-9\-\_\/]+)\b/i
+            ];
+            
+            for (const regex of invoiceRegexes) {
+                const match = val.match(regex);
+                if (match && match[1]) {
+                    invoiceNo = match[1].trim();
+                    break;
+                }
+            }
+            
+            // 2. Extract Shop Name
+            let headerIndex = -1;
+            for (let i = 0; i < lines.length; i++) {
+                if (/Bill\s*To|Ship\s*To/i.test(lines[i])) {
+                    headerIndex = i;
+                    break;
+                }
+            }
+            
+            if (headerIndex !== -1) {
+                // Find the first valid non-empty line after "Bill To" or "Ship To"
+                for (let i = headerIndex + 1; i < Math.min(lines.length, headerIndex + 6); i++) {
+                    const line = lines[i];
+                    if (/Bill\s*To|Ship\s*To/i.test(line)) continue;
+                    if (/GSTIN|GST/i.test(line)) continue;
+                    if (/Date|Order|SO|Invoice/i.test(line)) continue;
+                    if (/Address|Mobile|Phone|Email/i.test(line)) continue;
+                    if (line.match(/^\d+$/)) continue; // skip pure numbers
+                    
+                    shopName = line;
+                    break;
+                }
+            }
+            
+            // 3. Extract Shipping Pincode (last 6-digit number in the document)
+            const pincodes = val.match(/\b\d{6}\b/g) || [];
+            if (pincodes.length > 0) {
+                pincode = pincodes[pincodes.length - 1];
+            }
+            
+            // Populate form fields if extracted successfully
+            let filled = false;
+            if (shopName) {
+                document.getElementById('configShopName').value = shopName;
+                filled = true;
+            }
+            if (invoiceNo) {
+                document.getElementById('configInvoiceNo').value = invoiceNo;
+                filled = true;
+            }
+            if (pincode) {
+                document.getElementById('configPincode').value = pincode;
+                filled = true;
+            }
+            
+            if (filled) {
+                // Clear the paste area immediately after successful extraction to keep UI clean
+                outboundInvoicePasteArea.value = '';
+                // Temporary success message inside the paste area label
+                const label = outboundInvoicePasteArea.previousElementSibling;
+                const originalText = label.innerHTML;
+                label.innerHTML = '✅ Auto-Fill Success!';
+                label.style.color = 'var(--accent-emerald)';
+                setTimeout(() => {
+                    label.innerHTML = originalText;
+                    label.style.color = 'var(--accent-blue)';
+                }, 2000);
+            }
+        });
+    }
+
     // Toggle Sequence elements
     if (outboundSequenceToggle) {
         outboundSequenceToggle.addEventListener('change', () => {
