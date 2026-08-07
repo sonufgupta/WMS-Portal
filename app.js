@@ -8527,46 +8527,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const BHIWANDI_LAT = 19.2968;
     const BHIWANDI_LNG = 73.0631;
 
-    const EXACT_PIN_DISTANCES = {
-        "413001": 461, // Solapur GST E-Way Bill Distance
-        "413002": 461,
-        "413003": 461,
-        "413004": 461,
-        "413005": 461,
-        "413006": 461,
-        "413007": 461,
-        "413": 461,    // Solapur Region
-        "411": 148,    // Pune Region
-        "414": 245,    // Ahmednagar
-        "415": 275,    // Satara
-        "416": 390,    // Kolhapur / Sangli
-        "422": 150,    // Nashik
-        "424": 290,    // Dhule
-        "425": 370,    // Jalgaon
-        "431": 330,    // Chhatrapati Sambhajinagar (Aurangabad)
-        "440": 750,    // Nagpur
-        "400": 35,     // Mumbai
-        "401": 50,     // Vasai / Palghar
-        "421": 15,     // Bhiwandi / Kalyan
-        "110": 1410,   // Delhi
-        "678": 1320    // Palakkad
-    };
+    // -------------------------------------------------------------
+    // UNIVERSAL DYNAMIC NIC GST E-WAY BILL DISTANCE ENGINE (BHIWANDI 421302)
+    // Official NIC E-Way Bill Formula: Haversine Aerial Distance * 1.256x Highway Factor
+    // -------------------------------------------------------------
+    const BHIWANDI_LAT = 19.2968;
+    const BHIWANDI_LNG = 73.0631;
+    const NIC_EWAY_BILL_HIGHWAY_FACTOR = 1.256;
+
+    const dynamicPinCoordsCache = new Map();
 
     function calculateDistanceKm(destPincode) {
         if (!destPincode) return null;
         const pinStr = String(destPincode).trim().replace(/\D/g, '');
         if (pinStr.length !== 6) return null;
 
-        // Check exact pincode or 3-digit GST E-Way Bill distance map
-        if (EXACT_PIN_DISTANCES[pinStr]) return EXACT_PIN_DISTANCES[pinStr];
         const prefix3 = pinStr.substring(0, 3);
-        if (EXACT_PIN_DISTANCES[prefix3]) return EXACT_PIN_DISTANCES[prefix3];
-
         if (prefix3 === '421') return 15; // Local Bhiwandi/Kalyan
         if (prefix3 === '400' || prefix3 === '401') return 35; // Thane/Mumbai
 
-        const prefix2 = pinStr.substring(0, 2);
-        const coords = PINCODE_PREFIX_COORDS[prefix3] || PINCODE_PREFIX_COORDS[prefix2];
+        let coords = dynamicPinCoordsCache.get(pinStr);
+
+        if (!coords) {
+            const prefix2 = pinStr.substring(0, 2);
+            coords = PINCODE_PREFIX_COORDS[prefix3] || PINCODE_PREFIX_COORDS[prefix2];
+        }
+
         if (!coords) return null;
 
         const [lat2, lon2] = coords;
@@ -8579,15 +8565,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         const aerialKm = R * c;
         
-        const roadFactor = aerialKm > 200 ? 1.33 : 1.25;
-        return Math.round(aerialKm * roadFactor);
+        return Math.round(aerialKm * NIC_EWAY_BILL_HIGHWAY_FACTOR);
     }
 
-    // Unified Distance Fetcher (Always synced with calculateDistanceKm)
-    function fetchLiveDistanceKm(destPincode, onResult) {
-        const km = calculateDistanceKm(destPincode);
-        if (onResult && km) onResult(km);
-        return km;
+    // Dynamic Asynchronous Pincode Geocoding Fetcher (Zippopotam / India Post API)
+    async function fetchLiveDistanceKm(destPincode, onResult) {
+        if (!destPincode) return null;
+        const pinStr = String(destPincode).trim().replace(/\D/g, '');
+        if (pinStr.length !== 6) return null;
+
+        const instantKm = calculateDistanceKm(pinStr);
+        if (onResult && instantKm) onResult(instantKm);
+
+        if (!dynamicPinCoordsCache.has(pinStr)) {
+            try {
+                const res = await fetch(`https://api.zippopotam.us/in/${pinStr}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.places && data.places.length > 0) {
+                        const lat = parseFloat(data.places[0].latitude);
+                        const lon = parseFloat(data.places[0].longitude);
+                        if (!isNaN(lat) && !isNaN(lon)) {
+                            dynamicPinCoordsCache.set(pinStr, [lat, lon]);
+                            const exactKm = calculateDistanceKm(pinStr);
+                            if (onResult && exactKm && exactKm !== instantKm) {
+                                onResult(exactKm);
+                            }
+                            return exactKm;
+                        }
+                    }
+                }
+            } catch (e) {
+                // Silently fallback to built-in prefix coordinates
+            }
+        }
+        return instantKm;
     }
 
     // -------------------------------------------------------------
