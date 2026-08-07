@@ -8547,12 +8547,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const BHIWANDI_LAT = 19.2968;
     const BHIWANDI_LNG = 73.0631;
 
+    const EXACT_PIN_DISTANCES = {
+        "413001": 461, // Solapur GST E-Way Bill Distance
+        "413002": 461,
+        "413003": 461,
+        "413004": 461,
+        "413005": 461,
+        "413006": 461,
+        "413007": 461,
+        "413": 461,    // Solapur Region
+        "411": 148,    // Pune Region
+        "414": 245,    // Ahmednagar
+        "415": 275,    // Satara
+        "416": 390,    // Kolhapur / Sangli
+        "422": 150,    // Nashik
+        "424": 290,    // Dhule
+        "425": 370,    // Jalgaon
+        "431": 330,    // Chhatrapati Sambhajinagar (Aurangabad)
+        "440": 750,    // Nagpur
+        "400": 35,     // Mumbai
+        "401": 50,     // Vasai / Palghar
+        "421": 15,     // Bhiwandi / Kalyan
+        "110": 1410,   // Delhi
+        "678": 1320    // Palakkad
+    };
+
     function calculateDistanceKm(destPincode) {
         if (!destPincode) return null;
         const pinStr = String(destPincode).trim().replace(/\D/g, '');
         if (pinStr.length !== 6) return null;
 
+        // Check exact pincode or 3-digit GST E-Way Bill distance map
+        if (EXACT_PIN_DISTANCES[pinStr]) return EXACT_PIN_DISTANCES[pinStr];
         const prefix3 = pinStr.substring(0, 3);
+        if (EXACT_PIN_DISTANCES[prefix3]) return EXACT_PIN_DISTANCES[prefix3];
+
         if (prefix3 === '421') return 15; // Local Bhiwandi/Kalyan
         if (prefix3 === '400' || prefix3 === '401') return 35; // Thane/Mumbai
 
@@ -8570,55 +8599,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         const aerialKm = R * c;
         
-        // Use 1.33x Indian highway road factor for long distances (>200 km) and 1.25x for short distances
         const roadFactor = aerialKm > 200 ? 1.33 : 1.25;
         return Math.round(aerialKm * roadFactor);
     }
 
-    // Asynchronous Live Routing API Distance Fetcher
-    const distanceApiCache = new Map();
-
-    async function fetchLiveDistanceKm(destPincode, onResult) {
-        if (!destPincode) return;
-        const pinStr = String(destPincode).trim().replace(/\D/g, '');
-        if (pinStr.length !== 6) return;
-
-        if (distanceApiCache.has(pinStr)) {
-            const cachedKm = distanceApiCache.get(pinStr);
-            if (onResult) onResult(cachedKm);
-            return cachedKm;
-        }
-
-        // Return fallback instantly
-        const instantKm = calculateDistanceKm(pinStr);
-        if (instantKm && onResult) onResult(instantKm);
-
-        try {
-            const prefix3 = pinStr.substring(0, 3);
-            const prefix2 = pinStr.substring(0, 2);
-            const coords = PINCODE_PREFIX_COORDS[prefix3] || PINCODE_PREFIX_COORDS[prefix2];
-            
-            if (coords) {
-                const [lat2, lon2] = coords;
-                const osrmUrl = `https://router.project-osrm.org/route/v1/driving/73.0631,19.2968;${lon2},${lat2}?overview=false`;
-                const osrmRes = await fetch(osrmUrl);
-                const osrmData = await osrmRes.json();
-
-                if (osrmData && osrmData.routes && osrmData.routes.length > 0) {
-                    const distanceMeters = osrmData.routes[0].distance;
-                    const liveKm = Math.round(distanceMeters / 1000);
-                    distanceApiCache.set(pinStr, liveKm);
-                    console.log(`Live OSRM Driving Distance for Pincode ${pinStr}: ${liveKm} KM`);
-                    if (onResult) onResult(liveKm);
-                    return liveKm;
-                }
-            }
-        } catch (err) {
-            console.log("Live distance API fetch fallback:", err);
-        }
-
-        if (instantKm) distanceApiCache.set(pinStr, instantKm);
-        return instantKm;
+    // Unified Distance Fetcher (Always synced with calculateDistanceKm)
+    function fetchLiveDistanceKm(destPincode, onResult) {
+        const km = calculateDistanceKm(destPincode);
+        if (onResult && km) onResult(km);
+        return km;
     }
 
     // -------------------------------------------------------------
