@@ -227,11 +227,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const val = snapshot.val();
             if (val === null) {
                 localStorage.setItem('wms_damage_records', '[]');
+                cachedDamageRecords = [];
                 renderDamageUI();
                 renderInventoryPanel();
                 renderOrderQueueUI();
             } else {
                 if (syncCloudDataToLocal('wms_damage_records', val)) {
+                    cachedDamageRecords = val;
                     renderDamageUI();
                     renderInventoryPanel();
                     renderOrderQueueUI();
@@ -245,9 +247,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const val = snapshot.val();
             if (val === null) {
                 localStorage.setItem('wms_oda_records', '[]');
+                updateOdaMemoryCache([]);
                 renderOdaUI();
             } else {
                 if (syncCloudDataToLocal('wms_oda_records', val)) {
+                    updateOdaMemoryCache(val);
                     renderOdaUI();
                     console.log("ODA Pincode Records synchronized.");
                 }
@@ -8112,16 +8116,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // -------------------------------------------------------------
     // DAMAGE REGISTER MODULE
     // -------------------------------------------------------------
+    let cachedDamageRecords = null;
     function getDamageRecords() {
+        if (cachedDamageRecords !== null) {
+            return cachedDamageRecords;
+        }
         const data = localStorage.getItem('wms_damage_records');
         try {
-            return data ? JSON.parse(data) : [];
+            cachedDamageRecords = data ? JSON.parse(data) : [];
+            return cachedDamageRecords;
         } catch (e) {
-            return [];
+            cachedDamageRecords = [];
+            return cachedDamageRecords;
         }
     }
 
     function saveDamageRecords(records) {
+        cachedDamageRecords = records;
         localStorage.setItem('wms_damage_records', JSON.stringify(records));
         cachedProductStockMap = null;
         firebaseSet('damage_records', records);
@@ -8253,22 +8264,52 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -------------------------------------------------------------
-    // ODA REGISTER MODULE
+    // ODA REGISTER MODULE (Memory Cached & Map Indexed)
     // -------------------------------------------------------------
     let uploadedOdaRecords = [];
+    let memoryOdaRecords = []; // Flat list of {pincode, courier, remark}
+    let memoryOdaMap = new Map(); // Fast Map: pincode -> array of {courier, remark}
+
+    function updateOdaMemoryCache(recordsData) {
+        memoryOdaRecords = [];
+        memoryOdaMap.clear();
+        if (Array.isArray(recordsData)) {
+            recordsData.forEach(r => {
+                let pincode = '';
+                let courier = '';
+                let remark = '';
+                if (Array.isArray(r)) {
+                    pincode = String(r[0] || '').trim();
+                    courier = String(r[1] || '').trim();
+                    remark = String(r[2] || '').trim();
+                } else if (r && typeof r === 'object') {
+                    pincode = String(r.pincode || '').trim();
+                    courier = String(r.courier || '').trim();
+                    remark = String(r.remark || '').trim();
+                }
+                if (pincode) {
+                    const record = { pincode, courier, remark };
+                    memoryOdaRecords.push(record);
+                    if (!memoryOdaMap.has(pincode)) {
+                        memoryOdaMap.set(pincode, []);
+                    }
+                    memoryOdaMap.get(pincode).push(record);
+                }
+            });
+        }
+        console.log(`WMS Cache: ODA loaded with ${memoryOdaRecords.length} records.`);
+    }
 
     function getOdaRecords() {
-        const data = localStorage.getItem('wms_oda_records');
-        try {
-            return data ? JSON.parse(data) : [];
-        } catch (e) {
-            return [];
-        }
+        return memoryOdaRecords;
     }
 
     function saveOdaRecords(records) {
-        localStorage.setItem('wms_oda_records', JSON.stringify(records));
-        firebaseSet('oda_records', records);
+        // Store compressed structure: [ [pincode, courier, remark], ... ]
+        const compressed = records.map(r => [r.pincode, r.courier, r.remark]);
+        localStorage.setItem('wms_oda_records', JSON.stringify(compressed));
+        updateOdaMemoryCache(compressed);
+        firebaseSet('oda_records', compressed);
     }
 
     function isOdaRemark(remark) {
@@ -8290,29 +8331,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderOdaUI() {
-        const records = getOdaRecords();
-        
         const countSpan = document.getElementById('odaRecordsCount');
-        if (countSpan) countSpan.textContent = records.length;
+        if (countSpan) countSpan.textContent = memoryOdaRecords.length;
         
         const searchInput = document.getElementById('odaSearchInput');
         const filterText = searchInput ? searchInput.value.trim().toLowerCase() : '';
-        
-        const filtered = records.filter(r => {
-            return String(r.pincode).toLowerCase().includes(filterText) || 
-                   String(r.courier).toLowerCase().includes(filterText) ||
-                   String(r.remark).toLowerCase().includes(filterText);
-        });
         
         const body = document.getElementById('odaTableBody');
         if (!body) return;
         body.innerHTML = '';
         
+        let filtered = memoryOdaRecords;
+        if (filterText) {
+            filtered = memoryOdaRecords.filter(r => {
+                return r.pincode.includes(filterText) || 
+                       r.courier.toLowerCase().includes(filterText) ||
+                       r.remark.toLowerCase().includes(filterText);
+            });
+        }
+        
         if (filtered.length === 0) {
             body.innerHTML = `
                 <tr>
                     <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 24px;">
-                        ${records.length === 0 ? 'No ODA pincode records loaded. Please upload a file above.' : 'No records match search query.'}
+                        ${memoryOdaRecords.length === 0 ? 'No ODA pincode records loaded. Please upload a file above.' : 'No records match search query.'}
                     </td>
                 </tr>
             `;
@@ -8487,13 +8529,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    let odaSearchTimeout = null;
     if (odaSearchInput) {
         odaSearchInput.addEventListener('input', () => {
-            renderOdaUI();
+            if (odaSearchTimeout) clearTimeout(odaSearchTimeout);
+            odaSearchTimeout = setTimeout(() => {
+                renderOdaUI();
+            }, 250);
         });
     }
 
     // Initial load: Restore states on page load/reload
+    const savedOda = localStorage.getItem('wms_oda_records');
+    let parsedSavedOda = [];
+    try {
+        parsedSavedOda = savedOda ? JSON.parse(savedOda) : [];
+    } catch(e) {}
+    updateOdaMemoryCache(parsedSavedOda);
+
     restoreSidebarCollapsedState();
     restoreSessionState();
     restoreOutboundSessionState();
