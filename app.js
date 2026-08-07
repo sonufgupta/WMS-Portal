@@ -3876,7 +3876,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             // 3. Extract Shipping Pincode (last 6-digit number in the document)
-            let pincode = '';
             const pincodes = val.match(/\b\d{6}\b/g) || [];
             if (pincodes.length > 0) {
                 pincode = pincodes[pincodes.length - 1];
