@@ -3606,17 +3606,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
             document.getElementById('activeOutboundShop').textContent = activeOutboundSession.shopName;
             document.getElementById('activeOutboundInvoice').textContent = activeOutboundSession.invoiceNo;
+            const pincodeEl = document.getElementById('activeOutboundPincode');
+            if (pincodeEl) pincodeEl.textContent = activeOutboundSession.pincode || 'N/A';
             
             const odaBadge = document.getElementById('odaIndicatorBadge');
             if (odaBadge) {
-                const pincode = activeOutboundSession.pincode;
-                const records = getOdaRecords();
-                const matched = pincode ? records.filter(r => String(r.pincode) === String(pincode)) : [];
-                
-                if (matched.length > 0) {
-                    const isOda = matched.some(r => isOdaRemark(r.remark));
-                    const courierDetails = matched.map(r => `${r.courier}: ${r.remark}`).join(', ');
-                    const statusText = isOda ? `⚠️ ODA (${courierDetails})` : `✅ NORMAL (${courierDetails})`;
+                if (activeOutboundSession.pincode) {
+                    const pincode = activeOutboundSession.pincode;
+                    const records = getOdaRecords();
+                    const matched = records.filter(r => String(r.pincode) === String(pincode));
+                    
+                    let statusText = '';
+                    let isOda = false;
+                    
+                    if (matched.length > 0) {
+                        isOda = matched.some(r => isOdaRemark(r.remark));
+                        const courierDetails = matched.map(r => `${r.courier}: ${r.remark}`).join(', ');
+                        statusText = isOda ? `⚠️ ODA (${courierDetails})` : `✅ NORMAL (${courierDetails})`;
+                    } else {
+                        statusText = `✅ NORMAL (Delivery: Normal)`;
+                    }
                     
                     odaBadge.style.display = 'flex';
                     odaBadge.textContent = statusText;
@@ -3708,6 +3717,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             document.getElementById('configShopName').value = activeOutboundSession.shopName || '';
             document.getElementById('configInvoiceNo').value = activeOutboundSession.invoiceNo || '';
+            const pinEl = document.getElementById('configPincode');
+            if (pinEl) pinEl.value = activeOutboundSession.pincode || '';
             
             outboundConfigModal.classList.add('active');
         });
@@ -3741,19 +3752,42 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const shopVal = document.getElementById('configShopName').value.trim();
             const invoiceVal = document.getElementById('configInvoiceNo').value.trim();
+            const pinEl = document.getElementById('configPincode');
+            const pinVal = pinEl ? pinEl.value.trim().replace(/\D/g, '') : '';
 
             if (!shopVal || !invoiceVal) {
                 alert('Please enter both Shop Name and Invoice Number.');
                 return;
             }
 
+            if (pinVal && pinVal.length !== 6) {
+                alert('Pincode must be exactly a 6-digit number.');
+                return;
+            }
+
+            const checkOdaStatusForPincode = (pincode) => {
+                if (!pincode) return 'Normal';
+                const records = getOdaRecords();
+                const matched = records.filter(r => String(r.pincode) === String(pincode));
+                if (matched.length === 0) return 'Normal';
+                
+                const hasOda = matched.some(r => isOdaRemark(r.remark));
+                return hasOda ? 'ODA' : 'Normal';
+            };
+
+            const odaStatus = checkOdaStatusForPincode(pinVal);
+
             if (isEditingOutboundSession && activeOutboundSession) {
                 activeOutboundSession.shopName = shopVal;
                 activeOutboundSession.invoiceNo = invoiceVal;
+                activeOutboundSession.pincode = pinVal || '';
+                activeOutboundSession.odaStatus = odaStatus;
             } else {
                 activeOutboundSession = {
                     shopName: shopVal,
                     invoiceNo: invoiceVal,
+                    pincode: pinVal || '',
+                    odaStatus: odaStatus,
                     items: [],
                     serials: []
                 };
@@ -3841,6 +3875,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             
+            // 3. Extract Shipping Pincode (last 6-digit number in the document)
+            let pincode = '';
+            const pincodes = val.match(/\b\d{6}\b/g) || [];
+            if (pincodes.length > 0) {
+                pincode = pincodes[pincodes.length - 1];
+            }
+            
             // Populate form fields if extracted successfully
             let filled = false;
             if (shopName) {
@@ -3849,6 +3890,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (invoiceNo) {
                 document.getElementById('configInvoiceNo').value = invoiceNo;
+                filled = true;
+            }
+            if (pincode) {
+                const pinEl = document.getElementById('configPincode');
+                if (pinEl) pinEl.value = pincode;
                 filled = true;
             }
             
@@ -4587,7 +4633,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         const badge = isOda 
                             ? `<span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">⚠️ ODA</span>`
                             : `<span style="background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">Normal</span>`;
-                        return badge;
+                        const pinText = row.pincode ? `<span style="font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">${row.pincode}</span>` : '';
+                        return `<div style="display: flex; flex-direction: column; gap: 2px;">
+                                    ${badge}
+                                    ${pinText}
+                                </div>`;
                     })()}
                 </td>
                 <td>${itemNames}</td>
@@ -4734,8 +4784,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Header text inside cell A1 of every sheet
             let headerText = `${log.shopName} - ${lastIdPart} - ${dateStr} ${timeStr}`;
-            if (log.odaStatus && log.odaStatus !== 'Normal') {
-                headerText += ` - (${log.odaStatus})`;
+            if (log.pincode) {
+                headerText += ` - PIN: ${log.pincode} (${log.odaStatus || 'Normal'})`;
             }
 
             const seenSheetNames = new Set();
