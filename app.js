@@ -3624,9 +3624,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeOutboundSession.serials = activeOutboundSession.serials.filter(s => s && s.serial && s.serial.length <= 50);
             }
 
+            const distKm = activeOutboundSession.distanceKm || calculateDistanceKm(activeOutboundSession.pincode);
+            const distText = distKm ? ` (${distKm.toLocaleString('en-IN')} KM)` : '';
+
             document.getElementById('activeOutboundShop').textContent = activeOutboundSession.shopName;
             document.getElementById('activeOutboundInvoice').textContent = activeOutboundSession.invoiceNo;
-            document.getElementById('activeOutboundPincode').textContent = activeOutboundSession.pincode || 'N/A';
+            document.getElementById('activeOutboundPincode').textContent = (activeOutboundSession.pincode || 'N/A') + distText;
             
             const odaBadge = document.getElementById('odaIndicatorBadge');
             if (odaBadge) {
@@ -3644,6 +3647,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         statusText = isOda ? `⚠️ ODA (${courierDetails})` : `✅ NORMAL (${courierDetails})`;
                     } else {
                         statusText = `✅ NORMAL (No Data)`;
+                    }
+
+                    if (distKm) {
+                        statusText += ` • 🚗 ${distKm.toLocaleString('en-IN')} KM`;
                     }
                     
                     odaBadge.style.display = 'flex';
@@ -3794,18 +3801,21 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             const odaStatus = checkOdaStatusForPincode(pinVal);
+            const distKm = calculateDistanceKm(pinVal);
 
             if (isEditingOutboundSession && activeOutboundSession) {
                 activeOutboundSession.shopName = shopVal;
                 activeOutboundSession.invoiceNo = invoiceVal;
                 activeOutboundSession.pincode = pinVal || '';
                 activeOutboundSession.odaStatus = odaStatus;
+                activeOutboundSession.distanceKm = distKm;
             } else {
                 activeOutboundSession = {
                     shopName: shopVal,
                     invoiceNo: invoiceVal,
                     pincode: pinVal || '',
                     odaStatus: odaStatus,
+                    distanceKm: distKm,
                     items: [],
                     serials: []
                 };
@@ -4650,9 +4660,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         const badge = isOda 
                             ? `<span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">⚠️ ODA</span>`
                             : `<span style="background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">Normal</span>`;
+                        const dist = row.distanceKm || calculateDistanceKm(row.pincode);
+                        const distText = dist ? ` • ${dist.toLocaleString('en-IN')} km` : '';
                         return `<div style="display: flex; flex-direction: column; gap: 2px;">
                                     ${badge}
-                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">${row.pincode}</span>
+                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">${row.pincode}${distText}</span>
                                 </div>`;
                     })()}
                 </td>
@@ -4724,7 +4736,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span>${row.timestamp}</span>
                             <div style="display: flex; align-items: center; gap: 4px;">
                                 <span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--accent-blue);">${row.invoiceNo}</span>
-                                ${row.pincode ? `<span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted);">(${row.pincode})</span>` : ''}
+                                ${(() => {
+                                    if (!row.pincode) return '';
+                                    const dist = row.distanceKm || calculateDistanceKm(row.pincode);
+                                    const distStr = dist ? ` • ${dist.toLocaleString('en-IN')} km` : '';
+                                    return `<span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted);">(${row.pincode}${distStr})</span>`;
+                                })()}
                                 ${mobileOdaBadge}
                             </div>
                         </div>
@@ -4796,7 +4813,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Header text inside cell A1 of every sheet
             let headerText = `${log.shopName} - ${lastIdPart} - ${dateStr} ${timeStr}`;
             if (log.pincode) {
-                headerText += ` - PIN: ${log.pincode} (${log.odaStatus || 'Normal'})`;
+                const dist = log.distanceKm || calculateDistanceKm(log.pincode);
+                const distStr = dist ? ` - ${dist} KM` : '';
+                headerText += ` - PIN: ${log.pincode} (${log.odaStatus || 'Normal'}${distStr})`;
             }
 
             const seenSheetNames = new Set();
@@ -5200,6 +5219,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     invoiceNo: activeOutboundSession.invoiceNo,
                     pincode: activeOutboundSession.pincode || '',
                     odaStatus: activeOutboundSession.odaStatus || 'Normal',
+                    distanceKm: activeOutboundSession.distanceKm || calculateDistanceKm(activeOutboundSession.pincode),
                     items: activeOutboundSession.items,
                     serials: frozenSerials
                 };
@@ -8384,6 +8404,111 @@ document.addEventListener('DOMContentLoaded', () => {
                 damageSerialInput.value = '';
             }
         });
+    }
+
+    // -------------------------------------------------------------
+    // PINCODE DISTANCE CALCULATOR FROM BHIWANDI (421302)
+    // -------------------------------------------------------------
+    const PINCODE_PREFIX_COORDS = {
+        "11": [28.6139, 77.2090], // Delhi NCR
+        "12": [28.4595, 77.0266], // Haryana (Gurgaon/Faridabad)
+        "13": [29.6857, 76.9905], // Haryana (Karnal/Ambala)
+        "14": [30.9010, 75.8573], // Punjab (Ludhiana)
+        "15": [30.2110, 74.9455], // Punjab (Bhatinda)
+        "16": [30.7333, 76.7794], // Chandigarh
+        "17": [31.1048, 77.1734], // Himachal Pradesh
+        "18": [32.7266, 74.8570], // Jammu
+        "19": [34.0837, 74.7973], // Srinagar / Kashmir
+        "20": [28.5355, 77.3910], // UP (Noida/Ghaziabad/Meerut)
+        "21": [25.4358, 81.8463], // UP (Allahabad/Kanpur)
+        "22": [26.8467, 80.9462], // UP (Lucknow/Faizabad)
+        "23": [25.3176, 82.9739], // UP (Varanasi/Mirzapur)
+        "24": [28.9845, 77.7064], // UP (Bareilly/Moradabad)
+        "25": [29.4727, 77.7085], // UP (Muzaffarnagar)
+        "26": [29.2183, 79.5130], // Uttarakhand (Haldwani)
+        "27": [26.7606, 83.3732], // UP (Gorakhpur)
+        "28": [27.1767, 78.0081], // UP (Agra/Jhansi)
+        "30": [26.9124, 75.7873], // Rajasthan (Jaipur)
+        "31": [24.5854, 73.7125], // Rajasthan (Udaipur)
+        "32": [25.2138, 75.8648], // Rajasthan (Kota)
+        "33": [28.0229, 73.3119], // Rajasthan (Bikaner)
+        "34": [26.2389, 73.0243], // Rajasthan (Jodhpur)
+        "36": [22.3039, 70.8022], // Gujarat (Rajkot)
+        "37": [23.2420, 69.6669], // Gujarat (Kutch/Bhuj)
+        "38": [23.0225, 72.5714], // Gujarat (Ahmedabad/Gandhinagar)
+        "39": [21.1702, 72.8311], // Gujarat (Surat/Vadodara/Vapi)
+        "40": [19.0760, 72.8777], // Mumbai / Navi Mumbai
+        "41": [18.5204, 73.8567], // Pune / Satara / Kolhapur
+        "42": [19.9975, 73.7898], // Nashik / Thane / Bhiwandi
+        "43": [19.8762, 75.3433], // Chhatrapati Sambhajinagar (Aurangabad) / Nanded
+        "44": [21.1458, 79.0882], // Nagpur / Amravati / Akola
+        "45": [22.7196, 75.8577], // MP (Indore/Ujjain)
+        "46": [23.2599, 77.4126], // MP (Bhopal)
+        "47": [26.2183, 78.1828], // MP (Gwalior)
+        "48": [23.1815, 79.9864], // MP (Jabalpur)
+        "49": [21.2514, 81.6296], // Chhattisgarh (Raipur)
+        "50": [17.3850, 78.4867], // Telangana (Hyderabad)
+        "51": [13.6288, 79.4192], // AP (Tirupati/Chittoor)
+        "52": [16.5062, 80.6480], // AP (Vijayawada)
+        "53": [17.6868, 83.2185], // AP (Visakhapatnam)
+        "56": [12.9716, 77.5946], // Karnataka (Bengaluru)
+        "57": [12.9141, 74.8560], // Karnataka (Mangalore/Mysore)
+        "58": [15.3647, 75.1240], // Karnataka (Hubli/Belgaum)
+        "59": [15.8497, 74.4977], // Karnataka (Belagavi)
+        "60": [13.0827, 80.2707], // Tamil Nadu (Chennai)
+        "61": [10.7905, 78.7047], // Tamil Nadu (Trichy/Tanjore)
+        "62": [9.9252, 78.1198],  // Tamil Nadu (Madurai)
+        "63": [12.9165, 79.1325], // Tamil Nadu (Vellore/Salem)
+        "64": [11.0168, 76.9558], // Tamil Nadu (Coimbatore)
+        "67": [10.7867, 76.6548], // Kerala (Palakkad/Calicut/Kozhikode)
+        "68": [9.9312, 76.2673],  // Kerala (Kochi/Ernakulam)
+        "69": [8.5241, 76.9366],  // Kerala (Trivandrum)
+        "70": [22.5726, 88.3639], // Kolkata
+        "71": [23.2324, 87.8615], // West Bengal (Bardhaman)
+        "72": [22.4257, 87.3199], // West Bengal (Kharagpur)
+        "73": [26.7271, 88.3953], // West Bengal (Siliguri)
+        "74": [24.0983, 88.2514], // West Bengal (Murshidabad)
+        "75": [20.2961, 85.8245], // Odisha (Bhubaneswar)
+        "76": [19.3149, 84.7941], // Odisha (Berhampur)
+        "77": [21.4669, 83.9812], // Odisha (Sambalpur)
+        "78": [26.1445, 91.7362], // Assam (Guwahati)
+        "79": [23.8315, 91.2868], // Tripura / Meghalaya / Nagaland / Manipur
+        "80": [25.5941, 85.1376], // Bihar (Patna)
+        "81": [25.2425, 86.9842], // Bihar (Bhagalpur)
+        "82": [24.7914, 85.0002], // Bihar (Gaya)
+        "83": [23.3441, 85.3096], // Jharkhand (Ranchi/Jamshedpur)
+        "84": [26.1542, 85.8918], // Bihar (Darbhanga/Muzaffarpur)
+        "85": [25.7711, 87.4822]  // Bihar (Purnea)
+    };
+
+    const BHIWANDI_LAT = 19.2968;
+    const BHIWANDI_LNG = 73.0631;
+
+    function calculateDistanceKm(destPincode) {
+        if (!destPincode) return null;
+        const pinStr = String(destPincode).trim().replace(/\D/g, '');
+        if (pinStr.length !== 6) return null;
+
+        const prefix3 = pinStr.substring(0, 3);
+        if (prefix3 === '421') return 15; // Local Bhiwandi/Kalyan
+        if (prefix3 === '400' || prefix3 === '401') return 35; // Thane/Mumbai
+
+        const prefix2 = pinStr.substring(0, 2);
+        const coords = PINCODE_PREFIX_COORDS[prefix2];
+        if (!coords) return null;
+
+        const [lat2, lon2] = coords;
+        const R = 6371; // Earth radius in km
+        const dLat = (lat2 - BHIWANDI_LAT) * Math.PI / 180;
+        const dLon = (lon2 - BHIWANDI_LNG) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(BHIWANDI_LAT * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const aerialKm = R * c;
+        
+        // Add 1.25x road curvature factor for driving distance approximation
+        return Math.round(aerialKm * 1.25);
     }
 
     // -------------------------------------------------------------
