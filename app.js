@@ -3833,15 +3833,38 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // 1. Extract Invoice / Sales Order Number
             const invoiceRegexes = [
-                /(?:Sales\s*Order|Invoice|SO|Order)\s*(?:No\.?|#)?\s*[:\-]?\s*([A-Za-z0-9\-\_\/]+(?:\s*[A-Za-z0-9\-\_\/]+)*)/i,
-                /\b(SO-[A-Za-z0-9\-\_\/]+)\b/i,
-                /\b(INV-[A-Za-z0-9\-\_\/]+)\b/i
+                /\b(SO\s*-\s*[A-Za-z0-9\-\_\/]+(?:\s*\/[A-Za-z0-9\-\_\/]+)*)\b/i,
+                /\b(INV\s*-\s*[A-Za-z0-9\-\_\/]+(?:\s*\/[A-Za-z0-9\-\_\/]+)*)\b/i,
+                /(?:Sales\s*Order|Invoice|SO|Order)\s*(?:No\.?|#)\s*[:\-]?\s*([A-Za-z0-9\-\_\/\s]+)/i,
+                /(?:Sales\s*Order|Invoice|SO|Order)\s*[:\-]\s*([A-Za-z0-9\-\_\/\s]+)/i
             ];
             
             for (const regex of invoiceRegexes) {
                 const match = val.match(regex);
                 if (match && match[1]) {
-                    invoiceNo = match[1].trim();
+                    let cleaned = match[1].trim();
+                    // Split by double-spaces, tab, or common keywords to avoid capturing trailing fields
+                    cleaned = cleaned.split(/\s{2,}/)[0]; // stop at double spaces
+                    cleaned = cleaned.split('\t')[0]; // stop at tabs
+                    
+                    // Stop at common invoice keywords
+                    const stopKeywords = [/order\s*date/i, /date/i, /terms/i, /place/i, /gst/i];
+                    for (const kw of stopKeywords) {
+                        const kwIdx = cleaned.search(kw);
+                        if (kwIdx !== -1) {
+                            cleaned = cleaned.substring(0, kwIdx).trim();
+                        }
+                    }
+                    
+                    // Remove trailing non-alphanumeric punctuation
+                    cleaned = cleaned.replace(/[\:\-\s]+$/, '').trim();
+                    
+                    // Reject if it matches a common keyword like "Sales Order" or "Order" or is too short
+                    if (cleaned.toLowerCase() === 'sales order' || cleaned.toLowerCase() === 'order' || cleaned.length < 3) {
+                        continue;
+                    }
+                    
+                    invoiceNo = cleaned;
                     break;
                 }
             }
