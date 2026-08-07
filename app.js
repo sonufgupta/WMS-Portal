@@ -8524,15 +8524,10 @@ document.addEventListener('DOMContentLoaded', () => {
         "85": [25.7711, 87.4822]
     };
 
-    const BHIWANDI_LAT = 19.2968;
-    const BHIWANDI_LNG = 73.0631;
-
     // -------------------------------------------------------------
     // UNIVERSAL DYNAMIC NIC GST E-WAY BILL DISTANCE ENGINE (BHIWANDI 421302)
     // Official NIC E-Way Bill Formula: Haversine Aerial Distance * 1.256x Highway Factor
     // -------------------------------------------------------------
-    const BHIWANDI_LAT = 19.2968;
-    const BHIWANDI_LNG = 73.0631;
     const NIC_EWAY_BILL_HIGHWAY_FACTOR = 1.256;
 
     const dynamicPinCoordsCache = new Map();
