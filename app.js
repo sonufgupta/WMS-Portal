@@ -4639,6 +4639,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                 </div>`;
                     })()}
                 </td>
+                <td>
+                    ${(() => {
+                        if (row.courierRecommendation) {
+                            return `<span style="display:inline-flex; align-items:center; gap:5px; background:#1d4ed8; color:#fff; padding:3px 10px; border-radius:6px; font-size:0.75rem; font-weight:800; white-space:nowrap;">🚚 ${row.courierRecommendation}</span>`;
+                        }
+                        return `<span style="color:var(--text-muted); font-size:0.8rem;">—</span>`;
+                    })()}
+                </td>
                 <td>${itemNames}</td>
                 <td class="font-mono">${totalWeight.toFixed(3)} kg</td>
                 <td class="font-mono" style="font-weight: 700;">${totalPcs}</td>
@@ -4729,6 +4737,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span>Total Weight:</span>
                             <span style="font-weight: 700; color: var(--accent-emerald);">${totalWeight.toFixed(3)} kg</span>
                         </div>
+                        ${row.courierRecommendation ? `<div style="margin-top:6px; display:flex; align-items:center; gap:6px; border-top: 1px dashed var(--border-color); padding-top:6px;"><span style="font-size:0.7rem; color:var(--text-muted);">Courier:</span><span style="background:#1d4ed8; color:#fff; padding:2px 10px; border-radius:5px; font-size:0.72rem; font-weight:800;">🚚 ${row.courierRecommendation}</span></div>` : ''}
                     </div>
                     <div class="mobile-log-card-actions">
                         <button type="button" class="btn-show-outbound-box-details btn-mobile-action" data-id="${row.id}" style="background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.25); color: var(--accent-blue);">
@@ -4980,6 +4989,16 @@ document.addEventListener('DOMContentLoaded', () => {
             weightText.textContent = `${totalWeight.toFixed(3)} kg`;
         }
 
+        // Giant Logistics badge: show if under 10 kg, hide at 10 kg+
+        const giantBadge = document.getElementById('giantLogisticsBadge');
+        if (giantBadge) {
+            if (totalWeight < 10) {
+                giantBadge.style.display = 'flex';
+            } else {
+                giantBadge.style.display = 'none';
+            }
+        }
+
         const boxesText = document.getElementById('activeOutboundBoxesCount');
         if (boxesText) {
             boxesText.textContent = `${uniqueBoxes} ${uniqueBoxes === 1 ? 'Box' : 'Boxes'}`;
@@ -5160,6 +5179,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
+    // ── Helper: actually commit & close the outbound session ──────────────────
+    function commitAndCloseOutboundSession(courierRecommendation) {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('en-US', {
+            hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+        const frozenSerials = (activeOutboundSession.serials || []).map(s => {
+            return {
+                ...s,
+                resolvedWeight: resolveItemWeight(s.serial, s.itemName)
+            };
+        });
+
+        const logObj = {
+            id: Date.now().toString(),
+            timestamp: timeStr,
+            shopName: activeOutboundSession.shopName,
+            invoiceNo: activeOutboundSession.invoiceNo,
+            pincode: activeOutboundSession.pincode || '',
+            odaStatus: activeOutboundSession.odaStatus || 'Normal',
+            distanceKm: activeOutboundSession.distanceKm || calculateDistanceKm(activeOutboundSession.pincode),
+            courierRecommendation: courierRecommendation || '',
+            items: activeOutboundSession.items,
+            serials: frozenSerials
+        };
+
+        const historyData = getOutboundHistory();
+        historyData.unshift(logObj);
+        saveOutboundHistory(historyData);
+
+        // Auto download Excel immediately
+        downloadOutboundLogExcel(logObj);
+
+        activeOutboundSession = null;
+        saveActiveOutboundSession();
+        restoreOutboundSessionState();
+    }
+
     // End & Save Session
     if (endOutboundSessionBtn) {
         endOutboundSessionBtn.addEventListener('click', () => {
@@ -5168,44 +5225,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const confirmMsg = `Are you sure you want to end and save this Outbound dispatch?\n\nShop: ${activeOutboundSession.shopName}\nInvoice: ${activeOutboundSession.invoiceNo}\nTotal Items: ${activeOutboundSession.serials.length}`;
-            if (confirm(confirmMsg)) {
-                const now = new Date();
-                const timeStr = now.toLocaleTimeString('en-US', {
-                    hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit'
-                });
-                const frozenSerials = (activeOutboundSession.serials || []).map(s => {
-                    return {
-                        ...s,
-                        resolvedWeight: resolveItemWeight(s.serial, s.itemName)
-                    };
-                });
+            // Calculate current total weight
+            let totalWeight = 0;
+            (activeOutboundSession.serials || []).forEach(s => {
+                totalWeight += resolveItemWeight(s.serial, s.itemName);
+            });
 
-                const logObj = {
-                    id: Date.now().toString(),
-                    timestamp: timeStr,
-                    shopName: activeOutboundSession.shopName,
-                    invoiceNo: activeOutboundSession.invoiceNo,
-                    pincode: activeOutboundSession.pincode || '',
-                    odaStatus: activeOutboundSession.odaStatus || 'Normal',
-                    distanceKm: activeOutboundSession.distanceKm || calculateDistanceKm(activeOutboundSession.pincode),
-                    items: activeOutboundSession.items,
-                    serials: frozenSerials
-                };
-
-                const historyData = getOutboundHistory();
-                historyData.unshift(logObj);
-                saveOutboundHistory(historyData);
-
-                // Auto download Excel immediately
-                downloadOutboundLogExcel(logObj);
-
-                activeOutboundSession = null;
-                saveActiveOutboundSession();
-                restoreOutboundSessionState();
+            if (totalWeight < 10) {
+                // Show Giant Logistics popup
+                const popup = document.getElementById('giantLogisticsPopup');
+                const weightDisplay = document.getElementById('glWeightDisplay');
+                if (weightDisplay) weightDisplay.textContent = `${totalWeight.toFixed(3)} kg`;
+                if (popup) popup.classList.add('visible');
+            } else {
+                // Normal confirm for 10 kg+
+                const confirmMsg = `Are you sure you want to end and save this Outbound dispatch?\n\nShop: ${activeOutboundSession.shopName}\nInvoice: ${activeOutboundSession.invoiceNo}\nTotal Items: ${activeOutboundSession.serials.length}`;
+                if (confirm(confirmMsg)) {
+                    commitAndCloseOutboundSession('');
+                }
             }
         });
     }
+
+    // Giant Logistics popup button handlers
+    const btnGiantYes = document.getElementById('btnGiantLogisticsYes');
+    const btnGiantCancel = document.getElementById('btnGiantLogisticsCancel');
+    const glPopup = document.getElementById('giantLogisticsPopup');
+
+    if (btnGiantYes) {
+        btnGiantYes.addEventListener('click', () => {
+            if (glPopup) glPopup.classList.remove('visible');
+            commitAndCloseOutboundSession('Giant Logistics');
+        });
+    }
+    if (btnGiantCancel) {
+        btnGiantCancel.addEventListener('click', () => {
+            if (glPopup) glPopup.classList.remove('visible');
+        });
+    }
+
 
     if (cancelActiveOutboundSessionBtn) {
         cancelActiveOutboundSessionBtn.addEventListener('click', () => {

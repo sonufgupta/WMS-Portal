@@ -36,6 +36,74 @@
             50% { transform: scale(1.03); }
             100% { transform: scale(1); }
         }
+        @keyframes giantBadgePulse {
+            0%   { box-shadow: 0 4px 14px rgba(29,78,216,0.35); }
+            50%  { box-shadow: 0 4px 24px rgba(29,78,216,0.7); }
+            100% { box-shadow: 0 4px 14px rgba(29,78,216,0.35); }
+        }
+        /* Giant Logistics Confirm Popup */
+        #giantLogisticsPopup {
+            display: none;
+            position: fixed; inset: 0; z-index: 9999;
+            align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.65); backdrop-filter: blur(6px);
+        }
+        #giantLogisticsPopup.visible { display: flex; }
+        #giantLogisticsPopupBox {
+            background: var(--surface-card, #1e2434);
+            border: 2px solid #1d4ed8;
+            border-radius: 16px;
+            padding: 36px 40px;
+            max-width: 440px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            animation: popIn 0.25s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        @keyframes popIn {
+            from { transform: scale(0.82); opacity: 0; }
+            to   { transform: scale(1);    opacity: 1; }
+        }
+        #giantLogisticsPopupBox .gl-truck-icon {
+            font-size: 3rem; margin-bottom: 12px;
+        }
+        #giantLogisticsPopupBox h3 {
+            font-size: 1.3rem; font-weight: 800; color: #60a5fa;
+            margin: 0 0 10px;
+        }
+        #giantLogisticsPopupBox p {
+            font-size: 0.95rem; color: var(--text-secondary, #94a3b8);
+            margin: 0 0 26px; line-height: 1.6;
+        }
+        #giantLogisticsPopupBox .gl-weight-chip {
+            display: inline-block;
+            background: rgba(29,78,216,0.18);
+            color: #93c5fd;
+            border: 1px solid #1d4ed8;
+            border-radius: 20px;
+            padding: 3px 14px;
+            font-family: var(--font-mono, monospace);
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 18px;
+        }
+        #giantLogisticsPopupBox .gl-btn-row {
+            display: flex; gap: 14px; justify-content: center;
+        }
+        #giantLogisticsPopupBox #btnGiantLogisticsYes {
+            background: #1d4ed8; color: #fff;
+            border: none; border-radius: 10px;
+            padding: 12px 32px; font-weight: 800; font-size: 0.95rem;
+            cursor: pointer; transition: background 0.2s;
+        }
+        #giantLogisticsPopupBox #btnGiantLogisticsYes:hover { background: #1e40af; }
+        #giantLogisticsPopupBox #btnGiantLogisticsCancel {
+            background: transparent; color: var(--text-muted, #64748b);
+            border: 1px solid rgba(100,116,139,0.4); border-radius: 10px;
+            padding: 12px 28px; font-weight: 700; font-size: 0.95rem;
+            cursor: pointer; transition: background 0.2s;
+        }
+        #giantLogisticsPopupBox #btnGiantLogisticsCancel:hover { background: rgba(100,116,139,0.1); }
     </style>
 </head>
 <body>
@@ -557,6 +625,7 @@
                                             <th>Shop Name</th>
                                             <th>Invoice No.</th>
                                             <th>ODA Status</th>
+                                            <th>Courier</th>
                                             <th>Total Items</th>
                                             <th>Total Weight</th>
                                             <th>Total PCs</th>
@@ -603,6 +672,10 @@
                                 <div style="display: flex; gap: 12px; align-items: center;">
                                     <div id="odaIndicatorBadge" style="display: none; align-items: center; justify-content: center; font-weight: 800; font-size: 0.82rem; padding: 10px 18px; border-radius: var(--radius-sm); border-style: solid; border-width: 2px; text-transform: uppercase;">
                                         <!-- Will be populated dynamically -->
+                                    </div>
+                                    <!-- Giant Logistics Badge: shown when total weight < 10 kg -->
+                                    <div id="giantLogisticsBadge" style="display: none; align-items: center; justify-content: center; font-weight: 800; font-size: 0.82rem; padding: 10px 18px; border-radius: var(--radius-sm); background-color: #1d4ed8; color: #ffffff; letter-spacing: 0.05em; text-transform: uppercase; box-shadow: 0 4px 14px rgba(29,78,216,0.35); animation: giantBadgePulse 2s infinite; white-space: nowrap;">
+                                        🚚 Giant Logistics
                                     </div>
                                     <button type="button" class="btn-primary" id="btnEditOutboundSessionInfo" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); padding: 10px 18px; display: flex; align-items: center; gap: 8px; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
@@ -1536,6 +1609,20 @@
                     <span>Clear All Devices</span>
                 </button>
                 <button type="button" class="btn-secondary-link" id="closeDeviceManagerModalFooterBtn" style="border:1px solid var(--border-color); color:var(--text-secondary); background:none; border-radius:var(--radius-sm); font-weight:600; padding:10px 16px; font-size:0.9rem; cursor:pointer;">Close</button>
+            </div>
+        </div>
+    </div>
+    <!-- Giant Logistics Courier Confirm Popup -->
+    <div id="giantLogisticsPopup">
+        <div id="giantLogisticsPopupBox">
+            <div class="gl-truck-icon">🚚</div>
+            <h3>Giant Logistics Courier</h3>
+            <p>Is shipment weight is under 10 kg — this order should be handed over to:</p>
+            <div class="gl-weight-chip" id="glWeightDisplay">— kg</div>
+            <p style="font-size: 1.1rem; font-weight: 800; color: #60a5fa; margin: 0 0 24px;">Giant Logistics</p>
+            <div class="gl-btn-row">
+                <button id="btnGiantLogisticsYes">✅ Yes, Close Session</button>
+                <button id="btnGiantLogisticsCancel">Cancel</button>
             </div>
         </div>
     </div>
