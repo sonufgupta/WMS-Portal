@@ -4752,8 +4752,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td style="padding: 10px 16px;">${itemNamesHtml}</td>
                 <td class="font-mono">${totalWeight.toFixed(3)} kg</td>
                 <td class="font-mono" style="font-weight: 700;">${totalPcs}</td>
-                <td class="font-mono">
-                    <button type="button" class="btn-show-outbound-box-details" data-id="${row.id}" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.4); color: var(--accent-blue); padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth);">
+                <td class="font-mono" style="text-align:center;">
+                    <button type="button" class="btn-show-outbound-box-details" data-id="${row.id}"
+                        style="background: #e11d48; border: none; color: #ffffff; padding: 12px 20px; border-radius: var(--radius-md); font-size: 2.2rem; font-weight: 900; cursor: pointer; transition: var(--transition-smooth); min-width: 64px; line-height: 1; box-shadow: 0 4px 14px rgba(225,29,72,0.4);">
                         ${totalBoxes}
                     </button>
                 </td>
