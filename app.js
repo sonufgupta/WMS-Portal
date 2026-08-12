@@ -4663,10 +4663,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            const itemNames = (row.items || []).map(i => {
-                const count = (serialsByItemMap.get(i.name) || []).length;
-                return `${i.name} (${count})`;
-            }).join(', ') || 'N/A';
+            const itemNamesHtml = (() => {
+                const lines = (row.items || []).map(i => {
+                    const count = (serialsByItemMap.get(i.name) || []).length;
+                    return `<div style="display:flex; align-items:center; gap:6px; padding: 2px 0; white-space:nowrap;">
+                        <span style="color:var(--accent-blue); font-size:0.65rem;">●</span>
+                        <span style="font-size:0.82rem;">${i.name}</span>
+                        <span style="background:rgba(16,185,129,0.12); color:var(--accent-emerald); border:1px solid rgba(16,185,129,0.25); font-size:0.68rem; font-weight:800; padding:1px 6px; border-radius:10px; white-space:nowrap;">${count} pcs</span>
+                    </div>`;
+                });
+                return lines.length > 0
+                    ? `<div style="display:flex; flex-direction:column; gap:2px; min-width:180px;">${lines.join('')}</div>`
+                    : '<span style="color:var(--text-muted);">N/A</span>';
+            })();
 
             // Calculate total PCs and Boxes count
             const totalPcs = (row.serials || []).length;
@@ -4740,7 +4749,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         return `<span style="color:var(--text-muted); font-size:0.8rem;">—</span>`;
                     })()}
                 </td>
-                <td>${itemNames}</td>
+                <td style="padding: 10px 16px;">${itemNamesHtml}</td>
                 <td class="font-mono">${totalWeight.toFixed(3)} kg</td>
                 <td class="font-mono" style="font-weight: 700;">${totalPcs}</td>
                 <td class="font-mono">
