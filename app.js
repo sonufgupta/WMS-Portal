@@ -8979,14 +8979,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================================================
-    // DYNAMIC INDIAN FESTIVAL ENGINE & 3D VISUAL EFFECTS SYSTEM
+    // DYNAMIC INDIAN FESTIVAL ENGINE
     // ==========================================================================
     
     const festivalThemeSelector = document.getElementById('festivalThemeSelector');
     const festivalCountdownWidget = document.getElementById('festivalCountdownWidget');
     const festivalCountdownIcon = document.getElementById('festivalCountdownIcon');
     const festivalCountdownText = document.getElementById('festivalCountdownText');
-    const festivalCanvas = document.getElementById('festivalCanvas3D');
 
     // Festival Definitions & Dates
     const FESTIVAL_DEFS = [
@@ -9046,7 +9045,6 @@ document.addEventListener('DOMContentLoaded', () => {
             activeFestivalKey = 'classic';
             document.documentElement.removeAttribute('data-festival');
             if (festivalCountdownWidget) festivalCountdownWidget.style.display = 'none';
-            if (particleEngine) particleEngine.setMode('classic');
             localStorage.setItem('wms_festival_theme', 'classic');
             return;
         } else {
@@ -9059,7 +9057,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.documentElement.setAttribute('data-festival', activeFestivalKey);
         if (festivalCountdownWidget) festivalCountdownWidget.style.display = 'flex';
-        if (particleEngine) particleEngine.setMode(activeFestivalKey);
         localStorage.setItem('wms_festival_theme', key);
     }
 
@@ -9074,154 +9071,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 festivalCountdownText.textContent = `${f.name} (${festInfo.daysLeft} Day${festInfo.daysLeft === 1 ? '' : 's'} Away)`;
             }
         }
-    }
-
-    // --- 3D CANVAS PARTICLE ENGINE ---
-    let particleEngine = null;
-    function init3DParticleEngine() {
-        if (!festivalCanvas) return;
-        const ctx = festivalCanvas.getContext('2d');
-        let width = festivalCanvas.width = window.innerWidth;
-        let height = festivalCanvas.height = window.innerHeight;
-
-        window.addEventListener('resize', () => {
-            width = festivalCanvas.width = window.innerWidth;
-            height = festivalCanvas.height = window.innerHeight;
-        });
-
-        const particles = [];
-        const PARTICLE_COUNT = 45;
-
-        class Particle3D {
-            constructor() {
-                this.reset();
-            }
-            reset() {
-                this.x = Math.random() * width;
-                this.y = Math.random() * height;
-                this.z = Math.random() * 800 + 100;
-                this.vx = (Math.random() - 0.5) * 0.8;
-                this.vy = -(Math.random() * 0.8 + 0.3);
-                this.vz = (Math.random() - 0.5) * 0.5;
-                this.size = Math.random() * 4 + 2;
-                this.rotation = Math.random() * Math.PI * 2;
-                this.vRot = (Math.random() - 0.5) * 0.03;
-                this.alpha = Math.random() * 0.7 + 0.3;
-            }
-            update() {
-                this.x += this.vx;
-                this.y += this.vy;
-                this.z += this.vz;
-                this.rotation += this.vRot;
-
-                if (this.y < -20 || this.x < -20 || this.x > width + 20 || this.z < 10) {
-                    this.reset();
-                    this.y = height + 10;
-                }
-            }
-            draw(mode) {
-                const fov = 400;
-                const scale = fov / (fov + this.z);
-                const projX = (this.x - width / 2) * scale + width / 2;
-                const projY = (this.y - height / 2) * scale + height / 2;
-                const projSize = this.size * scale * 1.5;
-
-                ctx.save();
-                ctx.translate(projX, projY);
-                ctx.rotate(this.rotation);
-                ctx.globalAlpha = this.alpha * scale;
-
-                if (mode === 'independence') {
-                    const colors = ['#f97316', '#ffffff', '#16a34a'];
-                    const col = colors[Math.floor(this.x) % colors.length];
-                    ctx.fillStyle = col;
-                    ctx.shadowColor = col;
-                    ctx.shadowBlur = 8 * scale;
-                    ctx.fillRect(-projSize, -projSize, projSize * 2, projSize * 1.2);
-                } else if (mode === 'diwali') {
-                    ctx.fillStyle = '#fbbf24';
-                    ctx.shadowColor = '#f59e0b';
-                    ctx.shadowBlur = 12 * scale;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, projSize, 0, Math.PI * 2);
-                    ctx.fill();
-                } else if (mode === 'janmashtami') {
-                    const col = Math.random() > 0.5 ? '#60a5fa' : '#f59e0b';
-                    ctx.fillStyle = col;
-                    ctx.shadowColor = col;
-                    ctx.shadowBlur = 10 * scale;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, projSize, 0, Math.PI * 2);
-                    ctx.fill();
-                } else if (mode === 'ganesh') {
-                    ctx.fillStyle = '#fb923c';
-                    ctx.shadowColor = '#eab308';
-                    ctx.shadowBlur = 10 * scale;
-                    ctx.fillRect(-projSize, -projSize, projSize * 1.5, projSize * 1.5);
-                } else if (mode === 'holi') {
-                    const holiColors = ['#f472b6', '#38bdf8', '#a78bfa', '#4ade80', '#fbbf24'];
-                    const col = holiColors[Math.floor(this.x + this.y) % holiColors.length];
-                    ctx.fillStyle = col;
-                    ctx.shadowColor = col;
-                    ctx.shadowBlur = 10 * scale;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, projSize * 1.2, 0, Math.PI * 2);
-                    ctx.fill();
-                } else {
-                    ctx.fillStyle = '#f43f5e';
-                    ctx.shadowColor = '#e11d48';
-                    ctx.shadowBlur = 8 * scale;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, projSize, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-
-                ctx.restore();
-            }
-        }
-
-        for (let i = 0; i < PARTICLE_COUNT; i++) {
-            particles.push(new Particle3D());
-        }
-
-        let currentMode = 'independence';
-
-        function animate() {
-            ctx.clearRect(0, 0, width, height);
-            particles.forEach(p => {
-                p.update();
-                p.draw(currentMode);
-            });
-            requestAnimationFrame(animate);
-        }
-        animate();
-
-        particleEngine = {
-            setMode(mode) {
-                currentMode = mode;
-            }
-        };
-    }
-
-    // --- 3D INTERACTIVE CARD MOUSE TILT ---
-    function init3DCardTilt() {
-        const cards = document.querySelectorAll('.dashboard-card, .guide-card, .modal-card, .session-bar-card');
-        cards.forEach(card => {
-            card.classList.add('tilt-3d-card');
-            card.addEventListener('mousemove', (e) => {
-                const rect = card.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-                const centerX = rect.width / 2;
-                const centerY = rect.height / 2;
-                const rotateX = -((y - centerY) / centerY) * 6;
-                const rotateY = ((x - centerX) / centerX) * 6;
-                card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.01, 1.01, 1.01)`;
-            });
-            card.addEventListener('mouseleave', () => {
-                card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)';
-            });
-        });
     }
 
     // Bind Festival Switcher
@@ -9243,9 +9092,6 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(`🎉 Upcoming Festival Highlight:\n${festInfo.festival.icon} ${festInfo.festival.name}\n${festInfo.isActive ? 'Festival is LIVE today!' : festInfo.daysLeft + ' Days Remaining'}`);
         });
     }
-
-    init3DParticleEngine();
-    init3DCardTilt();
 
     // Initial load: Restore states on page load/reload
     const savedOda = localStorage.getItem('wms_oda_records');

@@ -66,7 +66,7 @@
 }
 
 /* ==========================================================================
-   FESTIVAL THEME TOKENS & 3D VISUAL EFFECTS ENGINE
+   FESTIVAL THEME TOKENS ENGINE
    ========================================================================== */
 
 /* 🇮🇳 15th August Independence Day Theme */
@@ -195,29 +195,6 @@
     --accent-ruby-glow: 0 0 25px rgba(251, 113, 133, 0.6);
     --text-primary: #fff1f2;
     --text-secondary: #fecdd3;
-}
-
-/* 3D Canvas Background Element */
-#festivalCanvas3D {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    pointer-events: none;
-    z-index: 1;
-    opacity: 0.8;
-}
-
-/* 3D Card Tilt & Parallax */
-.tilt-3d-card {
-    transform-style: preserve-3d;
-    transition: transform 0.15s cubic-bezier(0.2, 0, 0.2, 1), box-shadow 0.3s ease;
-    will-change: transform;
-}
-
-.tilt-3d-card:hover {
-    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.35), var(--accent-ruby-glow);
 }
 
 /* Rotating Ashoka Chakra Animation */
