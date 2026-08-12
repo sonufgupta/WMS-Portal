@@ -4725,9 +4725,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td style="text-align: center; cursor: pointer; padding: 10px 8px;" class="btn-toggle-outbound-mark" data-id="${row.id}" title="Toggle Marked Summary Inclusion">
                     ${checkedIcon}
                 </td>
-                <td class="font-mono">${timestampHtml}</td>
-                <td>${row.shopName}</td>
-                <td class="font-mono">${row.invoiceNo}</td>
+                <td class="font-mono" style="font-size:1.15rem; font-weight:900; color:#fff;">${timestampHtml}</td>
+                <td style="font-size:1.15rem; font-weight:900; color:#fff;">${row.shopName}</td>
+                <td class="font-mono" style="font-size:1.05rem; font-weight:900; color:#fff;">${row.invoiceNo}</td>
                 <td>
                     ${(() => {
                         const isOda = row.odaStatus === 'ODA';
@@ -4750,8 +4750,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     })()}
                 </td>
                 <td style="padding: 10px 16px;">${itemNamesHtml}</td>
-                <td class="font-mono">${totalWeight.toFixed(3)} kg</td>
-                <td class="font-mono" style="font-weight: 700;">${totalPcs}</td>
+                <td class="font-mono" style="font-size:1.15rem; font-weight:900; color:#fff;">${totalWeight.toFixed(3)} kg</td>
+                <td class="font-mono" style="font-size:1.5rem; font-weight:900; color:#e11d48;">${totalPcs}</td>
                 <td class="font-mono" style="text-align:center;">
                     <button type="button" class="btn-show-outbound-box-details" data-id="${row.id}"
                         style="background: #e11d48; border: none; color: #ffffff; padding: 12px 20px; border-radius: var(--radius-md); font-size: 2.2rem; font-weight: 900; cursor: pointer; transition: var(--transition-smooth); min-width: 64px; line-height: 1; box-shadow: 0 4px 14px rgba(225,29,72,0.4);">
