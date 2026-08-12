@@ -4808,27 +4808,39 @@ document.addEventListener('DOMContentLoaded', () => {
                     mobileOdaBadge = `<span style="background: ${odaBg}; color: ${odaColor}; border: 1px solid ${odaColor}; padding: 1px 4px; border-radius: 3px; font-size: 0.65rem; font-weight: 800; margin-left: 6px; text-transform: uppercase;">${odaLabel}</span>`;
                 }
 
+                // Format Date + Time
+                let dateFormattedStr = '';
+                const logTimestampMs = parseInt(row.id);
+                if (!isNaN(logTimestampMs)) {
+                    const d = new Date(logTimestampMs);
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const year = d.getFullYear();
+                    dateFormattedStr = `${day}/${month}/${year} • `;
+                }
+                const fullTimestampDisplay = `${dateFormattedStr}${row.timestamp}`;
+
                 card.innerHTML = `
-                    <div class="mobile-log-card-header">
-                        <h4 class="mobile-log-card-title">${row.shopName}</h4>
-                        <span class="mobile-log-card-badge">${totalPcs} PCs (${totalBoxes} Bx)</span>
+                    <div class="mobile-log-card-header" style="align-items: center;">
+                        <h4 class="mobile-log-card-title" style="font-size: 1.15rem; font-weight: 800;">${row.shopName}</h4>
+                        <span class="mobile-log-card-badge" style="font-size: 1.25rem; font-weight: 900; padding: 6px 14px; background: rgba(16, 185, 129, 0.15); border: 1.5px solid var(--accent-emerald); border-radius: var(--radius-md);">${totalPcs} PCs</span>
                     </div>
-                    <div class="mobile-log-card-subtitle" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-                        <div style="display: flex; flex-direction: column; gap: 2px;">
-                            <span>${row.timestamp}</span>
-                            <div style="display: flex; align-items: center; gap: 4px;">
-                                <span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--accent-blue);">${row.invoiceNo}</span>
+                    <div class="mobile-log-card-subtitle" style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 4px;">
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <span style="font-size: 0.92rem; font-weight: 700; color: var(--text-secondary);">${fullTimestampDisplay}</span>
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <span style="font-family: var(--font-mono); font-size: 1.25rem; font-weight: 900; color: #f43f5e; background: rgba(244, 63, 94, 0.1); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(244, 63, 94, 0.25);">${row.invoiceNo}</span>
                                 ${(() => {
                                     if (!row.pincode) return '';
                                     const dist = row.distanceKm || calculateDistanceKm(row.pincode);
                                     const distStr = dist ? ` • ${dist.toLocaleString('en-IN')} km` : '';
-                                    return `<span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted);">(${row.pincode}${distStr})</span>`;
+                                    return `<span style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); font-weight: 700;">(${row.pincode}${distStr})</span>`;
                                 })()}
                                 ${mobileOdaBadge}
                             </div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Mark:</span>
+                            <span style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Mark:</span>
                             <span class="btn-toggle-outbound-mark" data-id="${row.id}" style="display: inline-flex; align-items: center; justify-content: center;">
                                 ${mobileCheckIcon}
                             </span>
@@ -4836,24 +4848,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="mobile-log-card-items">
                         ${mobileItemsHtml}
-                        <div style="font-size: 0.75rem; color: var(--text-muted); border-top: 1px dashed var(--border-color); padding-top: 6px; margin-top: 4px; display: flex; justify-content: space-between; align-items: center;">
-                            <span>Total Weight:</span>
-                            <span style="font-weight: 700; color: var(--accent-emerald);">${totalWeight.toFixed(3)} kg</span>
+                        <div style="font-size: 0.85rem; color: var(--text-muted); border-top: 1px dashed var(--border-color); padding-top: 8px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 600;">Total Weight:</span>
+                            <span style="font-weight: 800; color: var(--accent-emerald); font-size: 1rem;">${totalWeight.toFixed(3)} kg</span>
                         </div>
-                        ${row.courierRecommendation ? `<div style="margin-top:6px; display:flex; align-items:center; gap:6px; border-top: 1px dashed var(--border-color); padding-top:6px;"><span style="font-size:0.7rem; color:var(--text-muted);">Courier:</span><span style="background:#1d4ed8; color:#fff; padding:2px 10px; border-radius:5px; font-size:0.72rem; font-weight:800;">🚚 ${row.courierRecommendation}</span></div>` : ''}
+                        ${row.courierRecommendation ? `<div style="margin-top:6px; display:flex; align-items:center; gap:6px; border-top: 1px dashed var(--border-color); padding-top:6px;"><span style="font-size:0.8rem; color:var(--text-muted); font-weight: 600;">Courier:</span><span style="background:#1d4ed8; color:#fff; padding:4px 12px; border-radius:6px; font-size:0.85rem; font-weight:800;">🚚 ${row.courierRecommendation}</span></div>` : ''}
                     </div>
-                    <div class="mobile-log-card-actions">
-                        <button type="button" class="btn-show-outbound-box-details btn-mobile-action" data-id="${row.id}" style="background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.25); color: var(--accent-blue);">
-                            <span>Boxes (${totalBoxes})</span>
+                    <div class="mobile-log-card-actions" style="gap: 12px; padding-top: 14px;">
+                        <button type="button" class="btn-show-outbound-box-details btn-mobile-action" data-id="${row.id}" style="background: rgba(244, 63, 94, 0.12); border-color: rgba(244, 63, 94, 0.35); color: var(--accent-rose); padding: 10px 18px; font-size: 1.05rem; font-weight: 800;">
+                            <span>Boxes (<strong style="font-size: 1.25rem; font-weight: 900; color: #ffffff;">${totalBoxes}</strong>)</span>
                         </button>
-                        <button type="button" class="btn-download-outbound-excel btn-mobile-action btn-mobile-excel" data-id="${row.id}">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
+                        <button type="button" class="btn-download-outbound-excel btn-mobile-action btn-mobile-excel" data-id="${row.id}" style="padding: 10px 18px; font-size: 1.05rem; font-weight: 800;">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                             </svg>
                             <span>Excel</span>
                         </button>
-                        <button type="button" class="btn-restore-outbound-log btn-mobile-action btn-mobile-delete" data-id="${row.id}" style="color: var(--accent-blue); background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.25);">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
+                        <button type="button" class="btn-restore-outbound-log btn-mobile-action btn-mobile-delete" data-id="${row.id}" style="padding: 10px 18px; font-size: 1.05rem; font-weight: 800; color: var(--accent-rose); background: rgba(244, 63, 94, 0.08); border-color: rgba(244, 63, 94, 0.3);">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                             </svg>
                             <span>Restore</span>
@@ -4863,6 +4875,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 mobileContainer.appendChild(card);
             }
         });
+
 
         const todayOutboundBoxesEl = document.getElementById('todayOutboundBoxes');
         const todayOutboundWeightEl = document.getElementById('todayOutboundWeight');
@@ -9050,120 +9063,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ==========================================================================
-    // DYNAMIC INDIAN FESTIVAL ENGINE
-    // ==========================================================================
-    
-    const festivalThemeSelector = document.getElementById('festivalThemeSelector');
-    const festivalCountdownWidget = document.getElementById('festivalCountdownWidget');
-    const festivalCountdownIcon = document.getElementById('festivalCountdownIcon');
-    const festivalCountdownText = document.getElementById('festivalCountdownText');
+    // Remove any leftover festival themes
+    document.documentElement.removeAttribute('data-festival');
+    localStorage.removeItem('wms_festival_theme');
 
-    // Festival Definitions & Dates
-    const FESTIVAL_DEFS = [
-        { key: 'independence', name: '15th August Independence Day', icon: '🇮🇳', month: 7, day: 15, durationDays: 3 },
-        { key: 'raksha', name: 'Raksha Bandhan', icon: '🪢', month: 7, day: 25, durationDays: 2 },
-        { key: 'janmashtami', name: 'Krishna Janmashtami', icon: '🪈', month: 7, day: 28, durationDays: 2 },
-        { key: 'ganesh', name: 'Ganesh Chaturthi', icon: '🐘', month: 8, day: 7, durationDays: 10 },
-        { key: 'navratri', name: 'Navratri / Durga Puja', icon: '💃', month: 9, day: 3, durationDays: 9 },
-        { key: 'diwali', name: 'Diwali Festival of Lights', icon: '🪔', month: 10, day: 1, durationDays: 5 },
-        { key: 'sankranti', name: 'Makar Sankranti', icon: '🪁', month: 0, day: 14, durationDays: 2 },
-        { key: 'holi', name: 'Holi Color Festival', icon: '🎨', month: 2, day: 14, durationDays: 2 }
-    ];
-
-    function getUpcomingOrActiveFestival() {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-
-        let nearestFest = null;
-        let minDiffDays = 999;
-        let isCurrentlyActive = false;
-
-        FESTIVAL_DEFS.forEach(f => {
-            let festDate = new Date(currentYear, f.month, f.day);
-            const endFestDate = new Date(currentYear, f.month, f.day + f.durationDays);
-            if (now > endFestDate) {
-                festDate = new Date(currentYear + 1, f.month, f.day);
-            }
-
-            const diffTime = festDate - now;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-            if (diffDays <= 0 && diffDays >= -f.durationDays) {
-                nearestFest = f;
-                minDiffDays = 0;
-                isCurrentlyActive = true;
-            } else if (!isCurrentlyActive && diffDays > 0 && diffDays < minDiffDays) {
-                minDiffDays = diffDays;
-                nearestFest = f;
-            }
-        });
-
-        if (!nearestFest) {
-            nearestFest = FESTIVAL_DEFS[0]; // Independence Day fallback
-        }
-
-        return { festival: nearestFest, daysLeft: minDiffDays, isActive: isCurrentlyActive };
-    }
-
-    let activeFestivalKey = 'independence';
-
-    function applyFestivalTheme(key) {
-        if (key === 'auto') {
-            const festInfo = getUpcomingOrActiveFestival();
-            activeFestivalKey = festInfo.festival.key;
-            updateFestivalWidget(festInfo);
-        } else if (key === 'classic') {
-            activeFestivalKey = 'classic';
-            document.documentElement.removeAttribute('data-festival');
-            if (festivalCountdownWidget) festivalCountdownWidget.style.display = 'none';
-            localStorage.setItem('wms_festival_theme', 'classic');
-            return;
-        } else {
-            activeFestivalKey = key;
-            const found = FESTIVAL_DEFS.find(f => f.key === key);
-            if (found) {
-                updateFestivalWidget({ festival: found, daysLeft: 0, isActive: true });
-            }
-        }
-
-        document.documentElement.setAttribute('data-festival', activeFestivalKey);
-        if (festivalCountdownWidget) festivalCountdownWidget.style.display = 'flex';
-        localStorage.setItem('wms_festival_theme', key);
-    }
-
-    function updateFestivalWidget(festInfo) {
-        if (!festivalCountdownWidget) return;
-        const f = festInfo.festival;
-        if (festivalCountdownIcon) festivalCountdownIcon.textContent = f.icon;
-        if (festivalCountdownText) {
-            if (festInfo.isActive) {
-                festivalCountdownText.textContent = `${f.name} (Live Festival!)`;
-            } else {
-                festivalCountdownText.textContent = `${f.name} (${festInfo.daysLeft} Day${festInfo.daysLeft === 1 ? '' : 's'} Away)`;
-            }
-        }
-    }
-
-    // Bind Festival Switcher
-    if (festivalThemeSelector) {
-        const savedFest = localStorage.getItem('wms_festival_theme') || 'auto';
-        festivalThemeSelector.value = savedFest;
-        applyFestivalTheme(savedFest);
-
-        festivalThemeSelector.addEventListener('change', (e) => {
-            applyFestivalTheme(e.target.value);
-        });
-    } else {
-        applyFestivalTheme('auto');
-    }
-
-    if (festivalCountdownWidget) {
-        festivalCountdownWidget.addEventListener('click', () => {
-            const festInfo = getUpcomingOrActiveFestival();
-            alert(`🎉 Upcoming Festival Highlight:\n${festInfo.festival.icon} ${festInfo.festival.name}\n${festInfo.isActive ? 'Festival is LIVE today!' : festInfo.daysLeft + ' Days Remaining'}`);
-        });
-    }
 
     // Initial load: Restore states on page load/reload
     const savedOda = localStorage.getItem('wms_oda_records');
