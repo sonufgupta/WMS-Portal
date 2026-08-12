@@ -1774,9 +1774,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const itemsList = activeSession.items || [];
 
+        // Pre-group serials by itemName for O(1) lookup
+        const serialsByItemNameMap = new Map();
+        (activeSession.serials || []).forEach(s => {
+            if (s && s.itemName) {
+                let list = serialsByItemNameMap.get(s.itemName);
+                if (!list) {
+                    list = [];
+                    serialsByItemNameMap.set(s.itemName, list);
+                }
+                list.push(s);
+            }
+        });
+
         itemsList.forEach(activeItem => {
             // Find all scanned serials belonging to this item
-            const itemSerials = activeSession.serials.filter(s => s.itemName === activeItem.name);
+            const itemSerials = serialsByItemNameMap.get(activeItem.name) || [];
             
             // Calculate item-specific pieces and unique boxes count
             const itemPieces = itemSerials.length;
@@ -2336,13 +2349,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const items = activeSession.items || [];
         
+        // Pre-group serials by itemName for O(1) lookup
+        const serialsByItemMap = new Map();
+        (activeSession.serials || []).forEach(s => {
+            if (s && s.itemName) {
+                let list = serialsByItemMap.get(s.itemName);
+                if (!list) {
+                    list = [];
+                    serialsByItemMap.set(s.itemName, list);
+                }
+                list.push(s);
+            }
+        });
+
         let totalExpected = 0;
         let totalScanned = 0;
         
         items.forEach(item => {
             totalExpected += parseInt(item.expectedQty) || 0;
-            // Count scanned serials for this product
-            const itemScans = activeSession.serials.filter(s => s.itemName === item.name).length;
+            const itemSerials = serialsByItemMap.get(item.name) || [];
+            const itemScans = itemSerials.length;
             item.scannedCount = itemScans;
             totalScanned += itemScans;
         });
@@ -2365,7 +2391,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sessionScannedBoxesCount) {
             let totalBoxesCount = 0;
             items.forEach(activeItem => {
-                const itemSerials = activeSession.serials.filter(s => s.itemName === activeItem.name);
+                const itemSerials = serialsByItemMap.get(activeItem.name) || [];
                 const uniqueBoxes = new Set(itemSerials.map(s => s.boxNo));
                 totalBoxesCount += uniqueBoxes.size;
             });
@@ -4624,11 +4650,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const tr = document.createElement('tr');
             tr.className = (index % 2 === 0) ? 'white-row' : 'black-row';
             let totalWeight = 0;
+            const serialsByItemMap = new Map();
             (row.serials || []).forEach(s => {
                 totalWeight += s.resolvedWeight !== undefined ? s.resolvedWeight : resolveItemWeight(s.serial, s.itemName);
+                if (s && s.itemName) {
+                    let list = serialsByItemMap.get(s.itemName);
+                    if (!list) {
+                        list = [];
+                        serialsByItemMap.set(s.itemName, list);
+                    }
+                    list.push(s);
+                }
             });
+
             const itemNames = (row.items || []).map(i => {
-                const count = (row.serials || []).filter(s => s.itemName === i.name).length;
+                const count = (serialsByItemMap.get(i.name) || []).length;
                 return `${i.name} (${count})`;
             }).join(', ') || 'N/A';
 
@@ -4637,7 +4673,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let totalBoxes = 0;
             const rowItems = row.items || [];
             rowItems.forEach(i => {
-                const itemSerials = (row.serials || []).filter(s => s.itemName === i.name);
+                const itemSerials = serialsByItemMap.get(i.name) || [];
                 const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
                 totalBoxes += itemBoxes;
             });
@@ -4744,7 +4780,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Item pills list
                 const mobileItemsHtml = (row.items || []).map(i => {
-                    const count = (row.serials || []).filter(s => s.itemName === i.name).length;
+                    const count = (serialsByItemMap.get(i.name) || []).length;
                     return `
                         <div class="mobile-log-card-item">
                             <span class="mobile-log-card-item-bullet">●</span>
@@ -4916,8 +4952,22 @@ document.addEventListener('DOMContentLoaded', () => {
             container.innerHTML = '';
             
             const items = activeOutboundSession.items || [];
+            
+            // Pre-group serials by itemName for O(1) lookup
+            const serialsByItemMap = new Map();
+            (activeOutboundSession.serials || []).forEach(s => {
+                if (s && s.itemName) {
+                    let list = serialsByItemMap.get(s.itemName);
+                    if (!list) {
+                        list = [];
+                        serialsByItemMap.set(s.itemName, list);
+                    }
+                    list.push(s);
+                }
+            });
+
             items.forEach(item => {
-                const itemSerials = activeOutboundSession.serials.filter(s => s.itemName === item.name);
+                const itemSerials = serialsByItemMap.get(item.name) || [];
                 const scannedCount = itemSerials.length;
                 
                 let subtotalWeight = 0;
@@ -5077,8 +5127,20 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const serialsByItemMap = new Map();
+        (activeOutboundSession.serials || []).forEach(s => {
+            if (s && s.itemName) {
+                let list = serialsByItemMap.get(s.itemName);
+                if (!list) {
+                    list = [];
+                    serialsByItemMap.set(s.itemName, list);
+                }
+                list.push(s);
+            }
+        });
+
         activeOutboundSession.items.forEach(item => {
-            const itemSerials = activeOutboundSession.serials.filter(s => s.itemName === item.name);
+            const itemSerials = serialsByItemMap.get(item.name) || [];
             const itemPieces = itemSerials.length;
             const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
 
@@ -5640,7 +5702,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Map Colors dynamically to products
         let colorIdx = 0;
-        const allUniqueInHistory = Array.from(new Set(inboundHistory.flatMap(log => (log.serials || []).map(s => s.itemName || log.item))));
+        const allUniqueInHistory = Object.keys(productStock);
         allUniqueInHistory.forEach(name => {
             if (!productColorsMap[name]) {
                 productColorsMap[name] = colorThemes[colorIdx % colorThemes.length];
