@@ -1815,13 +1815,27 @@ a {
     background-color: #eef2ff !important;
 }
 
-/* Mobile Log Cards Container */
 .mobile-log-cards {
     display: none;
     flex-direction: column;
     gap: 16px;
     width: 100%;
     margin-top: 12px;
+}
+
+/* Outbound Cards Grid - Always visible (Desktop & Mobile) */
+.outbound-cards-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 18px;
+    width: 100%;
+    margin-top: 12px;
+}
+
+@media (max-width: 600px) {
+    .outbound-cards-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* Individual Log Card */

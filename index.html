@@ -624,29 +624,14 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="table-container">
+                            <!-- Table hidden — card layout used for all screen sizes -->
+                            <div style="display:none;">
                                 <table class="portal-table" id="outboundHistoryTable">
-                                    <thead>
-                                        <tr>
-                                            <th style="width: 50px; text-align: center;">Mark</th>
-                                            <th>Timestamp</th>
-                                            <th>Shop Name</th>
-                                            <th>Invoice No.</th>
-                                            <th>ODA Status</th>
-                                            <th>Courier</th>
-                                            <th>Total Items</th>
-                                            <th>Total Weight</th>
-                                            <th>Total PCs</th>
-                                            <th>Total Boxes</th>
-                                            <th>Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="outboundHistoryBody">
-                                        <!-- Completed logs populated dynamically -->
-                                    </tbody>
+                                    <tbody id="outboundHistoryBody"></tbody>
                                 </table>
                             </div>
-                            <div class="mobile-log-cards" id="outboundHistoryMobileCards"></div>
+                            <!-- Card layout — shown on all screen sizes -->
+                            <div class="outbound-cards-grid" id="outboundHistoryMobileCards"></div>
                         </div>
 
                     <!-- State B: Outbound Session Active -->
