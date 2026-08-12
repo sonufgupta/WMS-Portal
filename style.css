@@ -1099,6 +1099,24 @@ a {
     background-color: rgba(37,99,235,0.04);
 }
 
+/* Outbound history table — compact overrides for 11-column layout */
+#outboundHistoryTable {
+    font-size: 0.8rem;
+}
+#outboundHistoryTable th {
+    padding: 10px 10px;
+    font-size: 0.68rem;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+#outboundHistoryTable td {
+    padding: 10px 10px;
+    font-size: 0.8rem;
+}
+#outboundHistoryTable .font-mono {
+    font-size: 0.78rem;
+}
+
 .font-mono {
     font-family: var(--font-mono);
     font-size: 0.85rem;
