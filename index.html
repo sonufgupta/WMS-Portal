@@ -611,34 +611,19 @@
                             </div>
                         </div>
 
-                        <div class="dashboard-card table-card">
-                            <div class="card-header">
-                                <div class="card-icon emerald">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" />
-                                    </svg>
-                                </div>
-                                <div class="card-title-group">
-                                    <h2>Completed Outbound Logs</h2>
-                                    <p>History of previously closed dispatch sessions</p>
-                                </div>
-                            </div>
-                            
-                            <!-- Today's Dispatch Summary Bar -->
-                            <div style="display: flex; gap: 16px; padding: 12px 24px; border-bottom: 1px solid var(--border-color); background: rgba(16, 185, 129, 0.02); flex-wrap: wrap;">
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted);">Today's Dispatch Summary:</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 6px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; color: var(--accent-blue);">
-                                    <span>Total Boxes:</span>
-                                    <span id="todayOutboundBoxes">0</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 6px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; color: var(--accent-amber);">
-                                    <span>Total Weight:</span>
-                                    <span id="todayOutboundWeight">0.000 kg</span>
+                        <div class="dashboard-card table-card" style="padding: 24px;">
+                            <!-- Today Summary Bar -->
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; justify-content: space-between;">
+                                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">Recent Outbound Logs</h3>
+                                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                                    <div style="display: flex; align-items: center; gap: 6px; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); padding: 5px 12px; border-radius: var(--radius-sm); font-size: 0.82rem; font-weight: 700; color: var(--accent-blue);">
+                                        📦 Today's Boxes: <span id="todayOutboundBoxes" style="margin-left:4px;">0</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 6px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); padding: 5px 12px; border-radius: var(--radius-sm); font-size: 0.82rem; font-weight: 700; color: var(--accent-amber);">
+                                        ⚖️ Today's Weight: <span id="todayOutboundWeight" style="margin-left:4px;">0.000 kg</span>
+                                    </div>
                                 </div>
                             </div>
-                            
                             <div class="table-container">
                                 <table class="portal-table" id="outboundHistoryTable">
                                     <thead>
@@ -663,7 +648,6 @@
                             </div>
                             <div class="mobile-log-cards" id="outboundHistoryMobileCards"></div>
                         </div>
-                    </div>
 
                     <!-- State B: Outbound Session Active -->
                     <div id="outboundActiveState" style="width: 100%; display: none; flex-direction: column; gap: 24px;">
