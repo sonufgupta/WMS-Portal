@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -37,27 +37,27 @@
             100% { transform: scale(1); }
         }
         @keyframes giantBadgePulse {
-            0%   { box-shadow: 0 4px 14px rgba(225,29,72,0.35); }
-            50%  { box-shadow: 0 4px 24px rgba(225,29,72,0.7); }
-            100% { box-shadow: 0 4px 14px rgba(225,29,72,0.35); }
+            0%   { box-shadow: 0 4px 14px rgba(29,78,216,0.3); }
+            50%  { box-shadow: 0 4px 24px rgba(29,78,216,0.6); }
+            100% { box-shadow: 0 4px 14px rgba(29,78,216,0.3); }
         }
         /* Giant Logistics Confirm Popup */
         #giantLogisticsPopup {
             display: none;
             position: fixed; inset: 0; z-index: 9999;
             align-items: center; justify-content: center;
-            background: rgba(10, 6, 10, 0.75); backdrop-filter: blur(8px);
+            background: rgba(15,14,40,0.5); backdrop-filter: blur(10px);
         }
         #giantLogisticsPopup.visible { display: flex; }
         #giantLogisticsPopupBox {
-            background: var(--bg-card, #1a0f18);
-            border: 2px solid #e11d48;
-            border-radius: 16px;
+            background: #ffffff;
+            border: 2px solid #5b4cf5;
+            border-radius: 20px;
             padding: 36px 40px;
             max-width: 440px;
             width: 90%;
             text-align: center;
-            box-shadow: 0 20px 60px rgba(225,29,72,0.25);
+            box-shadow: 0 24px 64px rgba(91,76,245,0.2);
             animation: popIn 0.25s cubic-bezier(0.34,1.56,0.64,1);
         }
         @keyframes popIn {
@@ -68,49 +68,48 @@
             font-size: 3rem; margin-bottom: 12px;
         }
         #giantLogisticsPopupBox h3 {
-            font-size: 1.3rem; font-weight: 800; color: #f43f5e;
+            font-size: 1.3rem; font-weight: 800; color: #5b4cf5;
             margin: 0 0 10px;
         }
         #giantLogisticsPopupBox p {
-            font-size: 0.95rem; color: var(--text-secondary, #a89ba5);
-            margin: 0 0 26px; line-height: 1.6;
+            font-size: 0.93rem; color: #5b5880;
+            margin: 0 0 24px; line-height: 1.6;
         }
         #giantLogisticsPopupBox .gl-weight-chip {
             display: inline-block;
-            background: rgba(225,29,72,0.18);
-            color: #fda4af;
-            border: 1px solid #e11d48;
-            border-radius: 20px;
-            padding: 4px 16px;
+            background: rgba(91,76,245,0.1);
+            color: #5b4cf5;
+            border: 1px solid rgba(91,76,245,0.25);
+            border-radius: 99px;
+            padding: 4px 18px;
             font-family: var(--font-mono, monospace);
             font-weight: 800;
             font-size: 1rem;
             margin-bottom: 18px;
-            box-shadow: 0 0 12px rgba(225, 29, 72, 0.3);
         }
         #giantLogisticsPopupBox .gl-btn-row {
             display: flex; gap: 14px; justify-content: center;
         }
         #giantLogisticsPopupBox #btnGiantLogisticsYes {
-            background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
+            background: linear-gradient(135deg, #5b4cf5 0%, #7c6ff7 100%);
             color: #fff;
-            border: 1px solid rgba(254, 205, 211, 0.2); border-radius: 10px;
-            padding: 12px 32px; font-weight: 800; font-size: 0.95rem;
+            border: none; border-radius: 10px;
+            padding: 12px 32px; font-weight: 800; font-size: 0.93rem;
             cursor: pointer; transition: all 0.2s ease;
-            box-shadow: 0 4px 14px rgba(225, 29, 72, 0.4);
+            box-shadow: 0 4px 14px rgba(91,76,245,0.35);
         }
         #giantLogisticsPopupBox #btnGiantLogisticsYes:hover {
-            background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+            background: linear-gradient(135deg, #4a3ce0 0%, #5b4cf5 100%);
             transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(225, 29, 72, 0.6);
+            box-shadow: 0 6px 20px rgba(91,76,245,0.5);
         }
         #giantLogisticsPopupBox #btnGiantLogisticsCancel {
-            background: transparent; color: var(--text-muted, #6e5e6b);
-            border: 1px solid rgba(110,94,107,0.4); border-radius: 10px;
-            padding: 12px 28px; font-weight: 700; font-size: 0.95rem;
+            background: #f5f4fc; color: #5b5880;
+            border: 1.5px solid #e4e2f0; border-radius: 10px;
+            padding: 12px 28px; font-weight: 700; font-size: 0.93rem;
             cursor: pointer; transition: background 0.2s;
         }
-        #giantLogisticsPopupBox #btnGiantLogisticsCancel:hover { background: rgba(225,29,72,0.1); color: #ffffff; }
+        #giantLogisticsPopupBox #btnGiantLogisticsCancel:hover { background: #ede9fa; color: #1a1833; }
     </style>
 </head>
 <body>
