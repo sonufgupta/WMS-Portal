@@ -426,14 +426,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             
-            // Activate and show target section
+            // Activate and show target section instantly
             const targetSection = document.getElementById(targetSectionId);
             if (targetSection) {
                 targetSection.style.display = 'flex';
-                // Small delay to allow CSS transitions to trigger
-                setTimeout(() => {
-                    targetSection.classList.add('active');
-                }, 20);
+                targetSection.classList.add('active');
             }
 
             if (targetSectionId === 'sectionInventory' || targetSectionId === 'sectionOverview') {
@@ -6716,9 +6713,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sectionInbound.style.display = 'none';
 
             sectionWithoutSerialInbound.style.display = 'block';
-            setTimeout(() => {
-                sectionWithoutSerialInbound.classList.add('active');
-            }, 20);
+            sectionWithoutSerialInbound.classList.add('active');
 
             renderWosDropdownItems();
         });
@@ -6731,9 +6726,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sectionWithoutSerialInbound.style.display = 'none';
 
             sectionInbound.style.display = 'flex';
-            setTimeout(() => {
-                sectionInbound.classList.add('active');
-            }, 20);
+            sectionInbound.classList.add('active');
         });
     }
 
@@ -6855,9 +6848,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 sectionWithoutSerialInbound.classList.remove('active');
                 sectionWithoutSerialInbound.style.display = 'none';
                 sectionInbound.style.display = 'flex';
-                setTimeout(() => {
-                    sectionInbound.classList.add('active');
-                }, 20);
+                sectionInbound.classList.add('active');
 
                 alert(`Success! Inwarded ${qtyVal} PCs (${boxCountVal} Boxes) of "${itemVal}" without serial numbers.`);
             };

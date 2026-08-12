@@ -42,10 +42,10 @@
     --radius-lg: 16px;
     --radius-xl: 24px;
     
-    /* Layout & Animation */
+    /* Layout & Animation - 100X Speed Optimized */
     --sidebar-width: 260px;
     --header-height: 70px;
-    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: all 0.08s cubic-bezier(0, 0, 0.2, 1);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -454,12 +454,11 @@ a {
     flex-direction: column;
 }
 
-/* Content Sections Toggling & Fade In Animation */
+/* Content Sections Toggling & Fast Instant Switching */
 .content-section {
     display: none;
     opacity: 0;
-    transform: translateY(12px);
-    transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1), transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: opacity 0.05s ease-out;
     flex: 1;
     flex-direction: column;
 }
@@ -467,7 +466,6 @@ a {
 .content-section.active {
     display: flex !important;
     opacity: 1;
-    transform: translateY(0);
 }
 
 /* Blank/Welcome Area Styling */
@@ -1001,7 +999,7 @@ a {
     justify-content: center;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.06s ease;
 }
 
 .modal-overlay.active {
@@ -1017,8 +1015,8 @@ a {
     max-width: 460px;
     padding: 32px;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
-    transform: scale(0.95);
-    transition: transform 0.3s ease;
+    transform: scale(0.97);
+    transition: transform 0.06s ease;
     display: flex;
     flex-direction: column;
     gap: 24px;
