@@ -4874,20 +4874,32 @@ document.addEventListener('DOMContentLoaded', () => {
                     mobileOdaBadge = `<span style="background: ${odaBg}; color: ${odaColor}; border: 1px solid ${odaColor}; padding: 1px 5px; border-radius: 3px; font-size: 0.65rem; font-weight: 800; text-transform: uppercase;">${odaLabel}</span>`;
                 }
 
-                // Format Timestamp Display
-                const timestampDisplay = row.timestamp || 'N/A';
+                // Format Full Date + Time Display
+                let timestampDisplay = row.timestamp || 'N/A';
+                let fullDateStr = '';
+                if (row.date) {
+                    fullDateStr = row.date;
+                } else if (!isNaN(parseInt(row.id))) {
+                    const d = new Date(parseInt(row.id));
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const month = months[d.getMonth()];
+                    const year = d.getFullYear();
+                    fullDateStr = `${day} ${month} ${year}`;
+                }
+                const fullDateTimeDisplay = fullDateStr ? `${fullDateStr} • ${timestampDisplay}` : timestampDisplay;
 
                 card.innerHTML = `
-                    <!-- 1. Top Row: Shop Name (Truncated with Ellipsis) + Total PCs/Boxes (Right) -->
+                    <!-- 1. Top Row: Shop Name (Truncated with Ellipsis) + Total PCs Badge (Right, Distinct Background, NO BX) -->
                     <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-width: 0;">
                         <h4 style="font-size: 0.95rem; font-weight: 800; color: #ffffff; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0;" title="${row.shopName}">${row.shopName}</h4>
-                        <span style="font-size: 0.78rem; font-weight: 800; color: #ffffff; font-family: var(--font-mono); white-space: nowrap; flex-shrink: 0; background: rgba(255, 255, 255, 0.06); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color);">${totalPcs} PCs (${totalBoxes} BX)</span>
+                        <span style="font-size: 0.8rem; font-weight: 800; color: #10b981; font-family: var(--font-mono); white-space: nowrap; flex-shrink: 0; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); padding: 3px 9px; border-radius: 6px; text-transform: uppercase;">${totalPcs} PCs</span>
                     </div>
 
-                    <!-- 2. Sub-header Row: Date/Time • Invoice No • CLOSED Badge -->
+                    <!-- 2. Sub-header Row: Full Date + Time • Invoice No • CLOSED Badge -->
                     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; min-width: 0; font-size: 0.75rem; color: #8a8f9e;">
                         <div style="display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;">
-                            <span style="flex-shrink: 0;">${timestampDisplay}</span>
+                            <span style="flex-shrink: 0; color: #8a8f9e; font-weight: 500;">${fullDateTimeDisplay}</span>
                             <span>•</span>
                             <span style="font-family: var(--font-mono); font-weight: 800; color: #f43f5e; overflow: hidden; text-overflow: ellipsis;">${row.invoiceNo}</span>
                             ${row.pincode ? `<span style="color: #8a8f9e; font-family: var(--font-mono); flex-shrink: 0;">(${row.pincode})</span>` : ''}
