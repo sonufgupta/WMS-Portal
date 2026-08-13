@@ -1603,7 +1603,7 @@
         </div>
     <!-- Giant Logistics Upload Documents Modal -->
     <div class="modal-overlay" id="glDocUploadModal" style="z-index: 10005;">
-        <div class="modal-card" style="max-width: 520px; width: 95%;">
+        <div class="modal-card" style="max-width: 540px; width: 95%;">
             <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="display: flex; align-items: center; gap: 8px; color: var(--accent-blue); margin: 0; font-size: 1.15rem;">
                     <span>📷 Upload Documents for Giant Logistics</span>
@@ -1615,31 +1615,67 @@
                     Order: <strong id="glDocOrderTitle" style="color: var(--text-primary);">—</strong>
                 </div>
                 <div style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: var(--radius-md); padding: 10px 14px; font-size: 0.82rem; color: var(--accent-rose); font-weight: 700;">
-                    ⚠️ Both Invoice Image and Shipment Image are COMPULSORY to arrange Giant Logistics pickup.
+                    ⚠️ Both Invoice Image and Shipment Image are COMPULSORY to arrange Giant Logistics pickup. Original high-resolution quality will be preserved.
                 </div>
                 
                 <!-- 1. Invoice Image -->
-                <div class="form-group" style="background: var(--bg-primary); border: 1px dashed var(--border-color); border-radius: var(--radius-md); padding: 14px;">
-                    <label style="font-weight: 800; color: var(--text-primary); margin-bottom: 6px; display: block;">1. Invoice Image / Copy (Required)</label>
-                    <input type="file" id="glInvoiceFileInput" accept="image/*,.pdf" style="font-size: 0.85rem; color: var(--text-secondary); width: 100%;">
-                    <div id="glInvoicePreview" style="margin-top: 8px; display: none;">
-                        <img id="glInvoiceImgTag" src="" alt="Invoice Preview" style="max-height: 120px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                <div class="form-group" style="background: var(--bg-primary); border: 1px dashed var(--border-color); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+                    <label style="font-weight: 800; color: var(--text-primary); margin: 0; display: block; font-size: 0.9rem;">1. Invoice Image / Copy (Compulsory)</label>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <label for="glInvoiceFileInput" class="btn-primary" style="flex: 1; min-width: 140px; background: rgba(59,130,246,0.12); color: var(--accent-blue); border: 1px solid var(--accent-blue); padding: 8px 12px; font-size: 0.82rem; font-weight: 800; border-radius: var(--radius-sm); text-align: center; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            📁 Select File / Gallery
+                        </label>
+                        <input type="file" id="glInvoiceFileInput" accept="image/*,.pdf" style="display: none;">
+                        
+                        <button type="button" id="btnInvoiceCamera" class="btn-primary" style="flex: 1; min-width: 140px; background: rgba(16,185,129,0.12); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 8px 12px; font-size: 0.82rem; font-weight: 800; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            📸 Take Live Photo
+                        </button>
+                    </div>
+                    <div id="glInvoicePreview" style="margin-top: 6px; display: none;">
+                        <img id="glInvoiceImgTag" src="" alt="Invoice Preview" style="max-height: 140px; max-width: 100%; border-radius: var(--radius-sm); border: 2px solid var(--accent-emerald); object-fit: contain;">
                     </div>
                 </div>
 
                 <!-- 2. Shipment Image -->
-                <div class="form-group" style="background: var(--bg-primary); border: 1px dashed var(--border-color); border-radius: var(--radius-md); padding: 14px;">
-                    <label style="font-weight: 800; color: var(--text-primary); margin-bottom: 6px; display: block;">2. Shipment Box Photo (Required)</label>
-                    <input type="file" id="glShipmentFileInput" accept="image/*" style="font-size: 0.85rem; color: var(--text-secondary); width: 100%;">
-                    <div id="glShipmentPreview" style="margin-top: 8px; display: none;">
-                        <img id="glShipmentImgTag" src="" alt="Shipment Preview" style="max-height: 120px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                <div class="form-group" style="background: var(--bg-primary); border: 1px dashed var(--border-color); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+                    <label style="font-weight: 800; color: var(--text-primary); margin: 0; display: block; font-size: 0.9rem;">2. Shipment Box Photo (Compulsory)</label>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <label for="glShipmentFileInput" class="btn-primary" style="flex: 1; min-width: 140px; background: rgba(59,130,246,0.12); color: var(--accent-blue); border: 1px solid var(--accent-blue); padding: 8px 12px; font-size: 0.82rem; font-weight: 800; border-radius: var(--radius-sm); text-align: center; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            📁 Select File / Gallery
+                        </label>
+                        <input type="file" id="glShipmentFileInput" accept="image/*" style="display: none;">
+
+                        <button type="button" id="btnShipmentCamera" class="btn-primary" style="flex: 1; min-width: 140px; background: rgba(16,185,129,0.12); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 8px 12px; font-size: 0.82rem; font-weight: 800; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            📸 Take Live Photo
+                        </button>
+                    </div>
+                    <div id="glShipmentPreview" style="margin-top: 6px; display: none;">
+                        <img id="glShipmentImgTag" src="" alt="Shipment Preview" style="max-height: 140px; max-width: 100%; border-radius: var(--radius-sm); border: 2px solid var(--accent-emerald); object-fit: contain;">
                     </div>
                 </div>
 
                 <div class="modal-footer" style="padding-top: 14px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end;">
                     <button type="button" class="btn-secondary-link" id="cancelGlDocUploadModalBtn" style="border: 1px solid var(--border-color); color: var(--text-secondary); background: none; border-radius: var(--radius-sm); padding: 8px 16px; font-weight: 600; cursor: pointer;">Cancel</button>
-                    <button type="button" class="btn-primary" id="btnSaveGlDocs" style="background: var(--accent-emerald); border-color: var(--accent-emerald); color: white; padding: 8px 20px; font-weight: 800; border-radius: var(--radius-sm); cursor: pointer;">Save Documents</button>
+                    <button type="button" class="btn-primary" id="btnSaveGlDocs" style="background: var(--accent-emerald); border-color: var(--accent-emerald); color: white; padding: 8px 20px; font-weight: 800; border-radius: var(--radius-sm); cursor: pointer;">Save Documents & Proceed</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Camera Stream Sub-Modal -->
+    <div class="modal-overlay" id="glCameraModal" style="z-index: 10010;">
+        <div class="modal-card" style="max-width: 520px; width: 95%; text-align: center; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h4 style="margin: 0; color: var(--text-primary); font-size: 1.1rem;" id="glCameraModalTitle">📸 Live Camera Photo</h4>
+                <button type="button" id="closeGlCameraModalBtn" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <div style="position: relative; background: #000; border-radius: var(--radius-md); overflow: hidden; max-height: 380px;">
+                <video id="glCameraVideo" autoplay playsinline style="width: 100%; height: auto; display: block;"></video>
+            </div>
+            <div style="margin-top: 14px; display: flex; justify-content: center; gap: 12px;">
+                <button type="button" id="btnCaptureGlPhoto" style="background: #f43f5e; color: white; border: none; padding: 10px 24px; font-weight: 900; font-size: 1rem; border-radius: 30px; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(244,63,94,0.4);">
+                    🔴 Capture High Quality Photo
+                </button>
             </div>
         </div>
     </div>

@@ -5101,11 +5101,96 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ── Live Camera & High Resolution Image Handlers ──────────────────
+    let activeCameraStream = null;
+    let cameraTargetType = null;
+
+    async function startGlCamera(targetType) {
+        cameraTargetType = targetType;
+        const cameraModal = document.getElementById('glCameraModal');
+        const video = document.getElementById('glCameraVideo');
+        const title = document.getElementById('glCameraModalTitle');
+
+        if (title) {
+            title.textContent = targetType === 'invoice' ? '📸 Take Photo: Invoice Copy' : '📸 Take Photo: Shipment Box';
+        }
+
+        try {
+            const constraints = {
+                video: {
+                    facingMode: { ideal: 'environment' },
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                }
+            };
+            activeCameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+            if (video) {
+                video.srcObject = activeCameraStream;
+                await video.play();
+            }
+            if (cameraModal) cameraModal.classList.add('active');
+        } catch (err) {
+            console.error('Camera access error:', err);
+            alert('⚠️ Camera access denied or not supported. Please use the "📁 Select File / Gallery" option.');
+        }
+    }
+
+    function stopGlCamera() {
+        if (activeCameraStream) {
+            activeCameraStream.getTracks().forEach(track => track.stop());
+            activeCameraStream = null;
+        }
+        const cameraModal = document.getElementById('glCameraModal');
+        if (cameraModal) cameraModal.classList.remove('active');
+    }
+
+    const closeGlCameraModalBtn = document.getElementById('closeGlCameraModalBtn');
+    if (closeGlCameraModalBtn) closeGlCameraModalBtn.addEventListener('click', stopGlCamera);
+
+    const btnInvoiceCamera = document.getElementById('btnInvoiceCamera');
+    const btnShipmentCamera = document.getElementById('btnShipmentCamera');
+    if (btnInvoiceCamera) btnInvoiceCamera.addEventListener('click', () => startGlCamera('invoice'));
+    if (btnShipmentCamera) btnShipmentCamera.addEventListener('click', () => startGlCamera('shipment'));
+
+    // Capture High Quality Uncompressed Photo (1.0 Quality canvas export)
+    const btnCaptureGlPhoto = document.getElementById('btnCaptureGlPhoto');
+    if (btnCaptureGlPhoto) {
+        btnCaptureGlPhoto.addEventListener('click', () => {
+            const video = document.getElementById('glCameraVideo');
+            if (!video || !video.videoWidth) return alert('Camera feed not ready.');
+
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Maximum camera resolution with zero quality loss (1.0)
+            const capturedDataUrl = canvas.toDataURL('image/jpeg', 1.0);
+
+            if (cameraTargetType === 'invoice') {
+                currentGlDocInvoiceBase64 = capturedDataUrl;
+                const invPreview = document.getElementById('glInvoicePreview');
+                const invTag = document.getElementById('glInvoiceImgTag');
+                if (invTag) invTag.src = capturedDataUrl;
+                if (invPreview) invPreview.style.display = 'block';
+            } else if (cameraTargetType === 'shipment') {
+                currentGlDocShipmentBase64 = capturedDataUrl;
+                const shipPreview = document.getElementById('glShipmentPreview');
+                const shipTag = document.getElementById('glShipmentImgTag');
+                if (shipTag) shipTag.src = capturedDataUrl;
+                if (shipPreview) shipPreview.style.display = 'block';
+            }
+
+            stopGlCamera();
+        });
+    }
+
     const btnSaveGlDocs = document.getElementById('btnSaveGlDocs');
     if (btnSaveGlDocs) {
         btnSaveGlDocs.addEventListener('click', () => {
             if (!currentGlDocInvoiceBase64 || !currentGlDocShipmentBase64) {
-                alert('⚠️ Upload Failed: Both Invoice Image and Shipment Image are COMPULSORY! Please select both files.');
+                alert('⚠️ Upload Failed: Both Invoice Image and Shipment Image are COMPULSORY! Please select files or take photos using the live camera.');
                 return;
             }
 
@@ -5117,7 +5202,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 saveOutboundHistory(historyData);
                 closeGlDocUploadModal();
                 renderOutboundHistoryTable();
-                alert('✅ Documents uploaded successfully! You can now generate the Giant Logistics pickup email.');
+                
+                // Open email pickup request modal automatically
+                handleGlEmailClick(currentGlDocLogId);
             }
         });
     }
