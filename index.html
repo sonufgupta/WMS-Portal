@@ -649,10 +649,6 @@
                                     <div id="odaIndicatorBadge" style="display: none; align-items: center; justify-content: center; font-weight: 800; font-size: 0.82rem; padding: 10px 18px; border-radius: var(--radius-sm); border-style: solid; border-width: 2px; text-transform: uppercase;">
                                         <!-- Will be populated dynamically -->
                                     </div>
-                                    <!-- Giant Logistics Badge: shown when total weight < 10 kg -->
-                                    <div id="giantLogisticsBadge" style="display: none; align-items: center; justify-content: center; font-weight: 800; font-size: 0.82rem; padding: 10px 18px; border-radius: var(--radius-sm); background-color: #1d4ed8; color: #ffffff; letter-spacing: 0.05em; text-transform: uppercase; box-shadow: 0 4px 14px rgba(29,78,216,0.35); animation: giantBadgePulse 2s infinite; white-space: nowrap;">
-                                        🚚 Giant Logistics
-                                    </div>
                                     <button type="button" class="btn-primary" id="btnEditOutboundSessionInfo" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); padding: 10px 18px; display: flex; align-items: center; gap: 8px; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -1588,19 +1584,6 @@
             </div>
         </div>
     </div>
-    <!-- Giant Logistics Courier Confirm Popup -->
-    <div id="giantLogisticsPopup">
-        <div id="giantLogisticsPopupBox">
-            <div class="gl-truck-icon">🚚</div>
-            <h3>Giant Logistics Courier</h3>
-            <p>Is shipment weight is under 10 kg — this order should be handed over to:</p>
-            <div class="gl-weight-chip" id="glWeightDisplay">— kg</div>
-            <p style="font-size: 1.1rem; font-weight: 800; color: #60a5fa; margin: 0 0 24px;">Giant Logistics</p>
-            <div class="gl-btn-row">
-                <button id="btnGiantLogisticsYes">✅ Yes, Close Session</button>
-                <button id="btnGiantLogisticsCancel">Cancel</button>
-            </div>
-        </div>
     <!-- Giant Logistics Upload Documents Modal -->
     <div class="modal-overlay" id="glDocUploadModal" style="z-index: 10005;">
         <div class="modal-card" style="max-width: 540px; width: 95%;">

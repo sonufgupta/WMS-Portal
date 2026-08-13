@@ -5784,42 +5784,10 @@ The shipment is ready for pickup. Kindly schedule the pickup at the earliest and
                 return;
             }
 
-            // Calculate current total weight
-            let totalWeight = 0;
-            (activeOutboundSession.serials || []).forEach(s => {
-                totalWeight += resolveItemWeight(s.serial, s.itemName);
-            });
-
-            if (totalWeight < 10) {
-                // Show Giant Logistics popup
-                const popup = document.getElementById('giantLogisticsPopup');
-                const weightDisplay = document.getElementById('glWeightDisplay');
-                if (weightDisplay) weightDisplay.textContent = `${totalWeight.toFixed(3)} kg`;
-                if (popup) popup.classList.add('visible');
-            } else {
-                // Normal confirm for 10 kg+
-                const confirmMsg = `Are you sure you want to end and save this Outbound dispatch?\n\nShop: ${activeOutboundSession.shopName}\nInvoice: ${activeOutboundSession.invoiceNo}\nTotal Items: ${activeOutboundSession.serials.length}`;
-                if (confirm(confirmMsg)) {
-                    commitAndCloseOutboundSession('');
-                }
+            const confirmMsg = `Are you sure you want to end and save this Outbound dispatch?\n\nShop: ${activeOutboundSession.shopName}\nInvoice: ${activeOutboundSession.invoiceNo}\nTotal Items: ${activeOutboundSession.serials.length}`;
+            if (confirm(confirmMsg)) {
+                commitAndCloseOutboundSession('');
             }
-        });
-    }
-
-    // Giant Logistics popup button handlers
-    const btnGiantYes = document.getElementById('btnGiantLogisticsYes');
-    const btnGiantCancel = document.getElementById('btnGiantLogisticsCancel');
-    const glPopup = document.getElementById('giantLogisticsPopup');
-
-    if (btnGiantYes) {
-        btnGiantYes.addEventListener('click', () => {
-            if (glPopup) glPopup.classList.remove('visible');
-            commitAndCloseOutboundSession('Giant Logistics');
-        });
-    }
-    if (btnGiantCancel) {
-        btnGiantCancel.addEventListener('click', () => {
-            if (glPopup) glPopup.classList.remove('visible');
         });
     }
 
