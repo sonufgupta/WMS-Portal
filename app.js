@@ -3862,12 +3862,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeOutboundSession.invoiceNo = invoiceVal;
                 activeOutboundSession.pincode = pinVal || '';
                 activeOutboundSession.odaStatus = odaStatus;
+                if (lastExtractedShippingAddress) {
+                    activeOutboundSession.shippingAddress = lastExtractedShippingAddress;
+                }
             } else {
                 activeOutboundSession = {
                     shopName: shopVal,
                     invoiceNo: invoiceVal,
                     pincode: pinVal || '',
                     odaStatus: odaStatus,
+                    shippingAddress: lastExtractedShippingAddress || '',
                     items: [],
                     serials: []
                 };
@@ -3878,6 +3882,8 @@ document.addEventListener('DOMContentLoaded', () => {
             restoreOutboundSessionState();
         });
     }
+
+    let lastExtractedShippingAddress = '';
 
     // Auto-fill parsing handler for outboundInvoicePasteArea
     const outboundInvoicePasteArea = document.getElementById('outboundInvoicePasteArea');
@@ -3892,6 +3898,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let shopName = '';
             let invoiceNo = '';
             let pincode = '';
+            let shippingAddress = '';
             
             // 1. Extract Invoice / Sales Order Number
             const invoiceRegexes = [
@@ -3905,11 +3912,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const match = val.match(regex);
                 if (match && match[1]) {
                     let cleaned = match[1].trim();
-                    // Split by double-spaces, tab, or common keywords to avoid capturing trailing fields
-                    cleaned = cleaned.split(/\s{2,}/)[0]; // stop at double spaces
-                    cleaned = cleaned.split('\t')[0]; // stop at tabs
+                    cleaned = cleaned.split(/\s{2,}/)[0];
+                    cleaned = cleaned.split('\t')[0];
                     
-                    // Stop at common invoice keywords
                     const stopKeywords = [/order\s*date/i, /date/i, /terms/i, /place/i, /gst/i];
                     for (const kw of stopKeywords) {
                         const kwIdx = cleaned.search(kw);
@@ -3918,10 +3923,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                     
-                    // Remove trailing non-alphanumeric punctuation
                     cleaned = cleaned.replace(/[\:\-\s]+$/, '').trim();
-                    
-                    // Reject if it matches a common keyword like "Sales Order" or "Order" or is too short
                     if (cleaned.toLowerCase() === 'sales order' || cleaned.toLowerCase() === 'order' || cleaned.length < 3) {
                         continue;
                     }
@@ -3941,14 +3943,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             if (headerIndex !== -1) {
-                // Find the first valid non-empty line after "Bill To" or "Ship To"
                 for (let i = headerIndex + 1; i < Math.min(lines.length, headerIndex + 6); i++) {
                     const line = lines[i];
                     if (/Bill\s*To|Ship\s*To/i.test(line)) continue;
                     if (/GSTIN|GST/i.test(line)) continue;
                     if (/Date|Order|SO|Invoice/i.test(line)) continue;
                     if (/Address|Mobile|Phone|Email/i.test(line)) continue;
-                    if (line.match(/^\d+$/)) continue; // skip pure numbers
+                    if (line.match(/^\d+$/)) continue;
                     
                     shopName = line;
                     break;
@@ -3959,6 +3960,37 @@ document.addEventListener('DOMContentLoaded', () => {
             const pincodes = val.match(/\b\d{6}\b/g) || [];
             if (pincodes.length > 0) {
                 pincode = pincodes[pincodes.length - 1];
+            }
+
+            // 4. Extract Full Shipping / Drop Address (all text after customer GSTIN / under Ship To)
+            let shipToIdx = -1;
+            let buyerGstinIdx = -1;
+            for (let i = 0; i < lines.length; i++) {
+                if (/Ship\s*To/i.test(lines[i])) {
+                    shipToIdx = i;
+                    break;
+                }
+            }
+            const searchStart = (shipToIdx !== -1) ? shipToIdx : 0;
+            for (let i = searchStart; i < lines.length; i++) {
+                if (/GSTIN/i.test(lines[i])) {
+                    buyerGstinIdx = i;
+                }
+            }
+
+            const addrLines = [];
+            const startLineIdx = (buyerGstinIdx !== -1) ? (buyerGstinIdx + 1) : (shipToIdx !== -1 ? shipToIdx + 1 : -1);
+            if (startLineIdx !== -1) {
+                for (let i = startLineIdx; i < lines.length; i++) {
+                    const l = lines[i];
+                    if (/Sales\s*Order|Invoice\s*#|Total|Amount|Terms|Place\s*Of\s*Supply/i.test(l)) break;
+                    if (/GSTIN/i.test(l) && buyerGstinIdx === -1) continue;
+                    addrLines.push(l);
+                }
+            }
+            if (addrLines.length > 0) {
+                shippingAddress = addrLines.join('\n').trim();
+                lastExtractedShippingAddress = shippingAddress;
             }
             
             // Populate form fields if extracted successfully
@@ -4849,7 +4881,27 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span style="font-weight: 600;">Total Weight:</span>
                             <span style="font-weight: 800; color: var(--accent-emerald); font-size: 1rem;">${totalWeight.toFixed(3)} kg</span>
                         </div>
-                        ${row.courierRecommendation ? `<div style="margin-top:6px; display:flex; align-items:center; gap:6px; border-top: 1px dashed var(--border-color); padding-top:6px;"><span style="font-size:0.8rem; color:var(--text-muted); font-weight: 600;">Courier:</span><span style="background:#1d4ed8; color:#fff; padding:4px 12px; border-radius:6px; font-size:0.85rem; font-weight:800;">🚚 ${row.courierRecommendation}</span></div>` : ''}
+                        ${(() => {
+                            const isGl = row.courierRecommendation === 'Giant Logistics' || totalWeight < 10;
+                            const hasDocs = row.invoiceImage && row.shipmentImage;
+                            const docsBadgeColor = hasDocs ? 'var(--accent-emerald)' : 'var(--accent-rose)';
+                            const docsBadgeBg = hasDocs ? 'rgba(16, 185, 129, 0.12)' : 'rgba(244, 63, 94, 0.12)';
+                            const docsLabel = hasDocs ? 'Docs Uploaded (2/2) ✅' : 'Upload Docs (0/2) ⚠️';
+
+                            if (!row.courierRecommendation && !isGl) return '';
+
+                            return `
+                                <div style="margin-top:6px; display:flex; align-items:center; gap:8px; border-top: 1px dashed var(--border-color); padding-top:6px; flex-wrap:wrap;">
+                                    <span style="font-size:0.8rem; color:var(--text-muted); font-weight: 600;">Courier:</span>
+                                    <button type="button" class="btn-trigger-gl-email" data-id="${row.id}" title="Click to generate Giant Logistics pickup request email" style="background:#1d4ed8; color:#fff; padding:4px 12px; border-radius:6px; font-size:0.82rem; font-weight:800; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:4px; box-shadow: 0 2px 8px rgba(29,78,216,0.3);">
+                                        🚚 ${row.courierRecommendation || 'Giant Logistics'}
+                                    </button>
+                                    <button type="button" class="btn-open-gl-upload-modal" data-id="${row.id}" title="Upload compulsory Invoice & Shipment box photos" style="background:${docsBadgeBg}; color:${docsBadgeColor}; border: 1px solid ${docsBadgeColor}; padding:4px 10px; border-radius:6px; font-size:0.75rem; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
+                                        📷 ${docsLabel}
+                                    </button>
+                                </div>
+                            `;
+                        })()}
                     </div>
                     <div class="mobile-log-card-actions" style="gap: 12px; padding-top: 14px;">
                         <button type="button" class="btn-show-outbound-box-details btn-mobile-action" data-id="${row.id}" style="background: rgba(244, 63, 94, 0.12); border-color: rgba(244, 63, 94, 0.35); color: var(--accent-rose); padding: 10px 18px; font-size: 1.05rem; font-weight: 800;">
@@ -4962,6 +5014,274 @@ document.addEventListener('DOMContentLoaded', () => {
             alert("Excel export encountered an error, but log details have been saved successfully.");
         }
     }
+
+    // ── Giant Logistics Document Upload & Email Pickup Handlers ──────────────────
+    let currentGlDocLogId = null;
+    let currentGlDocInvoiceBase64 = '';
+    let currentGlDocShipmentBase64 = '';
+
+    function openGlDocUploadModal(logId) {
+        currentGlDocLogId = logId;
+        const historyData = getOutboundHistory();
+        const logItem = historyData.find(item => item.id === logId);
+        if (!logItem) return alert('Order log not found.');
+
+        const modal = document.getElementById('glDocUploadModal');
+        const titleEl = document.getElementById('glDocOrderTitle');
+        if (titleEl) titleEl.textContent = `${logItem.shopName} (${logItem.invoiceNo})`;
+
+        currentGlDocInvoiceBase64 = logItem.invoiceImage || '';
+        currentGlDocShipmentBase64 = logItem.shipmentImage || '';
+
+        const invPreview = document.getElementById('glInvoicePreview');
+        const invTag = document.getElementById('glInvoiceImgTag');
+        if (invTag && currentGlDocInvoiceBase64) {
+            invTag.src = currentGlDocInvoiceBase64;
+            if (invPreview) invPreview.style.display = 'block';
+        } else if (invPreview) {
+            invPreview.style.display = 'none';
+        }
+
+        const shipPreview = document.getElementById('glShipmentPreview');
+        const shipTag = document.getElementById('glShipmentImgTag');
+        if (shipTag && currentGlDocShipmentBase64) {
+            shipTag.src = currentGlDocShipmentBase64;
+            if (shipPreview) shipPreview.style.display = 'block';
+        } else if (shipPreview) {
+            shipPreview.style.display = 'none';
+        }
+
+        if (modal) modal.classList.add('active');
+    }
+
+    function closeGlDocUploadModal() {
+        const modal = document.getElementById('glDocUploadModal');
+        if (modal) modal.classList.remove('active');
+    }
+
+    const closeGlDocUploadModalBtn = document.getElementById('closeGlDocUploadModalBtn');
+    const cancelGlDocUploadModalBtn = document.getElementById('cancelGlDocUploadModalBtn');
+    if (closeGlDocUploadModalBtn) closeGlDocUploadModalBtn.addEventListener('click', closeGlDocUploadModal);
+    if (cancelGlDocUploadModalBtn) cancelGlDocUploadModalBtn.addEventListener('click', closeGlDocUploadModal);
+
+    const glInvoiceFileInput = document.getElementById('glInvoiceFileInput');
+    const glShipmentFileInput = document.getElementById('glShipmentFileInput');
+
+    if (glInvoiceFileInput) {
+        glInvoiceFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    currentGlDocInvoiceBase64 = evt.target.result;
+                    const invPreview = document.getElementById('glInvoicePreview');
+                    const invTag = document.getElementById('glInvoiceImgTag');
+                    if (invTag) invTag.src = currentGlDocInvoiceBase64;
+                    if (invPreview) invPreview.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    if (glShipmentFileInput) {
+        glShipmentFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    currentGlDocShipmentBase64 = evt.target.result;
+                    const shipPreview = document.getElementById('glShipmentPreview');
+                    const shipTag = document.getElementById('glShipmentImgTag');
+                    if (shipTag) shipTag.src = currentGlDocShipmentBase64;
+                    if (shipPreview) shipPreview.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    const btnSaveGlDocs = document.getElementById('btnSaveGlDocs');
+    if (btnSaveGlDocs) {
+        btnSaveGlDocs.addEventListener('click', () => {
+            if (!currentGlDocInvoiceBase64 || !currentGlDocShipmentBase64) {
+                alert('⚠️ Upload Failed: Both Invoice Image and Shipment Image are COMPULSORY! Please select both files.');
+                return;
+            }
+
+            const historyData = getOutboundHistory();
+            const logItem = historyData.find(item => item.id === currentGlDocLogId);
+            if (logItem) {
+                logItem.invoiceImage = currentGlDocInvoiceBase64;
+                logItem.shipmentImage = currentGlDocShipmentBase64;
+                saveOutboundHistory(historyData);
+                closeGlDocUploadModal();
+                renderOutboundHistoryTable();
+                alert('✅ Documents uploaded successfully! You can now generate the Giant Logistics pickup email.');
+            }
+        });
+    }
+
+    function handleGlEmailClick(logId) {
+        const historyData = getOutboundHistory();
+        const logItem = historyData.find(item => item.id === logId);
+        if (!logItem) return alert('Order log not found.');
+
+        if (!logItem.invoiceImage || !logItem.shipmentImage) {
+            alert('⚠️ Image Upload Required!\n\nPlease upload both Invoice Image and Shipment Image first before arranging Giant Logistics pickup email.');
+            openGlDocUploadModal(logId);
+            return;
+        }
+
+        const serialsByItemMap = new Map();
+        let totalWeight = 0;
+        (logItem.serials || []).forEach(s => {
+            totalWeight += s.resolvedWeight !== undefined ? s.resolvedWeight : resolveItemWeight(s.serial, s.itemName);
+            if (s && s.itemName) {
+                let list = serialsByItemMap.get(s.itemName);
+                if (!list) {
+                    list = [];
+                    serialsByItemMap.set(s.itemName, list);
+                }
+                list.push(s);
+            }
+        });
+        const rowItems = logItem.items || [];
+        let totalBoxes = 0;
+        rowItems.forEach(i => {
+            const itemSerials = serialsByItemMap.get(i.name) || [];
+            const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
+            totalBoxes += itemBoxes;
+        });
+        if (rowItems.length === 0 && (logItem.serials || []).length > 0) {
+            totalBoxes = new Set((logItem.serials || []).map(s => s.boxNo)).size;
+        }
+
+        const defaultTo = "sonu.gupta@geonix.in";
+        const defaultCc = "cs@gaintlogistic.com, operation@gaintlogistic.com, shubham@gaintlogistic.com, gaintlogistic@gmail.com, info@gaintlogistic.com, kapil.kumar@geonix.in, sumit.suresh@geonix.in";
+
+        const savedTo = localStorage.getItem('wms_gl_to_email') || defaultTo;
+        const savedCc = localStorage.getItem('wms_gl_cc_emails') || defaultCc;
+
+        const toInput = document.getElementById('glEmailToInput');
+        const ccInput = document.getElementById('glEmailCcInput');
+        const btnSaveCc = document.getElementById('btnSaveGlCcEmails');
+
+        if (toInput) toInput.value = savedTo;
+        if (ccInput) ccInput.value = savedCc;
+
+        const subjectText = `Pickup Request for Shipment - ${logItem.invoiceNo} - ${logItem.shopName}`;
+        const dropAddress = logItem.shippingAddress ? `${logItem.shopName}\n${logItem.shippingAddress}` : logItem.shopName;
+
+        const bodyText = `Dear GAINT LOGISTSC TEAM,
+
+Kindly arrange the pickup today for the below shipment.
+
+Pickup Details: Sonu Gupta (8261829125 )
+Ground Floor,H.NO. 833, Building No. D-7, Gala No. 40, Bhumi World Industrial Park,
+Mumbai Nasik, Highway, Shashtri Nahar Post office, Bhiwandi  Dist-Thane
+BHIWANDI Maharashtra 421302
+
+
+Drop Details:${dropAddress}
+
+Total Box : ${totalBoxes}
+Total weight : ${totalWeight.toFixed(3)} kg
+
+The shipment is ready for pickup. Kindly schedule the pickup at the earliest and share the pickup confirmation once arranged.`;
+
+        const subjectEl = document.getElementById('glEmailSubject');
+        const bodyEl = document.getElementById('glEmailBodyText');
+        const mailtoBtn = document.getElementById('btnTriggerGlMailto');
+        const previewContainer = document.getElementById('glEmailAttachmentsPreview');
+
+        if (subjectEl) subjectEl.textContent = subjectText;
+        if (bodyEl) bodyEl.value = bodyText;
+
+        function updateMailtoLink() {
+            const currentTo = toInput ? toInput.value.trim() : savedTo;
+            const currentCc = ccInput ? ccInput.value.trim() : savedCc;
+            const mailtoUrl = `mailto:${currentTo}?cc=${encodeURIComponent(currentCc)}&subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`;
+            if (mailtoBtn) mailtoBtn.href = mailtoUrl;
+        }
+
+        if (toInput) toInput.oninput = updateMailtoLink;
+        if (ccInput) ccInput.oninput = updateMailtoLink;
+
+        if (btnSaveCc) {
+            btnSaveCc.onclick = () => {
+                const newTo = toInput ? toInput.value.trim() : defaultTo;
+                const newCc = ccInput ? ccInput.value.trim() : defaultCc;
+                localStorage.setItem('wms_gl_to_email', newTo);
+                localStorage.setItem('wms_gl_cc_emails', newCc);
+                if (isFirebaseConnected && db) {
+                    firebaseSet('gl_email_settings', { to: newTo, cc: newCc });
+                }
+                const orig = btnSaveCc.innerHTML;
+                btnSaveCc.innerHTML = '✅ Saved!';
+                btnSaveCc.style.background = 'rgba(16, 185, 129, 0.25)';
+                setTimeout(() => {
+                    btnSaveCc.innerHTML = orig;
+                    btnSaveCc.style.background = 'rgba(16, 185, 129, 0.12)';
+                }, 2000);
+            };
+        }
+
+        updateMailtoLink();
+
+        if (previewContainer) {
+            previewContainer.innerHTML = `
+                <div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
+                    <img src="${logItem.invoiceImage}" alt="Invoice Image" style="width: 100px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <span style="font-size:0.72rem; color:var(--text-secondary); font-weight:700;">Invoice Copy</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
+                    <img src="${logItem.shipmentImage}" alt="Shipment Image" style="width: 100px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <span style="font-size:0.72rem; color:var(--text-secondary); font-weight:700;">Shipment Box</span>
+                </div>
+            `;
+        }
+
+        const copyBtn = document.getElementById('btnCopyGlEmailText');
+        if (copyBtn) {
+            copyBtn.onclick = () => {
+                navigator.clipboard.writeText(bodyText);
+                const orig = copyBtn.innerHTML;
+                copyBtn.innerHTML = '✅ Copied!';
+                setTimeout(() => copyBtn.innerHTML = orig, 2000);
+            };
+        }
+
+        const downloadImgBtn = document.getElementById('btnDownloadGlImages');
+        if (downloadImgBtn) {
+            downloadImgBtn.onclick = () => {
+                const cleanInv = (logItem.invoiceNo || 'Shipment').replace(/[^a-zA-Z0-9]/g, '_');
+                
+                const link1 = document.createElement('a');
+                link1.href = logItem.invoiceImage;
+                link1.download = `Invoice_${cleanInv}.png`;
+                link1.click();
+
+                setTimeout(() => {
+                    const link2 = document.createElement('a');
+                    link2.href = logItem.shipmentImage;
+                    link2.download = `Shipment_${cleanInv}.png`;
+                    link2.click();
+                }, 300);
+            };
+        }
+
+        const modal = document.getElementById('glEmailModal');
+        if (modal) modal.classList.add('active');
+    }
+
+    function closeGlEmailModal() {
+        const modal = document.getElementById('glEmailModal');
+        if (modal) modal.classList.remove('active');
+    }
+
+    const closeGlEmailModalBtn = document.getElementById('closeGlEmailModalBtn');
+    if (closeGlEmailModalBtn) closeGlEmailModalBtn.addEventListener('click', closeGlEmailModal);
 
     // --- Outbound Progress UI and Live Count Calculators ---
     function updateOutboundSessionProgress() {
@@ -5338,6 +5658,9 @@ document.addEventListener('DOMContentLoaded', () => {
             invoiceNo: activeOutboundSession.invoiceNo,
             pincode: activeOutboundSession.pincode || '',
             odaStatus: activeOutboundSession.odaStatus || 'Normal',
+            shippingAddress: activeOutboundSession.shippingAddress || '',
+            invoiceImage: '',
+            shipmentImage: '',
             distanceKm: activeOutboundSession.distanceKm || calculateDistanceKm(activeOutboundSession.pincode),
             courierRecommendation: courierRecommendation || '',
             items: activeOutboundSession.items,
@@ -5439,6 +5762,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     saveOutboundHistory(historyData);
                     renderOutboundHistoryTable();
                 }
+                return;
+            }
+
+            const uploadDocsBtn = e.target.closest('.btn-open-gl-upload-modal');
+            if (uploadDocsBtn) {
+                e.stopPropagation();
+                const logId = uploadDocsBtn.getAttribute('data-id');
+                openGlDocUploadModal(logId);
+                return;
+            }
+
+            const glEmailBtn = e.target.closest('.btn-trigger-gl-email');
+            if (glEmailBtn) {
+                e.stopPropagation();
+                const logId = glEmailBtn.getAttribute('data-id');
+                handleGlEmailClick(logId);
                 return;
             }
 

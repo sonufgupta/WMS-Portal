@@ -1601,6 +1601,105 @@
                 <button id="btnGiantLogisticsCancel">Cancel</button>
             </div>
         </div>
+    <!-- Giant Logistics Upload Documents Modal -->
+    <div class="modal-overlay" id="glDocUploadModal" style="z-index: 10005;">
+        <div class="modal-card" style="max-width: 520px; width: 95%;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="display: flex; align-items: center; gap: 8px; color: var(--accent-blue); margin: 0; font-size: 1.15rem;">
+                    <span>📷 Upload Documents for Giant Logistics</span>
+                </h3>
+                <button type="button" class="close-modal" id="closeGlDocUploadModalBtn" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 12px;">
+                <div style="font-size: 0.88rem; color: var(--text-secondary);">
+                    Order: <strong id="glDocOrderTitle" style="color: var(--text-primary);">—</strong>
+                </div>
+                <div style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: var(--radius-md); padding: 10px 14px; font-size: 0.82rem; color: var(--accent-rose); font-weight: 700;">
+                    ⚠️ Both Invoice Image and Shipment Image are COMPULSORY to arrange Giant Logistics pickup.
+                </div>
+                
+                <!-- 1. Invoice Image -->
+                <div class="form-group" style="background: var(--bg-primary); border: 1px dashed var(--border-color); border-radius: var(--radius-md); padding: 14px;">
+                    <label style="font-weight: 800; color: var(--text-primary); margin-bottom: 6px; display: block;">1. Invoice Image / Copy (Required)</label>
+                    <input type="file" id="glInvoiceFileInput" accept="image/*,.pdf" style="font-size: 0.85rem; color: var(--text-secondary); width: 100%;">
+                    <div id="glInvoicePreview" style="margin-top: 8px; display: none;">
+                        <img id="glInvoiceImgTag" src="" alt="Invoice Preview" style="max-height: 120px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                    </div>
+                </div>
+
+                <!-- 2. Shipment Image -->
+                <div class="form-group" style="background: var(--bg-primary); border: 1px dashed var(--border-color); border-radius: var(--radius-md); padding: 14px;">
+                    <label style="font-weight: 800; color: var(--text-primary); margin-bottom: 6px; display: block;">2. Shipment Box Photo (Required)</label>
+                    <input type="file" id="glShipmentFileInput" accept="image/*" style="font-size: 0.85rem; color: var(--text-secondary); width: 100%;">
+                    <div id="glShipmentPreview" style="margin-top: 8px; display: none;">
+                        <img id="glShipmentImgTag" src="" alt="Shipment Preview" style="max-height: 120px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                    </div>
+                </div>
+
+                <div class="modal-footer" style="padding-top: 14px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end;">
+                    <button type="button" class="btn-secondary-link" id="cancelGlDocUploadModalBtn" style="border: 1px solid var(--border-color); color: var(--text-secondary); background: none; border-radius: var(--radius-sm); padding: 8px 16px; font-weight: 600; cursor: pointer;">Cancel</button>
+                    <button type="button" class="btn-primary" id="btnSaveGlDocs" style="background: var(--accent-emerald); border-color: var(--accent-emerald); color: white; padding: 8px 20px; font-weight: 800; border-radius: var(--radius-sm); cursor: pointer;">Save Documents</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Giant Logistics Email Pickup Modal -->
+    <div class="modal-overlay" id="glEmailModal" style="z-index: 10005;">
+        <div class="modal-card" style="max-width: 680px; width: 95%;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="display: flex; align-items: center; gap: 8px; color: #60a5fa; margin: 0; font-size: 1.15rem;">
+                    <span>🚚 Giant Logistics Pickup Email Request</span>
+                </h3>
+                <button type="button" class="close-modal" id="closeGlEmailModalBtn" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 12px; max-height: 75vh; overflow-y: auto; padding-right: 4px;">
+                
+                <div style="display: flex; flex-direction: column; gap: 10px; font-size: 0.85rem; background: var(--bg-primary); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <strong style="color: var(--text-muted); min-width: 60px;">TO:</strong>
+                        <input type="email" id="glEmailToInput" value="sonu.gupta@geonix.in" style="flex: 1; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; color: var(--accent-emerald); font-weight: 700; font-size: 0.85rem; padding: 4px 8px; outline: none;">
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong style="color: var(--text-muted);">CC Recipients (Editable & Saveable):</strong>
+                            <button type="button" id="btnSaveGlCcEmails" title="Save these CC emails for all future emails" style="background: rgba(16, 185, 129, 0.12); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); padding: 3px 10px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; cursor: pointer; transition: var(--transition-smooth);">
+                                💾 Save Default Recipients
+                            </button>
+                        </div>
+                        <textarea id="glEmailCcInput" style="width: 100%; height: 52px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 0.78rem; padding: 6px 8px; outline: none; resize: vertical; font-family: var(--font-mono); line-height: 1.4;"></textarea>
+                    </div>
+                    <div><strong style="color: var(--text-muted);">SUBJECT:</strong> <span id="glEmailSubject" style="color: var(--text-primary); font-weight: 700;">Pickup Request for Shipment</span></div>
+                </div>
+
+                <div class="form-group">
+                    <label style="font-weight: 800; color: var(--text-primary); margin-bottom: 4px; display: block; font-size: 0.85rem;">Email Message Body:</label>
+                    <textarea id="glEmailBodyText" readonly style="width: 100%; height: 230px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.82rem; padding: 12px; resize: none; font-family: var(--font-mono); line-height: 1.5; outline: none;"></textarea>
+                </div>
+
+                <!-- Attached Images Display -->
+                <div style="background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: var(--radius-md); padding: 12px;">
+                    <div style="font-weight: 800; color: var(--accent-emerald); font-size: 0.85rem; margin-bottom: 8px;">
+                        📎 Attached Documents (2/2 Compulsory Images Uploaded):
+                    </div>
+                    <div style="display: flex; gap: 16px; flex-wrap: wrap;" id="glEmailAttachmentsPreview">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <div class="modal-footer" style="padding-top: 14px; border-top: 1px solid var(--border-color); display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
+                    <button type="button" class="btn-secondary-link" id="btnDownloadGlImages" style="border: 1px solid var(--accent-blue); color: var(--accent-blue); background: rgba(59,130,246,0.08); border-radius: var(--radius-sm); padding: 8px 14px; font-weight: 700; font-size: 0.85rem; cursor: pointer;">
+                        ⬇️ Download Attached Images
+                    </button>
+                    <button type="button" class="btn-secondary-link" id="btnCopyGlEmailText" style="border: 1px solid var(--accent-amber); color: var(--accent-amber); background: rgba(245,158,11,0.08); border-radius: var(--radius-sm); padding: 8px 14px; font-weight: 700; font-size: 0.85rem; cursor: pointer;">
+                        📋 Copy Email Text
+                    </button>
+                    <a id="btnTriggerGlMailto" href="#" target="_blank" class="btn-primary" style="background: #1d4ed8; border-color: #1d4ed8; color: white; padding: 8px 18px; font-weight: 800; font-size: 0.88rem; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border-radius: var(--radius-sm);">
+                        📧 Open Email Client
+                    </a>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Firebase SDK Compat -->
