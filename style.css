@@ -45,7 +45,7 @@
     /* Layout & Animation */
     --sidebar-width: 260px;
     --header-height: 70px;
-    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: all 0.08s ease-out;
 }
 
 /* Light Theme Variables (Crimson Light Mode) */
@@ -1809,6 +1809,20 @@ a {
     #inventoryStockRegisterBody td {
         padding: 8px 6px !important;
         font-size: 0.78rem !important;
+    }
+}
+
+.outbound-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+    width: 100%;
+    margin-top: 12px;
+}
+
+@media (max-width: 600px) {
+    .outbound-cards-grid {
+        grid-template-columns: 1fr;
     }
 }
 
