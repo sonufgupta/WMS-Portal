@@ -4839,10 +4839,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     border: 1px solid var(--border-color);
                     ${rowIsToday ? 'border-left: 4px solid var(--accent-emerald);' : ''}
                     border-radius: 12px;
-                    padding: 12px;
+                    padding: 14px;
                     display: flex;
                     flex-direction: column;
-                    gap: 6px;
+                    height: 100%;
                     box-sizing: border-box;
                     width: 100%;
                     min-width: 0;
@@ -4940,18 +4940,18 @@ document.addEventListener('DOMContentLoaded', () => {
                             : ''}
                     </div>
 
-                    <!-- 4. Action Buttons Row (Boxes, Excel, Restore) -->
-                    <div style="display: flex; gap: 8px; width: 100%; margin-top: 4px;">
-                        <button type="button" class="btn-show-outbound-box-details" data-id="${row.id}" style="flex: 1; background: rgba(244, 63, 94, 0.08); border: 1px solid #f43f5e; color: #f43f5e; padding: 7px 6px; border-radius: 6px; font-weight: 800; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
+                    <!-- 4. Action Buttons Row (Always Positioned at Very Bottom in Straight Horizontal Line Across Cards) -->
+                    <div style="display: flex; gap: 8px; width: 100%; margin-top: auto; padding-top: 12px;">
+                        <button type="button" class="btn-show-outbound-box-details" data-id="${row.id}" style="flex: 1; background: rgba(244, 63, 94, 0.08); border: 1px solid #f43f5e; color: #f43f5e; padding: 8px 6px; border-radius: 6px; font-weight: 800; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
                             <span>Boxes (${totalBoxes})</span>
                         </button>
-                        <button type="button" class="btn-download-outbound-excel" data-id="${row.id}" style="flex: 1; background: rgba(16, 185, 129, 0.08); border: 1px solid #10b981; color: #10b981; padding: 7px 6px; border-radius: 6px; font-weight: 800; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s;">
+                        <button type="button" class="btn-download-outbound-excel" data-id="${row.id}" style="flex: 1; background: rgba(16, 185, 129, 0.08); border: 1px solid #10b981; color: #10b981; padding: 8px 6px; border-radius: 6px; font-weight: 800; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s;">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                             </svg>
                             <span>Excel</span>
                         </button>
-                        <button type="button" class="btn-restore-outbound-log" data-id="${row.id}" style="flex: 1; background: rgba(99, 102, 241, 0.08); border: 1px solid #6366f1; color: #818cf8; padding: 7px 6px; border-radius: 6px; font-weight: 800; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s;">
+                        <button type="button" class="btn-restore-outbound-log" data-id="${row.id}" style="flex: 1; background: rgba(99, 102, 241, 0.08); border: 1px solid #6366f1; color: #818cf8; padding: 8px 6px; border-radius: 6px; font-weight: 800; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s;">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                             </svg>
