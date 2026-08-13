@@ -1814,29 +1814,68 @@ a {
     background: rgba(244, 63, 94, 0.15);
 }
 
-/* Toggle visibility on mobile */
-@media (max-width: 768px) {
-    .table-card .table-container {
-        display: none !important;
-    }
-/* Outbound History Cards Grid - 3 Column Layout for Desktop */
+/* ==========================================================================
+   Outbound History Cards Layout - Responsive Web vs Mobile Separation
+   ========================================================================== */
+
+/* Base Grid Container */
 .outbound-cards-grid {
-    display: grid !important;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    flex-direction: column;
     gap: 16px;
     width: 100%;
     margin-top: 12px;
 }
 
-@media (max-width: 1366px) {
+/* 1. Desktop Web Page View (3 Cards in 1 Row) */
+@media (min-width: 769px) {
     .outbound-cards-grid {
-        grid-template-columns: repeat(2, 1fr);
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 16px !important;
+    }
+    
+    .outbound-card-inner-list {
+        max-height: 140px !important;
+        overflow-y: auto !important;
+    }
+    
+    .outbound-card-title {
+        font-size: 1.05rem !important;
+    }
+    
+    .outbound-card-btn {
+        padding: 8px 6px !important;
+        font-size: 0.85rem !important;
     }
 }
 
+@media (min-width: 769px) and (max-width: 1366px) {
+    .outbound-cards-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+/* 2. Mobile Phone View (Original Full-Width 1 Card per Row Layout) */
 @media (max-width: 768px) {
     .outbound-cards-grid {
-        grid-template-columns: 1fr;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 16px !important;
+    }
+    
+    .outbound-card-inner-list {
+        max-height: none !important;
+        overflow-y: visible !important;
+    }
+    
+    .outbound-card-title {
+        font-size: 1.15rem !important;
+    }
+    
+    .outbound-card-btn {
+        padding: 10px 16px !important;
+        font-size: 0.95rem !important;
     }
 }
 
