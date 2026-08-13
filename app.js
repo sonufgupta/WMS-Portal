@@ -4902,12 +4902,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span style="color: #8a8f9e; font-weight: 500;">${fullDateTimeDisplay}</span>
                             <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                                 <span style="font-family: var(--font-mono); font-size: 0.9rem; font-weight: 800; color: #f43f5e;">${row.invoiceNo}</span>
-                                ${(() => {
-                                    if (!row.pincode) return '';
-                                    const dist = row.distanceKm || calculateDistanceKm(row.pincode);
-                                    const distStr = dist ? ` • ${dist.toLocaleString('en-IN')} km` : '';
-                                    return `<span style="font-family: var(--font-mono); font-size: 0.78rem; color: #8a8f9e; font-weight: 700;">(${row.pincode}${distStr})</span>`;
-                                })()}
+                                ${row.pincode ? `<span style="font-family: var(--font-mono); font-size: 0.78rem; color: #8a8f9e; font-weight: 700;">(${row.pincode})</span>` : ''}
                                 ${mobileOdaBadge}
                             </div>
                         </div>
