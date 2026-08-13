@@ -8470,6 +8470,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Add to damage records
+        const records = getDamageRecords();
         records.push({
             serial: cleanSerial,
             itemName: foundInbound.itemName,
