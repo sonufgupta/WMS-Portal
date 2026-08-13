@@ -426,11 +426,14 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             
-            // Activate and show target section instantly
+            // Activate and show target section
             const targetSection = document.getElementById(targetSectionId);
             if (targetSection) {
                 targetSection.style.display = 'flex';
-                targetSection.classList.add('active');
+                // Small delay to allow CSS transitions to trigger
+                setTimeout(() => {
+                    targetSection.classList.add('active');
+                }, 20);
             }
 
             if (targetSectionId === 'sectionInventory' || targetSectionId === 'sectionOverview') {
@@ -440,7 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (targetSectionId === 'sectionInbound') {
                 renderHistoryTable();
             } else if (targetSectionId === 'sectionOutbound') {
-                restoreOutboundSessionState();
+                renderOutboundHistoryTable();
             }
             
             console.log(`Navigated to section: ${targetSectionId}`);
@@ -1771,22 +1774,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const itemsList = activeSession.items || [];
 
-        // Pre-group serials by itemName for O(1) lookup
-        const serialsByItemNameMap = new Map();
-        (activeSession.serials || []).forEach(s => {
-            if (s && s.itemName) {
-                let list = serialsByItemNameMap.get(s.itemName);
-                if (!list) {
-                    list = [];
-                    serialsByItemNameMap.set(s.itemName, list);
-                }
-                list.push(s);
-            }
-        });
-
         itemsList.forEach(activeItem => {
             // Find all scanned serials belonging to this item
-            const itemSerials = serialsByItemNameMap.get(activeItem.name) || [];
+            const itemSerials = activeSession.serials.filter(s => s.itemName === activeItem.name);
             
             // Calculate item-specific pieces and unique boxes count
             const itemPieces = itemSerials.length;
@@ -2346,26 +2336,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const items = activeSession.items || [];
         
-        // Pre-group serials by itemName for O(1) lookup
-        const serialsByItemMap = new Map();
-        (activeSession.serials || []).forEach(s => {
-            if (s && s.itemName) {
-                let list = serialsByItemMap.get(s.itemName);
-                if (!list) {
-                    list = [];
-                    serialsByItemMap.set(s.itemName, list);
-                }
-                list.push(s);
-            }
-        });
-
         let totalExpected = 0;
         let totalScanned = 0;
         
         items.forEach(item => {
             totalExpected += parseInt(item.expectedQty) || 0;
-            const itemSerials = serialsByItemMap.get(item.name) || [];
-            const itemScans = itemSerials.length;
+            // Count scanned serials for this product
+            const itemScans = activeSession.serials.filter(s => s.itemName === item.name).length;
             item.scannedCount = itemScans;
             totalScanned += itemScans;
         });
@@ -2388,7 +2365,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sessionScannedBoxesCount) {
             let totalBoxesCount = 0;
             items.forEach(activeItem => {
-                const itemSerials = serialsByItemMap.get(activeItem.name) || [];
+                const itemSerials = activeSession.serials.filter(s => s.itemName === activeItem.name);
                 const uniqueBoxes = new Set(itemSerials.map(s => s.boxNo));
                 totalBoxesCount += uniqueBoxes.size;
             });
@@ -3648,21 +3625,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function restoreOutboundSessionState() {
-        const outboundInactiveState = document.getElementById('outboundInactiveState');
-        const outboundActiveState = document.getElementById('outboundActiveState');
-        
         const saved = localStorage.getItem('wms_active_outbound_session');
-        if (saved && saved !== 'null') {
-            try {
-                activeOutboundSession = JSON.parse(saved);
-            } catch (e) {
-                activeOutboundSession = null;
-            }
-        } else {
-            activeOutboundSession = null;
-        }
+        if (saved) {
+            activeOutboundSession = JSON.parse(saved);
 
-        if (activeOutboundSession) {
+            if (!activeOutboundSession) return;
 
             if (activeOutboundSession && !activeOutboundSession.items) {
                 activeOutboundSession.items = [];
@@ -3872,16 +3839,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeOutboundSession.invoiceNo = invoiceVal;
                 activeOutboundSession.pincode = pinVal || '';
                 activeOutboundSession.odaStatus = odaStatus;
-                if (lastExtractedShippingAddress) {
-                    activeOutboundSession.shippingAddress = lastExtractedShippingAddress;
-                }
             } else {
                 activeOutboundSession = {
                     shopName: shopVal,
                     invoiceNo: invoiceVal,
                     pincode: pinVal || '',
                     odaStatus: odaStatus,
-                    shippingAddress: lastExtractedShippingAddress || '',
                     items: [],
                     serials: []
                 };
@@ -3892,8 +3855,6 @@ document.addEventListener('DOMContentLoaded', () => {
             restoreOutboundSessionState();
         });
     }
-
-    let lastExtractedShippingAddress = '';
 
     // Auto-fill parsing handler for outboundInvoicePasteArea
     const outboundInvoicePasteArea = document.getElementById('outboundInvoicePasteArea');
@@ -3908,7 +3869,6 @@ document.addEventListener('DOMContentLoaded', () => {
             let shopName = '';
             let invoiceNo = '';
             let pincode = '';
-            let shippingAddress = '';
             
             // 1. Extract Invoice / Sales Order Number
             const invoiceRegexes = [
@@ -3922,9 +3882,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const match = val.match(regex);
                 if (match && match[1]) {
                     let cleaned = match[1].trim();
-                    cleaned = cleaned.split(/\s{2,}/)[0];
-                    cleaned = cleaned.split('\t')[0];
+                    // Split by double-spaces, tab, or common keywords to avoid capturing trailing fields
+                    cleaned = cleaned.split(/\s{2,}/)[0]; // stop at double spaces
+                    cleaned = cleaned.split('\t')[0]; // stop at tabs
                     
+                    // Stop at common invoice keywords
                     const stopKeywords = [/order\s*date/i, /date/i, /terms/i, /place/i, /gst/i];
                     for (const kw of stopKeywords) {
                         const kwIdx = cleaned.search(kw);
@@ -3933,7 +3895,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                     
+                    // Remove trailing non-alphanumeric punctuation
                     cleaned = cleaned.replace(/[\:\-\s]+$/, '').trim();
+                    
+                    // Reject if it matches a common keyword like "Sales Order" or "Order" or is too short
                     if (cleaned.toLowerCase() === 'sales order' || cleaned.toLowerCase() === 'order' || cleaned.length < 3) {
                         continue;
                     }
@@ -3953,13 +3918,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             if (headerIndex !== -1) {
+                // Find the first valid non-empty line after "Bill To" or "Ship To"
                 for (let i = headerIndex + 1; i < Math.min(lines.length, headerIndex + 6); i++) {
                     const line = lines[i];
                     if (/Bill\s*To|Ship\s*To/i.test(line)) continue;
                     if (/GSTIN|GST/i.test(line)) continue;
                     if (/Date|Order|SO|Invoice/i.test(line)) continue;
                     if (/Address|Mobile|Phone|Email/i.test(line)) continue;
-                    if (line.match(/^\d+$/)) continue;
+                    if (line.match(/^\d+$/)) continue; // skip pure numbers
                     
                     shopName = line;
                     break;
@@ -3970,37 +3936,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const pincodes = val.match(/\b\d{6}\b/g) || [];
             if (pincodes.length > 0) {
                 pincode = pincodes[pincodes.length - 1];
-            }
-
-            // 4. Extract Full Shipping / Drop Address (all text after customer GSTIN / under Ship To)
-            let shipToIdx = -1;
-            let buyerGstinIdx = -1;
-            for (let i = 0; i < lines.length; i++) {
-                if (/Ship\s*To/i.test(lines[i])) {
-                    shipToIdx = i;
-                    break;
-                }
-            }
-            const searchStart = (shipToIdx !== -1) ? shipToIdx : 0;
-            for (let i = searchStart; i < lines.length; i++) {
-                if (/GSTIN/i.test(lines[i])) {
-                    buyerGstinIdx = i;
-                }
-            }
-
-            const addrLines = [];
-            const startLineIdx = (buyerGstinIdx !== -1) ? (buyerGstinIdx + 1) : (shipToIdx !== -1 ? shipToIdx + 1 : -1);
-            if (startLineIdx !== -1) {
-                for (let i = startLineIdx; i < lines.length; i++) {
-                    const l = lines[i];
-                    if (/Sales\s*Order|Invoice\s*#|Total|Amount|Terms|Place\s*Of\s*Supply/i.test(l)) break;
-                    if (/GSTIN/i.test(l) && buyerGstinIdx === -1) continue;
-                    addrLines.push(l);
-                }
-            }
-            if (addrLines.length > 0) {
-                shippingAddress = addrLines.join('\n').trim();
-                lastExtractedShippingAddress = shippingAddress;
             }
             
             // Populate form fields if extracted successfully
@@ -4689,39 +4624,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const tr = document.createElement('tr');
             tr.className = (index % 2 === 0) ? 'white-row' : 'black-row';
             let totalWeight = 0;
-            const serialsByItemMap = new Map();
             (row.serials || []).forEach(s => {
                 totalWeight += s.resolvedWeight !== undefined ? s.resolvedWeight : resolveItemWeight(s.serial, s.itemName);
-                if (s && s.itemName) {
-                    let list = serialsByItemMap.get(s.itemName);
-                    if (!list) {
-                        list = [];
-                        serialsByItemMap.set(s.itemName, list);
-                    }
-                    list.push(s);
-                }
             });
-
-            const itemNamesHtml = (() => {
-                const lines = (row.items || []).map(i => {
-                    const count = (serialsByItemMap.get(i.name) || []).length;
-                    return `<div style="display:flex; align-items:center; gap:6px; padding: 2px 0; white-space:nowrap;">
-                        <span style="color:var(--accent-blue); font-size:0.65rem;">●</span>
-                        <span style="font-size:0.82rem;">${i.name}</span>
-                        <span style="background:rgba(16,185,129,0.12); color:var(--accent-emerald); border:1px solid rgba(16,185,129,0.25); font-size:0.68rem; font-weight:800; padding:1px 6px; border-radius:10px; white-space:nowrap;">${count} pcs</span>
-                    </div>`;
-                });
-                return lines.length > 0
-                    ? `<div style="display:flex; flex-direction:column; gap:2px; min-width:180px;">${lines.join('')}</div>`
-                    : '<span style="color:var(--text-muted);">N/A</span>';
-            })();
+            const itemNames = (row.items || []).map(i => {
+                const count = (row.serials || []).filter(s => s.itemName === i.name).length;
+                return `${i.name} (${count})`;
+            }).join(', ') || 'N/A';
 
             // Calculate total PCs and Boxes count
             const totalPcs = (row.serials || []).length;
             let totalBoxes = 0;
             const rowItems = row.items || [];
             rowItems.forEach(i => {
-                const itemSerials = serialsByItemMap.get(i.name) || [];
+                const itemSerials = (row.serials || []).filter(s => s.itemName === i.name);
                 const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
                 totalBoxes += itemBoxes;
             });
@@ -4764,9 +4680,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td style="text-align: center; cursor: pointer; padding: 10px 8px;" class="btn-toggle-outbound-mark" data-id="${row.id}" title="Toggle Marked Summary Inclusion">
                     ${checkedIcon}
                 </td>
-                <td class="font-mono" style="font-size:1.15rem; font-weight:900; color:#fff;">${timestampHtml}</td>
-                <td style="font-size:1.15rem; font-weight:900; color:#fff;">${row.shopName}</td>
-                <td class="font-mono" style="font-size:1.05rem; font-weight:900; color:#fff;">${row.invoiceNo}</td>
+                <td class="font-mono">${timestampHtml}</td>
+                <td>${row.shopName}</td>
+                <td class="font-mono">${row.invoiceNo}</td>
                 <td>
                     ${(() => {
                         const isOda = row.odaStatus === 'ODA';
@@ -4788,12 +4704,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         return `<span style="color:var(--text-muted); font-size:0.8rem;">—</span>`;
                     })()}
                 </td>
-                <td style="padding: 10px 16px;">${itemNamesHtml}</td>
-                <td class="font-mono" style="font-size:1.15rem; font-weight:900; color:#fff;">${totalWeight.toFixed(3)} kg</td>
-                <td class="font-mono" style="font-size:1.5rem; font-weight:900; color:#e11d48;">${totalPcs}</td>
-                <td class="font-mono" style="text-align:center;">
-                    <button type="button" class="btn-show-outbound-box-details" data-id="${row.id}"
-                        style="background: #e11d48; border: none; color: #ffffff; padding: 12px 20px; border-radius: var(--radius-md); font-size: 2.2rem; font-weight: 900; cursor: pointer; transition: var(--transition-smooth); min-width: 64px; line-height: 1; box-shadow: 0 4px 14px rgba(225,29,72,0.4);">
+                <td>${itemNames}</td>
+                <td class="font-mono">${totalWeight.toFixed(3)} kg</td>
+                <td class="font-mono" style="font-weight: 700;">${totalPcs}</td>
+                <td class="font-mono">
+                    <button type="button" class="btn-show-outbound-box-details" data-id="${row.id}" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.4); color: var(--accent-blue); padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth);">
                         ${totalBoxes}
                     </button>
                 </td>
@@ -4829,7 +4744,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Item pills list
                 const mobileItemsHtml = (row.items || []).map(i => {
-                    const count = (serialsByItemMap.get(i.name) || []).length;
+                    const count = (row.serials || []).filter(s => s.itemName === i.name).length;
                     return `
                         <div class="mobile-log-card-item">
                             <span class="mobile-log-card-item-bullet">●</span>
@@ -4847,39 +4762,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     mobileOdaBadge = `<span style="background: ${odaBg}; color: ${odaColor}; border: 1px solid ${odaColor}; padding: 1px 4px; border-radius: 3px; font-size: 0.65rem; font-weight: 800; margin-left: 6px; text-transform: uppercase;">${odaLabel}</span>`;
                 }
 
-                // Format Date + Time
-                let dateFormattedStr = '';
-                const logTimestampMs = parseInt(row.id);
-                if (!isNaN(logTimestampMs)) {
-                    const d = new Date(logTimestampMs);
-                    const day = String(d.getDate()).padStart(2, '0');
-                    const month = String(d.getMonth() + 1).padStart(2, '0');
-                    const year = d.getFullYear();
-                    dateFormattedStr = `${day}/${month}/${year} • `;
-                }
-                const fullTimestampDisplay = `${dateFormattedStr}${row.timestamp}`;
-
                 card.innerHTML = `
-                    <div class="mobile-log-card-header" style="align-items: center;">
-                        <h4 class="mobile-log-card-title" style="font-size: 1.15rem; font-weight: 800;">${row.shopName}</h4>
-                        <span class="mobile-log-card-badge" style="font-size: 1.25rem; font-weight: 900; padding: 6px 14px; background: rgba(16, 185, 129, 0.15); border: 1.5px solid var(--accent-emerald); border-radius: var(--radius-md);">${totalPcs} PCs</span>
+                    <div class="mobile-log-card-header">
+                        <h4 class="mobile-log-card-title">${row.shopName}</h4>
+                        <span class="mobile-log-card-badge">${totalPcs} PCs (${totalBoxes} Bx)</span>
                     </div>
-                    <div class="mobile-log-card-subtitle" style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 4px;">
-                        <div style="display: flex; flex-direction: column; gap: 4px;">
-                            <span style="font-size: 0.92rem; font-weight: 700; color: var(--text-secondary);">${fullTimestampDisplay}</span>
-                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                <span style="font-family: var(--font-mono); font-size: 1.25rem; font-weight: 900; color: #f43f5e; background: rgba(244, 63, 94, 0.1); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(244, 63, 94, 0.25);">${row.invoiceNo}</span>
+                    <div class="mobile-log-card-subtitle" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <span>${row.timestamp}</span>
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                <span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--accent-blue);">${row.invoiceNo}</span>
                                 ${(() => {
                                     if (!row.pincode) return '';
                                     const dist = row.distanceKm || calculateDistanceKm(row.pincode);
                                     const distStr = dist ? ` • ${dist.toLocaleString('en-IN')} km` : '';
-                                    return `<span style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); font-weight: 700;">(${row.pincode}${distStr})</span>`;
+                                    return `<span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted);">(${row.pincode}${distStr})</span>`;
                                 })()}
                                 ${mobileOdaBadge}
                             </div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Mark:</span>
+                            <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Mark:</span>
                             <span class="btn-toggle-outbound-mark" data-id="${row.id}" style="display: inline-flex; align-items: center; justify-content: center;">
                                 ${mobileCheckIcon}
                             </span>
@@ -4887,44 +4790,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="mobile-log-card-items">
                         ${mobileItemsHtml}
-                        <div style="font-size: 0.85rem; color: var(--text-muted); border-top: 1px dashed var(--border-color); padding-top: 8px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-weight: 600;">Total Weight:</span>
-                            <span style="font-weight: 800; color: var(--accent-emerald); font-size: 1rem;">${totalWeight.toFixed(3)} kg</span>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); border-top: 1px dashed var(--border-color); padding-top: 6px; margin-top: 4px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>Total Weight:</span>
+                            <span style="font-weight: 700; color: var(--accent-emerald);">${totalWeight.toFixed(3)} kg</span>
                         </div>
-                        ${(() => {
-                            const isGl = row.courierRecommendation === 'Giant Logistics' || totalWeight < 10;
-                            const hasDocs = row.invoiceImage && row.shipmentImage;
-                            const docsBadgeColor = hasDocs ? 'var(--accent-emerald)' : 'var(--accent-rose)';
-                            const docsBadgeBg = hasDocs ? 'rgba(16, 185, 129, 0.12)' : 'rgba(244, 63, 94, 0.12)';
-                            const docsLabel = hasDocs ? 'Docs Uploaded (2/2) ✅' : 'Upload Docs (0/2) ⚠️';
-
-                            if (!row.courierRecommendation && !isGl) return '';
-
-                            return `
-                                <div style="margin-top:6px; display:flex; align-items:center; gap:8px; border-top: 1px dashed var(--border-color); padding-top:6px; flex-wrap:wrap;">
-                                    <span style="font-size:0.8rem; color:var(--text-muted); font-weight: 600;">Courier:</span>
-                                    <button type="button" class="btn-trigger-gl-email" data-id="${row.id}" title="Click to generate Giant Logistics pickup request email" style="background:#1d4ed8; color:#fff; padding:4px 12px; border-radius:6px; font-size:0.82rem; font-weight:800; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:4px; box-shadow: 0 2px 8px rgba(29,78,216,0.3);">
-                                        🚚 ${row.courierRecommendation || 'Giant Logistics'}
-                                    </button>
-                                    <button type="button" class="btn-open-gl-upload-modal" data-id="${row.id}" title="Upload compulsory Invoice & Shipment box photos" style="background:${docsBadgeBg}; color:${docsBadgeColor}; border: 1px solid ${docsBadgeColor}; padding:4px 10px; border-radius:6px; font-size:0.75rem; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
-                                        📷 ${docsLabel}
-                                    </button>
-                                </div>
-                            `;
-                        })()}
+                        ${row.courierRecommendation ? `<div style="margin-top:6px; display:flex; align-items:center; gap:6px; border-top: 1px dashed var(--border-color); padding-top:6px;"><span style="font-size:0.7rem; color:var(--text-muted);">Courier:</span><span style="background:#1d4ed8; color:#fff; padding:2px 10px; border-radius:5px; font-size:0.72rem; font-weight:800;">🚚 ${row.courierRecommendation}</span></div>` : ''}
                     </div>
-                    <div class="mobile-log-card-actions" style="gap: 12px; padding-top: 14px;">
-                        <button type="button" class="btn-show-outbound-box-details btn-mobile-action" data-id="${row.id}" style="background: rgba(244, 63, 94, 0.12); border-color: rgba(244, 63, 94, 0.35); color: var(--accent-rose); padding: 10px 18px; font-size: 1.05rem; font-weight: 800;">
-                            <span>Boxes (<strong style="font-size: 1.25rem; font-weight: 900; color: #ffffff;">${totalBoxes}</strong>)</span>
+                    <div class="mobile-log-card-actions">
+                        <button type="button" class="btn-show-outbound-box-details btn-mobile-action" data-id="${row.id}" style="background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.25); color: var(--accent-blue);">
+                            <span>Boxes (${totalBoxes})</span>
                         </button>
-                        <button type="button" class="btn-download-outbound-excel btn-mobile-action btn-mobile-excel" data-id="${row.id}" style="padding: 10px 18px; font-size: 1.05rem; font-weight: 800;">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                        <button type="button" class="btn-download-outbound-excel btn-mobile-action btn-mobile-excel" data-id="${row.id}">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                             </svg>
                             <span>Excel</span>
                         </button>
-                        <button type="button" class="btn-restore-outbound-log btn-mobile-action btn-mobile-delete" data-id="${row.id}" style="padding: 10px 18px; font-size: 1.05rem; font-weight: 800; color: var(--accent-rose); background: rgba(244, 63, 94, 0.08); border-color: rgba(244, 63, 94, 0.3);">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                        <button type="button" class="btn-restore-outbound-log btn-mobile-action btn-mobile-delete" data-id="${row.id}" style="color: var(--accent-blue); background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.25);">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                             </svg>
                             <span>Restore</span>
@@ -4934,7 +4817,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 mobileContainer.appendChild(card);
             }
         });
-
 
         const todayOutboundBoxesEl = document.getElementById('todayOutboundBoxes');
         const todayOutboundWeightEl = document.getElementById('todayOutboundWeight');
@@ -5025,361 +4907,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ── Giant Logistics Document Upload & Email Pickup Handlers ──────────────────
-    let currentGlDocLogId = null;
-    let currentGlDocInvoiceBase64 = '';
-    let currentGlDocShipmentBase64 = '';
-
-    function openGlDocUploadModal(logId) {
-        currentGlDocLogId = logId;
-        const historyData = getOutboundHistory();
-        const logItem = historyData.find(item => item.id === logId);
-        if (!logItem) return alert('Order log not found.');
-
-        const modal = document.getElementById('glDocUploadModal');
-        const titleEl = document.getElementById('glDocOrderTitle');
-        if (titleEl) titleEl.textContent = `${logItem.shopName} (${logItem.invoiceNo})`;
-
-        currentGlDocInvoiceBase64 = logItem.invoiceImage || '';
-        currentGlDocShipmentBase64 = logItem.shipmentImage || '';
-
-        const invPreview = document.getElementById('glInvoicePreview');
-        const invTag = document.getElementById('glInvoiceImgTag');
-        if (invTag && currentGlDocInvoiceBase64) {
-            invTag.src = currentGlDocInvoiceBase64;
-            if (invPreview) invPreview.style.display = 'block';
-        } else if (invPreview) {
-            invPreview.style.display = 'none';
-        }
-
-        const shipPreview = document.getElementById('glShipmentPreview');
-        const shipTag = document.getElementById('glShipmentImgTag');
-        if (shipTag && currentGlDocShipmentBase64) {
-            shipTag.src = currentGlDocShipmentBase64;
-            if (shipPreview) shipPreview.style.display = 'block';
-        } else if (shipPreview) {
-            shipPreview.style.display = 'none';
-        }
-
-        if (modal) modal.classList.add('active');
-    }
-
-    function closeGlDocUploadModal() {
-        const modal = document.getElementById('glDocUploadModal');
-        if (modal) modal.classList.remove('active');
-    }
-
-    const closeGlDocUploadModalBtn = document.getElementById('closeGlDocUploadModalBtn');
-    const cancelGlDocUploadModalBtn = document.getElementById('cancelGlDocUploadModalBtn');
-    if (closeGlDocUploadModalBtn) closeGlDocUploadModalBtn.addEventListener('click', closeGlDocUploadModal);
-    if (cancelGlDocUploadModalBtn) cancelGlDocUploadModalBtn.addEventListener('click', closeGlDocUploadModal);
-
-    const glInvoiceFileInput = document.getElementById('glInvoiceFileInput');
-    const glShipmentFileInput = document.getElementById('glShipmentFileInput');
-
-    if (glInvoiceFileInput) {
-        glInvoiceFileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (evt) => {
-                    currentGlDocInvoiceBase64 = evt.target.result;
-                    const invPreview = document.getElementById('glInvoicePreview');
-                    const invTag = document.getElementById('glInvoiceImgTag');
-                    if (invTag) invTag.src = currentGlDocInvoiceBase64;
-                    if (invPreview) invPreview.style.display = 'block';
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-    }
-
-    if (glShipmentFileInput) {
-        glShipmentFileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (evt) => {
-                    currentGlDocShipmentBase64 = evt.target.result;
-                    const shipPreview = document.getElementById('glShipmentPreview');
-                    const shipTag = document.getElementById('glShipmentImgTag');
-                    if (shipTag) shipTag.src = currentGlDocShipmentBase64;
-                    if (shipPreview) shipPreview.style.display = 'block';
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-    }
-
-    // ── Live Camera & High Resolution Image Handlers ──────────────────
-    let activeCameraStream = null;
-    let cameraTargetType = null;
-
-    async function startGlCamera(targetType) {
-        cameraTargetType = targetType;
-        const cameraModal = document.getElementById('glCameraModal');
-        const video = document.getElementById('glCameraVideo');
-        const title = document.getElementById('glCameraModalTitle');
-
-        if (title) {
-            title.textContent = targetType === 'invoice' ? '📸 Take Photo: Invoice Copy' : '📸 Take Photo: Shipment Box';
-        }
-
-        try {
-            const constraints = {
-                video: {
-                    facingMode: { ideal: 'environment' },
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
-                }
-            };
-            activeCameraStream = await navigator.mediaDevices.getUserMedia(constraints);
-            if (video) {
-                video.srcObject = activeCameraStream;
-                await video.play();
-            }
-            if (cameraModal) cameraModal.classList.add('active');
-        } catch (err) {
-            console.error('Camera access error:', err);
-            alert('⚠️ Camera access denied or not supported. Please use the "📁 Select File / Gallery" option.');
-        }
-    }
-
-    function stopGlCamera() {
-        if (activeCameraStream) {
-            activeCameraStream.getTracks().forEach(track => track.stop());
-            activeCameraStream = null;
-        }
-        const cameraModal = document.getElementById('glCameraModal');
-        if (cameraModal) cameraModal.classList.remove('active');
-    }
-
-    const closeGlCameraModalBtn = document.getElementById('closeGlCameraModalBtn');
-    if (closeGlCameraModalBtn) closeGlCameraModalBtn.addEventListener('click', stopGlCamera);
-
-    const btnInvoiceCamera = document.getElementById('btnInvoiceCamera');
-    const btnShipmentCamera = document.getElementById('btnShipmentCamera');
-    if (btnInvoiceCamera) btnInvoiceCamera.addEventListener('click', () => startGlCamera('invoice'));
-    if (btnShipmentCamera) btnShipmentCamera.addEventListener('click', () => startGlCamera('shipment'));
-
-    // Capture High Quality Uncompressed Photo (1.0 Quality canvas export)
-    const btnCaptureGlPhoto = document.getElementById('btnCaptureGlPhoto');
-    if (btnCaptureGlPhoto) {
-        btnCaptureGlPhoto.addEventListener('click', () => {
-            const video = document.getElementById('glCameraVideo');
-            if (!video || !video.videoWidth) return alert('Camera feed not ready.');
-
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-            // Maximum camera resolution with zero quality loss (1.0)
-            const capturedDataUrl = canvas.toDataURL('image/jpeg', 1.0);
-
-            if (cameraTargetType === 'invoice') {
-                currentGlDocInvoiceBase64 = capturedDataUrl;
-                const invPreview = document.getElementById('glInvoicePreview');
-                const invTag = document.getElementById('glInvoiceImgTag');
-                if (invTag) invTag.src = capturedDataUrl;
-                if (invPreview) invPreview.style.display = 'block';
-            } else if (cameraTargetType === 'shipment') {
-                currentGlDocShipmentBase64 = capturedDataUrl;
-                const shipPreview = document.getElementById('glShipmentPreview');
-                const shipTag = document.getElementById('glShipmentImgTag');
-                if (shipTag) shipTag.src = capturedDataUrl;
-                if (shipPreview) shipPreview.style.display = 'block';
-            }
-
-            stopGlCamera();
-        });
-    }
-
-    const btnSaveGlDocs = document.getElementById('btnSaveGlDocs');
-    if (btnSaveGlDocs) {
-        btnSaveGlDocs.addEventListener('click', () => {
-            if (!currentGlDocInvoiceBase64 || !currentGlDocShipmentBase64) {
-                alert('⚠️ Upload Failed: Both Invoice Image and Shipment Image are COMPULSORY! Please select files or take photos using the live camera.');
-                return;
-            }
-
-            const historyData = getOutboundHistory();
-            const logItem = historyData.find(item => item.id === currentGlDocLogId);
-            if (logItem) {
-                logItem.invoiceImage = currentGlDocInvoiceBase64;
-                logItem.shipmentImage = currentGlDocShipmentBase64;
-                saveOutboundHistory(historyData);
-                closeGlDocUploadModal();
-                renderOutboundHistoryTable();
-                
-                // Open email pickup request modal automatically
-                handleGlEmailClick(currentGlDocLogId);
-            }
-        });
-    }
-
-    function handleGlEmailClick(logId) {
-        const historyData = getOutboundHistory();
-        const logItem = historyData.find(item => item.id === logId);
-        if (!logItem) return alert('Order log not found.');
-
-        if (!logItem.invoiceImage || !logItem.shipmentImage) {
-            alert('⚠️ Image Upload Required!\n\nPlease upload both Invoice Image and Shipment Image first before arranging Giant Logistics pickup email.');
-            openGlDocUploadModal(logId);
-            return;
-        }
-
-        const serialsByItemMap = new Map();
-        let totalWeight = 0;
-        (logItem.serials || []).forEach(s => {
-            totalWeight += s.resolvedWeight !== undefined ? s.resolvedWeight : resolveItemWeight(s.serial, s.itemName);
-            if (s && s.itemName) {
-                let list = serialsByItemMap.get(s.itemName);
-                if (!list) {
-                    list = [];
-                    serialsByItemMap.set(s.itemName, list);
-                }
-                list.push(s);
-            }
-        });
-        const rowItems = logItem.items || [];
-        let totalBoxes = 0;
-        rowItems.forEach(i => {
-            const itemSerials = serialsByItemMap.get(i.name) || [];
-            const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
-            totalBoxes += itemBoxes;
-        });
-        if (rowItems.length === 0 && (logItem.serials || []).length > 0) {
-            totalBoxes = new Set((logItem.serials || []).map(s => s.boxNo)).size;
-        }
-
-        const defaultTo = "sonu.gupta@geonix.in";
-        const defaultCc = "cs@gaintlogistic.com, operation@gaintlogistic.com, shubham@gaintlogistic.com, gaintlogistic@gmail.com, info@gaintlogistic.com, kapil.kumar@geonix.in, sumit.suresh@geonix.in";
-
-        const savedTo = localStorage.getItem('wms_gl_to_email') || defaultTo;
-        const savedCc = localStorage.getItem('wms_gl_cc_emails') || defaultCc;
-
-        const toInput = document.getElementById('glEmailToInput');
-        const ccInput = document.getElementById('glEmailCcInput');
-        const btnSaveCc = document.getElementById('btnSaveGlCcEmails');
-
-        if (toInput) toInput.value = savedTo;
-        if (ccInput) ccInput.value = savedCc;
-
-        const subjectText = `Pickup Request for Shipment - ${logItem.invoiceNo} - ${logItem.shopName}`;
-        const dropAddress = logItem.shippingAddress ? `${logItem.shopName}\n${logItem.shippingAddress}` : logItem.shopName;
-
-        const bodyText = `Dear GAINT LOGISTSC TEAM,
-
-Kindly arrange the pickup today for the below shipment.
-
-Pickup Details: Sonu Gupta (8261829125 )
-Ground Floor,H.NO. 833, Building No. D-7, Gala No. 40, Bhumi World Industrial Park,
-Mumbai Nasik, Highway, Shashtri Nahar Post office, Bhiwandi  Dist-Thane
-BHIWANDI Maharashtra 421302
-
-
-Drop Details:${dropAddress}
-
-Total Box : ${totalBoxes}
-Total weight : ${totalWeight.toFixed(3)} kg
-
-The shipment is ready for pickup. Kindly schedule the pickup at the earliest and share the pickup confirmation once arranged.`;
-
-        const subjectEl = document.getElementById('glEmailSubject');
-        const bodyEl = document.getElementById('glEmailBodyText');
-        const mailtoBtn = document.getElementById('btnTriggerGlMailto');
-        const previewContainer = document.getElementById('glEmailAttachmentsPreview');
-
-        if (subjectEl) subjectEl.textContent = subjectText;
-        if (bodyEl) bodyEl.value = bodyText;
-
-        function updateMailtoLink() {
-            const currentTo = toInput ? toInput.value.trim() : savedTo;
-            const currentCc = ccInput ? ccInput.value.trim() : savedCc;
-            const mailtoUrl = `mailto:${currentTo}?cc=${encodeURIComponent(currentCc)}&subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`;
-            if (mailtoBtn) mailtoBtn.href = mailtoUrl;
-        }
-
-        if (toInput) toInput.oninput = updateMailtoLink;
-        if (ccInput) ccInput.oninput = updateMailtoLink;
-
-        if (btnSaveCc) {
-            btnSaveCc.onclick = () => {
-                const newTo = toInput ? toInput.value.trim() : defaultTo;
-                const newCc = ccInput ? ccInput.value.trim() : defaultCc;
-                localStorage.setItem('wms_gl_to_email', newTo);
-                localStorage.setItem('wms_gl_cc_emails', newCc);
-                if (isFirebaseConnected && db) {
-                    firebaseSet('gl_email_settings', { to: newTo, cc: newCc });
-                }
-                const orig = btnSaveCc.innerHTML;
-                btnSaveCc.innerHTML = '✅ Saved!';
-                btnSaveCc.style.background = 'rgba(16, 185, 129, 0.25)';
-                setTimeout(() => {
-                    btnSaveCc.innerHTML = orig;
-                    btnSaveCc.style.background = 'rgba(16, 185, 129, 0.12)';
-                }, 2000);
-            };
-        }
-
-        updateMailtoLink();
-
-        if (previewContainer) {
-            previewContainer.innerHTML = `
-                <div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
-                    <img src="${logItem.invoiceImage}" alt="Invoice Image" style="width: 100px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color);">
-                    <span style="font-size:0.72rem; color:var(--text-secondary); font-weight:700;">Invoice Copy</span>
-                </div>
-                <div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
-                    <img src="${logItem.shipmentImage}" alt="Shipment Image" style="width: 100px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color);">
-                    <span style="font-size:0.72rem; color:var(--text-secondary); font-weight:700;">Shipment Box</span>
-                </div>
-            `;
-        }
-
-        const copyBtn = document.getElementById('btnCopyGlEmailText');
-        if (copyBtn) {
-            copyBtn.onclick = () => {
-                navigator.clipboard.writeText(bodyText);
-                const orig = copyBtn.innerHTML;
-                copyBtn.innerHTML = '✅ Copied!';
-                setTimeout(() => copyBtn.innerHTML = orig, 2000);
-            };
-        }
-
-        const downloadImgBtn = document.getElementById('btnDownloadGlImages');
-        if (downloadImgBtn) {
-            downloadImgBtn.onclick = () => {
-                const cleanInv = (logItem.invoiceNo || 'Shipment').replace(/[^a-zA-Z0-9]/g, '_');
-                
-                const link1 = document.createElement('a');
-                link1.href = logItem.invoiceImage;
-                link1.download = `Invoice_${cleanInv}.png`;
-                link1.click();
-
-                setTimeout(() => {
-                    const link2 = document.createElement('a');
-                    link2.href = logItem.shipmentImage;
-                    link2.download = `Shipment_${cleanInv}.png`;
-                    link2.click();
-                }, 300);
-            };
-        }
-
-        const modal = document.getElementById('glEmailModal');
-        if (modal) modal.classList.add('active');
-    }
-
-    function closeGlEmailModal() {
-        const modal = document.getElementById('glEmailModal');
-        if (modal) modal.classList.remove('active');
-    }
-
-    const closeGlEmailModalBtn = document.getElementById('closeGlEmailModalBtn');
-    if (closeGlEmailModalBtn) closeGlEmailModalBtn.addEventListener('click', closeGlEmailModal);
-
     // --- Outbound Progress UI and Live Count Calculators ---
     function updateOutboundSessionProgress() {
         if (!activeOutboundSession) return;
@@ -5389,22 +4916,8 @@ The shipment is ready for pickup. Kindly schedule the pickup at the earliest and
             container.innerHTML = '';
             
             const items = activeOutboundSession.items || [];
-            
-            // Pre-group serials by itemName for O(1) lookup
-            const serialsByItemMap = new Map();
-            (activeOutboundSession.serials || []).forEach(s => {
-                if (s && s.itemName) {
-                    let list = serialsByItemMap.get(s.itemName);
-                    if (!list) {
-                        list = [];
-                        serialsByItemMap.set(s.itemName, list);
-                    }
-                    list.push(s);
-                }
-            });
-
             items.forEach(item => {
-                const itemSerials = serialsByItemMap.get(item.name) || [];
+                const itemSerials = activeOutboundSession.serials.filter(s => s.itemName === item.name);
                 const scannedCount = itemSerials.length;
                 
                 let subtotalWeight = 0;
@@ -5564,20 +5077,8 @@ The shipment is ready for pickup. Kindly schedule the pickup at the earliest and
             return;
         }
 
-        const serialsByItemMap = new Map();
-        (activeOutboundSession.serials || []).forEach(s => {
-            if (s && s.itemName) {
-                let list = serialsByItemMap.get(s.itemName);
-                if (!list) {
-                    list = [];
-                    serialsByItemMap.set(s.itemName, list);
-                }
-                list.push(s);
-            }
-        });
-
         activeOutboundSession.items.forEach(item => {
-            const itemSerials = serialsByItemMap.get(item.name) || [];
+            const itemSerials = activeOutboundSession.serials.filter(s => s.itemName === item.name);
             const itemPieces = itemSerials.length;
             const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
 
@@ -5755,9 +5256,6 @@ The shipment is ready for pickup. Kindly schedule the pickup at the earliest and
             invoiceNo: activeOutboundSession.invoiceNo,
             pincode: activeOutboundSession.pincode || '',
             odaStatus: activeOutboundSession.odaStatus || 'Normal',
-            shippingAddress: activeOutboundSession.shippingAddress || '',
-            invoiceImage: '',
-            shipmentImage: '',
             distanceKm: activeOutboundSession.distanceKm || calculateDistanceKm(activeOutboundSession.pincode),
             courierRecommendation: courierRecommendation || '',
             items: activeOutboundSession.items,
@@ -5784,10 +5282,42 @@ The shipment is ready for pickup. Kindly schedule the pickup at the earliest and
                 return;
             }
 
-            const confirmMsg = `Are you sure you want to end and save this Outbound dispatch?\n\nShop: ${activeOutboundSession.shopName}\nInvoice: ${activeOutboundSession.invoiceNo}\nTotal Items: ${activeOutboundSession.serials.length}`;
-            if (confirm(confirmMsg)) {
-                commitAndCloseOutboundSession('');
+            // Calculate current total weight
+            let totalWeight = 0;
+            (activeOutboundSession.serials || []).forEach(s => {
+                totalWeight += resolveItemWeight(s.serial, s.itemName);
+            });
+
+            if (totalWeight < 10) {
+                // Show Giant Logistics popup
+                const popup = document.getElementById('giantLogisticsPopup');
+                const weightDisplay = document.getElementById('glWeightDisplay');
+                if (weightDisplay) weightDisplay.textContent = `${totalWeight.toFixed(3)} kg`;
+                if (popup) popup.classList.add('visible');
+            } else {
+                // Normal confirm for 10 kg+
+                const confirmMsg = `Are you sure you want to end and save this Outbound dispatch?\n\nShop: ${activeOutboundSession.shopName}\nInvoice: ${activeOutboundSession.invoiceNo}\nTotal Items: ${activeOutboundSession.serials.length}`;
+                if (confirm(confirmMsg)) {
+                    commitAndCloseOutboundSession('');
+                }
             }
+        });
+    }
+
+    // Giant Logistics popup button handlers
+    const btnGiantYes = document.getElementById('btnGiantLogisticsYes');
+    const btnGiantCancel = document.getElementById('btnGiantLogisticsCancel');
+    const glPopup = document.getElementById('giantLogisticsPopup');
+
+    if (btnGiantYes) {
+        btnGiantYes.addEventListener('click', () => {
+            if (glPopup) glPopup.classList.remove('visible');
+            commitAndCloseOutboundSession('Giant Logistics');
+        });
+    }
+    if (btnGiantCancel) {
+        btnGiantCancel.addEventListener('click', () => {
+            if (glPopup) glPopup.classList.remove('visible');
         });
     }
 
@@ -5827,22 +5357,6 @@ The shipment is ready for pickup. Kindly schedule the pickup at the earliest and
                     saveOutboundHistory(historyData);
                     renderOutboundHistoryTable();
                 }
-                return;
-            }
-
-            const uploadDocsBtn = e.target.closest('.btn-open-gl-upload-modal');
-            if (uploadDocsBtn) {
-                e.stopPropagation();
-                const logId = uploadDocsBtn.getAttribute('data-id');
-                openGlDocUploadModal(logId);
-                return;
-            }
-
-            const glEmailBtn = e.target.closest('.btn-trigger-gl-email');
-            if (glEmailBtn) {
-                e.stopPropagation();
-                const logId = glEmailBtn.getAttribute('data-id');
-                handleGlEmailClick(logId);
                 return;
             }
 
@@ -6126,7 +5640,7 @@ The shipment is ready for pickup. Kindly schedule the pickup at the earliest and
 
         // Map Colors dynamically to products
         let colorIdx = 0;
-        const allUniqueInHistory = Object.keys(productStock);
+        const allUniqueInHistory = Array.from(new Set(inboundHistory.flatMap(log => (log.serials || []).map(s => s.itemName || log.item))));
         allUniqueInHistory.forEach(name => {
             if (!productColorsMap[name]) {
                 productColorsMap[name] = colorThemes[colorIdx % colorThemes.length];
@@ -7117,7 +6631,9 @@ The shipment is ready for pickup. Kindly schedule the pickup at the earliest and
             sectionInbound.style.display = 'none';
 
             sectionWithoutSerialInbound.style.display = 'block';
-            sectionWithoutSerialInbound.classList.add('active');
+            setTimeout(() => {
+                sectionWithoutSerialInbound.classList.add('active');
+            }, 20);
 
             renderWosDropdownItems();
         });
@@ -7130,7 +6646,9 @@ The shipment is ready for pickup. Kindly schedule the pickup at the earliest and
             sectionWithoutSerialInbound.style.display = 'none';
 
             sectionInbound.style.display = 'flex';
-            sectionInbound.classList.add('active');
+            setTimeout(() => {
+                sectionInbound.classList.add('active');
+            }, 20);
         });
     }
 
@@ -7252,7 +6770,9 @@ The shipment is ready for pickup. Kindly schedule the pickup at the earliest and
                 sectionWithoutSerialInbound.classList.remove('active');
                 sectionWithoutSerialInbound.style.display = 'none';
                 sectionInbound.style.display = 'flex';
-                sectionInbound.classList.add('active');
+                setTimeout(() => {
+                    sectionInbound.classList.add('active');
+                }, 20);
 
                 alert(`Success! Inwarded ${qtyVal} PCs (${boxCountVal} Boxes) of "${itemVal}" without serial numbers.`);
             };
@@ -8874,7 +8394,6 @@ The shipment is ready for pickup. Kindly schedule the pickup at the earliest and
         }
 
         // Add to damage records
-        const records = getDamageRecords();
         records.push({
             serial: cleanSerial,
             itemName: foundInbound.itemName,
@@ -9459,10 +8978,274 @@ The shipment is ready for pickup. Kindly schedule the pickup at the earliest and
         });
     }
 
-    // Remove any leftover festival themes
-    document.documentElement.removeAttribute('data-festival');
-    localStorage.removeItem('wms_festival_theme');
+    // ==========================================================================
+    // DYNAMIC INDIAN FESTIVAL ENGINE & 3D VISUAL EFFECTS SYSTEM
+    // ==========================================================================
+    
+    const festivalThemeSelector = document.getElementById('festivalThemeSelector');
+    const festivalCountdownWidget = document.getElementById('festivalCountdownWidget');
+    const festivalCountdownIcon = document.getElementById('festivalCountdownIcon');
+    const festivalCountdownText = document.getElementById('festivalCountdownText');
+    const festivalCanvas = document.getElementById('festivalCanvas3D');
 
+    // Festival Definitions & Dates
+    const FESTIVAL_DEFS = [
+        { key: 'independence', name: '15th August Independence Day', icon: '🇮🇳', month: 7, day: 15, durationDays: 3 },
+        { key: 'raksha', name: 'Raksha Bandhan', icon: '🪢', month: 7, day: 25, durationDays: 2 },
+        { key: 'janmashtami', name: 'Krishna Janmashtami', icon: '🪈', month: 7, day: 28, durationDays: 2 },
+        { key: 'ganesh', name: 'Ganesh Chaturthi', icon: '🐘', month: 8, day: 7, durationDays: 10 },
+        { key: 'navratri', name: 'Navratri / Durga Puja', icon: '💃', month: 9, day: 3, durationDays: 9 },
+        { key: 'diwali', name: 'Diwali Festival of Lights', icon: '🪔', month: 10, day: 1, durationDays: 5 },
+        { key: 'sankranti', name: 'Makar Sankranti', icon: '🪁', month: 0, day: 14, durationDays: 2 },
+        { key: 'holi', name: 'Holi Color Festival', icon: '🎨', month: 2, day: 14, durationDays: 2 }
+    ];
+
+    function getUpcomingOrActiveFestival() {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+
+        let nearestFest = null;
+        let minDiffDays = 999;
+        let isCurrentlyActive = false;
+
+        FESTIVAL_DEFS.forEach(f => {
+            let festDate = new Date(currentYear, f.month, f.day);
+            const endFestDate = new Date(currentYear, f.month, f.day + f.durationDays);
+            if (now > endFestDate) {
+                festDate = new Date(currentYear + 1, f.month, f.day);
+            }
+
+            const diffTime = festDate - now;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays <= 0 && diffDays >= -f.durationDays) {
+                nearestFest = f;
+                minDiffDays = 0;
+                isCurrentlyActive = true;
+            } else if (!isCurrentlyActive && diffDays > 0 && diffDays < minDiffDays) {
+                minDiffDays = diffDays;
+                nearestFest = f;
+            }
+        });
+
+        if (!nearestFest) {
+            nearestFest = FESTIVAL_DEFS[0]; // Independence Day fallback
+        }
+
+        return { festival: nearestFest, daysLeft: minDiffDays, isActive: isCurrentlyActive };
+    }
+
+    let activeFestivalKey = 'independence';
+
+    function applyFestivalTheme(key) {
+        if (key === 'auto') {
+            const festInfo = getUpcomingOrActiveFestival();
+            activeFestivalKey = festInfo.festival.key;
+            updateFestivalWidget(festInfo);
+        } else if (key === 'classic') {
+            activeFestivalKey = 'classic';
+            document.documentElement.removeAttribute('data-festival');
+            if (festivalCountdownWidget) festivalCountdownWidget.style.display = 'none';
+            if (particleEngine) particleEngine.setMode('classic');
+            localStorage.setItem('wms_festival_theme', 'classic');
+            return;
+        } else {
+            activeFestivalKey = key;
+            const found = FESTIVAL_DEFS.find(f => f.key === key);
+            if (found) {
+                updateFestivalWidget({ festival: found, daysLeft: 0, isActive: true });
+            }
+        }
+
+        document.documentElement.setAttribute('data-festival', activeFestivalKey);
+        if (festivalCountdownWidget) festivalCountdownWidget.style.display = 'flex';
+        if (particleEngine) particleEngine.setMode(activeFestivalKey);
+        localStorage.setItem('wms_festival_theme', key);
+    }
+
+    function updateFestivalWidget(festInfo) {
+        if (!festivalCountdownWidget) return;
+        const f = festInfo.festival;
+        if (festivalCountdownIcon) festivalCountdownIcon.textContent = f.icon;
+        if (festivalCountdownText) {
+            if (festInfo.isActive) {
+                festivalCountdownText.textContent = `${f.name} (Live Festival!)`;
+            } else {
+                festivalCountdownText.textContent = `${f.name} (${festInfo.daysLeft} Day${festInfo.daysLeft === 1 ? '' : 's'} Away)`;
+            }
+        }
+    }
+
+    // --- 3D CANVAS PARTICLE ENGINE ---
+    let particleEngine = null;
+    function init3DParticleEngine() {
+        if (!festivalCanvas) return;
+        const ctx = festivalCanvas.getContext('2d');
+        let width = festivalCanvas.width = window.innerWidth;
+        let height = festivalCanvas.height = window.innerHeight;
+
+        window.addEventListener('resize', () => {
+            width = festivalCanvas.width = window.innerWidth;
+            height = festivalCanvas.height = window.innerHeight;
+        });
+
+        const particles = [];
+        const PARTICLE_COUNT = 45;
+
+        class Particle3D {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.z = Math.random() * 800 + 100;
+                this.vx = (Math.random() - 0.5) * 0.8;
+                this.vy = -(Math.random() * 0.8 + 0.3);
+                this.vz = (Math.random() - 0.5) * 0.5;
+                this.size = Math.random() * 4 + 2;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.vRot = (Math.random() - 0.5) * 0.03;
+                this.alpha = Math.random() * 0.7 + 0.3;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.z += this.vz;
+                this.rotation += this.vRot;
+
+                if (this.y < -20 || this.x < -20 || this.x > width + 20 || this.z < 10) {
+                    this.reset();
+                    this.y = height + 10;
+                }
+            }
+            draw(mode) {
+                const fov = 400;
+                const scale = fov / (fov + this.z);
+                const projX = (this.x - width / 2) * scale + width / 2;
+                const projY = (this.y - height / 2) * scale + height / 2;
+                const projSize = this.size * scale * 1.5;
+
+                ctx.save();
+                ctx.translate(projX, projY);
+                ctx.rotate(this.rotation);
+                ctx.globalAlpha = this.alpha * scale;
+
+                if (mode === 'independence') {
+                    const colors = ['#f97316', '#ffffff', '#16a34a'];
+                    const col = colors[Math.floor(this.x) % colors.length];
+                    ctx.fillStyle = col;
+                    ctx.shadowColor = col;
+                    ctx.shadowBlur = 8 * scale;
+                    ctx.fillRect(-projSize, -projSize, projSize * 2, projSize * 1.2);
+                } else if (mode === 'diwali') {
+                    ctx.fillStyle = '#fbbf24';
+                    ctx.shadowColor = '#f59e0b';
+                    ctx.shadowBlur = 12 * scale;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, projSize, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (mode === 'janmashtami') {
+                    const col = Math.random() > 0.5 ? '#60a5fa' : '#f59e0b';
+                    ctx.fillStyle = col;
+                    ctx.shadowColor = col;
+                    ctx.shadowBlur = 10 * scale;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, projSize, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (mode === 'ganesh') {
+                    ctx.fillStyle = '#fb923c';
+                    ctx.shadowColor = '#eab308';
+                    ctx.shadowBlur = 10 * scale;
+                    ctx.fillRect(-projSize, -projSize, projSize * 1.5, projSize * 1.5);
+                } else if (mode === 'holi') {
+                    const holiColors = ['#f472b6', '#38bdf8', '#a78bfa', '#4ade80', '#fbbf24'];
+                    const col = holiColors[Math.floor(this.x + this.y) % holiColors.length];
+                    ctx.fillStyle = col;
+                    ctx.shadowColor = col;
+                    ctx.shadowBlur = 10 * scale;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, projSize * 1.2, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = '#f43f5e';
+                    ctx.shadowColor = '#e11d48';
+                    ctx.shadowBlur = 8 * scale;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, projSize, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+        }
+
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+            particles.push(new Particle3D());
+        }
+
+        let currentMode = 'independence';
+
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+            particles.forEach(p => {
+                p.update();
+                p.draw(currentMode);
+            });
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        particleEngine = {
+            setMode(mode) {
+                currentMode = mode;
+            }
+        };
+    }
+
+    // --- 3D INTERACTIVE CARD MOUSE TILT ---
+    function init3DCardTilt() {
+        const cards = document.querySelectorAll('.dashboard-card, .guide-card, .modal-card, .session-bar-card');
+        cards.forEach(card => {
+            card.classList.add('tilt-3d-card');
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const centerX = rect.width / 2;
+                const centerY = rect.height / 2;
+                const rotateX = -((y - centerY) / centerY) * 6;
+                const rotateY = ((x - centerX) / centerX) * 6;
+                card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.01, 1.01, 1.01)`;
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)';
+            });
+        });
+    }
+
+    // Bind Festival Switcher
+    if (festivalThemeSelector) {
+        const savedFest = localStorage.getItem('wms_festival_theme') || 'auto';
+        festivalThemeSelector.value = savedFest;
+        applyFestivalTheme(savedFest);
+
+        festivalThemeSelector.addEventListener('change', (e) => {
+            applyFestivalTheme(e.target.value);
+        });
+    } else {
+        applyFestivalTheme('auto');
+    }
+
+    if (festivalCountdownWidget) {
+        festivalCountdownWidget.addEventListener('click', () => {
+            const festInfo = getUpcomingOrActiveFestival();
+            alert(`🎉 Upcoming Festival Highlight:\n${festInfo.festival.icon} ${festInfo.festival.name}\n${festInfo.isActive ? 'Festival is LIVE today!' : festInfo.daysLeft + ' Days Remaining'}`);
+        });
+    }
+
+    init3DParticleEngine();
+    init3DCardTilt();
 
     // Initial load: Restore states on page load/reload
     const savedOda = localStorage.getItem('wms_oda_records');

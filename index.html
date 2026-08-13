@@ -114,6 +114,8 @@
     </style>
 </head>
 <body>
+    <!-- 3D Parallax & Festival Particle Canvas -->
+    <canvas id="festivalCanvas3D"></canvas>
     <div class="app-container">
         <!-- Sidebar Navigation -->
         <aside class="app-sidebar" id="appSidebar">
@@ -227,6 +229,22 @@
                 </div>
 
                 <div class="header-right" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <div class="header-widget" id="festivalCountdownWidget" title="Upcoming Festival Event" style="display: flex; align-items: center; gap: 6px; background: rgba(249, 115, 22, 0.12); border: 1px solid rgba(249, 115, 22, 0.4); color: #ff7700; font-weight: 700; cursor: pointer; padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.8rem;">
+                        <span id="festivalCountdownIcon">🇮🇳</span>
+                        <span id="festivalCountdownText">15 Aug Independence Day (4 Days)</span>
+                    </div>
+                    <select id="festivalThemeSelector" aria-label="Select Festival Theme" style="background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.82rem; font-weight: 700; cursor: pointer; outline: none;">
+                        <option value="auto">🎆 Auto Festival Theme</option>
+                        <option value="independence">🇮🇳 15th August Independence Day</option>
+                        <option value="raksha">🪢 Raksha Bandhan</option>
+                        <option value="janmashtami">🪈 Janmashtami</option>
+                        <option value="ganesh">🐘 Ganesh Chaturthi</option>
+                        <option value="navratri">💃 Navratri / Durga Puja</option>
+                        <option value="diwali">🪔 Diwali Festival of Lights</option>
+                        <option value="holi">🎨 Holi Colors</option>
+                        <option value="sankranti">🪁 Makar Sankranti</option>
+                        <option value="classic">💎 Classic Red Premium</option>
+                    </select>
                     <div class="header-widget" id="headerClockWidget">
                         00:00:00
                     </div>
@@ -534,7 +552,7 @@
                 </section>
 
                 <!-- 3. OUTBOUND SECTION -->
-                <section class="content-section" id="sectionOutbound" style="display: none; padding: 24px; height: 100%; width: 100%; box-sizing: border-box; overflow-y: auto; overflow-x: hidden;">
+                <section class="content-section" id="sectionOutbound" style="display: none; padding: 24px; height: 100%; width: 100%; box-sizing: border-box; overflow-y: auto;">
                     
                     <!-- State A: Outbound Session Inactive -->
                     <div id="outboundInactiveState" style="width: 100%; display: flex; flex-direction: column; gap: 24px;">
@@ -595,28 +613,59 @@
                             </div>
                         </div>
 
-                        <div class="dashboard-card table-card" style="padding: 24px;">
-                            <!-- Today Summary Bar -->
-                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; justify-content: space-between;">
-                                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">Recent Outbound Logs</h3>
-                                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                                    <div style="display: flex; align-items: center; gap: 6px; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); padding: 5px 12px; border-radius: var(--radius-sm); font-size: 0.82rem; font-weight: 700; color: var(--accent-blue);">
-                                        📦 Today's Boxes: <span id="todayOutboundBoxes" style="margin-left:4px;">0</span>
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 6px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); padding: 5px 12px; border-radius: var(--radius-sm); font-size: 0.82rem; font-weight: 700; color: var(--accent-amber);">
-                                        ⚖️ Today's Weight: <span id="todayOutboundWeight" style="margin-left:4px;">0.000 kg</span>
-                                    </div>
+                        <div class="dashboard-card table-card">
+                            <div class="card-header">
+                                <div class="card-icon emerald">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" />
+                                    </svg>
+                                </div>
+                                <div class="card-title-group">
+                                    <h2>Completed Outbound Logs</h2>
+                                    <p>History of previously closed dispatch sessions</p>
                                 </div>
                             </div>
-                            <!-- Table hidden — card layout used for all screen sizes -->
-                            <div style="display:none;">
+                            
+                            <!-- Today's Dispatch Summary Bar -->
+                            <div style="display: flex; gap: 16px; padding: 12px 24px; border-bottom: 1px solid var(--border-color); background: rgba(16, 185, 129, 0.02); flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted);">Today's Dispatch Summary:</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; color: var(--accent-blue);">
+                                    <span>Total Boxes:</span>
+                                    <span id="todayOutboundBoxes">0</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; color: var(--accent-amber);">
+                                    <span>Total Weight:</span>
+                                    <span id="todayOutboundWeight">0.000 kg</span>
+                                </div>
+                            </div>
+                            
+                            <div class="table-container">
                                 <table class="portal-table" id="outboundHistoryTable">
-                                    <tbody id="outboundHistoryBody"></tbody>
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 50px; text-align: center;">Mark</th>
+                                            <th>Timestamp</th>
+                                            <th>Shop Name</th>
+                                            <th>Invoice No.</th>
+                                            <th>ODA Status</th>
+                                            <th>Courier</th>
+                                            <th>Total Items</th>
+                                            <th>Total Weight</th>
+                                            <th>Total PCs</th>
+                                            <th>Total Boxes</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="outboundHistoryBody">
+                                        <!-- Completed logs populated dynamically -->
+                                    </tbody>
                                 </table>
                             </div>
-                            <!-- Card layout — shown on all screen sizes -->
-                            <div class="outbound-cards-grid" id="outboundHistoryMobileCards"></div>
+                            <div class="mobile-log-cards" id="outboundHistoryMobileCards"></div>
                         </div>
+                    </div>
 
                     <!-- State B: Outbound Session Active -->
                     <div id="outboundActiveState" style="width: 100%; display: none; flex-direction: column; gap: 24px;">
@@ -648,6 +697,10 @@
                                 <div style="display: flex; gap: 12px; align-items: center;">
                                     <div id="odaIndicatorBadge" style="display: none; align-items: center; justify-content: center; font-weight: 800; font-size: 0.82rem; padding: 10px 18px; border-radius: var(--radius-sm); border-style: solid; border-width: 2px; text-transform: uppercase;">
                                         <!-- Will be populated dynamically -->
+                                    </div>
+                                    <!-- Giant Logistics Badge: shown when total weight < 10 kg -->
+                                    <div id="giantLogisticsBadge" style="display: none; align-items: center; justify-content: center; font-weight: 800; font-size: 0.82rem; padding: 10px 18px; border-radius: var(--radius-sm); background-color: #1d4ed8; color: #ffffff; letter-spacing: 0.05em; text-transform: uppercase; box-shadow: 0 4px 14px rgba(29,78,216,0.35); animation: giantBadgePulse 2s infinite; white-space: nowrap;">
+                                        🚚 Giant Logistics
                                     </div>
                                     <button type="button" class="btn-primary" id="btnEditOutboundSessionInfo" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); padding: 10px 18px; display: flex; align-items: center; gap: 8px; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
@@ -1584,139 +1637,17 @@
             </div>
         </div>
     </div>
-    <!-- Giant Logistics Upload Documents Modal -->
-    <div class="modal-overlay" id="glDocUploadModal" style="z-index: 10005;">
-        <div class="modal-card" style="max-width: 540px; width: 95%;">
-            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="display: flex; align-items: center; gap: 8px; color: var(--accent-blue); margin: 0; font-size: 1.15rem;">
-                    <span>📷 Upload Documents for Giant Logistics</span>
-                </h3>
-                <button type="button" class="close-modal" id="closeGlDocUploadModalBtn" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 12px;">
-                <div style="font-size: 0.88rem; color: var(--text-secondary);">
-                    Order: <strong id="glDocOrderTitle" style="color: var(--text-primary);">—</strong>
-                </div>
-                <div style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: var(--radius-md); padding: 10px 14px; font-size: 0.82rem; color: var(--accent-rose); font-weight: 700;">
-                    ⚠️ Both Invoice Image and Shipment Image are COMPULSORY to arrange Giant Logistics pickup. Original high-resolution quality will be preserved.
-                </div>
-                
-                <!-- 1. Invoice Image -->
-                <div class="form-group" style="background: var(--bg-primary); border: 1px dashed var(--border-color); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 8px;">
-                    <label style="font-weight: 800; color: var(--text-primary); margin: 0; display: block; font-size: 0.9rem;">1. Invoice Image / Copy (Compulsory)</label>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <label for="glInvoiceFileInput" class="btn-primary" style="flex: 1; min-width: 140px; background: rgba(59,130,246,0.12); color: var(--accent-blue); border: 1px solid var(--accent-blue); padding: 8px 12px; font-size: 0.82rem; font-weight: 800; border-radius: var(--radius-sm); text-align: center; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                            📁 Select File / Gallery
-                        </label>
-                        <input type="file" id="glInvoiceFileInput" accept="image/*,.pdf" style="display: none;">
-                        
-                        <button type="button" id="btnInvoiceCamera" class="btn-primary" style="flex: 1; min-width: 140px; background: rgba(16,185,129,0.12); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 8px 12px; font-size: 0.82rem; font-weight: 800; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                            📸 Take Live Photo
-                        </button>
-                    </div>
-                    <div id="glInvoicePreview" style="margin-top: 6px; display: none;">
-                        <img id="glInvoiceImgTag" src="" alt="Invoice Preview" style="max-height: 140px; max-width: 100%; border-radius: var(--radius-sm); border: 2px solid var(--accent-emerald); object-fit: contain;">
-                    </div>
-                </div>
-
-                <!-- 2. Shipment Image -->
-                <div class="form-group" style="background: var(--bg-primary); border: 1px dashed var(--border-color); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 8px;">
-                    <label style="font-weight: 800; color: var(--text-primary); margin: 0; display: block; font-size: 0.9rem;">2. Shipment Box Photo (Compulsory)</label>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <label for="glShipmentFileInput" class="btn-primary" style="flex: 1; min-width: 140px; background: rgba(59,130,246,0.12); color: var(--accent-blue); border: 1px solid var(--accent-blue); padding: 8px 12px; font-size: 0.82rem; font-weight: 800; border-radius: var(--radius-sm); text-align: center; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                            📁 Select File / Gallery
-                        </label>
-                        <input type="file" id="glShipmentFileInput" accept="image/*" style="display: none;">
-
-                        <button type="button" id="btnShipmentCamera" class="btn-primary" style="flex: 1; min-width: 140px; background: rgba(16,185,129,0.12); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 8px 12px; font-size: 0.82rem; font-weight: 800; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                            📸 Take Live Photo
-                        </button>
-                    </div>
-                    <div id="glShipmentPreview" style="margin-top: 6px; display: none;">
-                        <img id="glShipmentImgTag" src="" alt="Shipment Preview" style="max-height: 140px; max-width: 100%; border-radius: var(--radius-sm); border: 2px solid var(--accent-emerald); object-fit: contain;">
-                    </div>
-                </div>
-
-                <div class="modal-footer" style="padding-top: 14px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end;">
-                    <button type="button" class="btn-secondary-link" id="cancelGlDocUploadModalBtn" style="border: 1px solid var(--border-color); color: var(--text-secondary); background: none; border-radius: var(--radius-sm); padding: 8px 16px; font-weight: 600; cursor: pointer;">Cancel</button>
-                    <button type="button" class="btn-primary" id="btnSaveGlDocs" style="background: var(--accent-emerald); border-color: var(--accent-emerald); color: white; padding: 8px 20px; font-weight: 800; border-radius: var(--radius-sm); cursor: pointer;">Save Documents & Proceed</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Live Camera Stream Sub-Modal -->
-    <div class="modal-overlay" id="glCameraModal" style="z-index: 10010;">
-        <div class="modal-card" style="max-width: 520px; width: 95%; text-align: center; padding: 16px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h4 style="margin: 0; color: var(--text-primary); font-size: 1.1rem;" id="glCameraModalTitle">📸 Live Camera Photo</h4>
-                <button type="button" id="closeGlCameraModalBtn" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
-            </div>
-            <div style="position: relative; background: #000; border-radius: var(--radius-md); overflow: hidden; max-height: 380px;">
-                <video id="glCameraVideo" autoplay playsinline style="width: 100%; height: auto; display: block;"></video>
-            </div>
-            <div style="margin-top: 14px; display: flex; justify-content: center; gap: 12px;">
-                <button type="button" id="btnCaptureGlPhoto" style="background: #f43f5e; color: white; border: none; padding: 10px 24px; font-weight: 900; font-size: 1rem; border-radius: 30px; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(244,63,94,0.4);">
-                    🔴 Capture High Quality Photo
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Giant Logistics Email Pickup Modal -->
-    <div class="modal-overlay" id="glEmailModal" style="z-index: 10005;">
-        <div class="modal-card" style="max-width: 680px; width: 95%;">
-            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="display: flex; align-items: center; gap: 8px; color: #60a5fa; margin: 0; font-size: 1.15rem;">
-                    <span>🚚 Giant Logistics Pickup Email Request</span>
-                </h3>
-                <button type="button" class="close-modal" id="closeGlEmailModalBtn" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 12px; max-height: 75vh; overflow-y: auto; padding-right: 4px;">
-                
-                <div style="display: flex; flex-direction: column; gap: 10px; font-size: 0.85rem; background: var(--bg-primary); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <strong style="color: var(--text-muted); min-width: 60px;">TO:</strong>
-                        <input type="email" id="glEmailToInput" value="sonu.gupta@geonix.in" style="flex: 1; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; color: var(--accent-emerald); font-weight: 700; font-size: 0.85rem; padding: 4px 8px; outline: none;">
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 4px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <strong style="color: var(--text-muted);">CC Recipients (Editable & Saveable):</strong>
-                            <button type="button" id="btnSaveGlCcEmails" title="Save these CC emails for all future emails" style="background: rgba(16, 185, 129, 0.12); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); padding: 3px 10px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; cursor: pointer; transition: var(--transition-smooth);">
-                                💾 Save Default Recipients
-                            </button>
-                        </div>
-                        <textarea id="glEmailCcInput" style="width: 100%; height: 52px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 0.78rem; padding: 6px 8px; outline: none; resize: vertical; font-family: var(--font-mono); line-height: 1.4;"></textarea>
-                    </div>
-                    <div><strong style="color: var(--text-muted);">SUBJECT:</strong> <span id="glEmailSubject" style="color: var(--text-primary); font-weight: 700;">Pickup Request for Shipment</span></div>
-                </div>
-
-                <div class="form-group">
-                    <label style="font-weight: 800; color: var(--text-primary); margin-bottom: 4px; display: block; font-size: 0.85rem;">Email Message Body:</label>
-                    <textarea id="glEmailBodyText" readonly style="width: 100%; height: 230px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.82rem; padding: 12px; resize: none; font-family: var(--font-mono); line-height: 1.5; outline: none;"></textarea>
-                </div>
-
-                <!-- Attached Images Display -->
-                <div style="background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: var(--radius-md); padding: 12px;">
-                    <div style="font-weight: 800; color: var(--accent-emerald); font-size: 0.85rem; margin-bottom: 8px;">
-                        📎 Attached Documents (2/2 Compulsory Images Uploaded):
-                    </div>
-                    <div style="display: flex; gap: 16px; flex-wrap: wrap;" id="glEmailAttachmentsPreview">
-                        <!-- Populated by JS -->
-                    </div>
-                </div>
-
-                <div class="modal-footer" style="padding-top: 14px; border-top: 1px solid var(--border-color); display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
-                    <button type="button" class="btn-secondary-link" id="btnDownloadGlImages" style="border: 1px solid var(--accent-blue); color: var(--accent-blue); background: rgba(59,130,246,0.08); border-radius: var(--radius-sm); padding: 8px 14px; font-weight: 700; font-size: 0.85rem; cursor: pointer;">
-                        ⬇️ Download Attached Images
-                    </button>
-                    <button type="button" class="btn-secondary-link" id="btnCopyGlEmailText" style="border: 1px solid var(--accent-amber); color: var(--accent-amber); background: rgba(245,158,11,0.08); border-radius: var(--radius-sm); padding: 8px 14px; font-weight: 700; font-size: 0.85rem; cursor: pointer;">
-                        📋 Copy Email Text
-                    </button>
-                    <a id="btnTriggerGlMailto" href="#" target="_blank" class="btn-primary" style="background: #1d4ed8; border-color: #1d4ed8; color: white; padding: 8px 18px; font-weight: 800; font-size: 0.88rem; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border-radius: var(--radius-sm);">
-                        📧 Open Email Client
-                    </a>
-                </div>
+    <!-- Giant Logistics Courier Confirm Popup -->
+    <div id="giantLogisticsPopup">
+        <div id="giantLogisticsPopupBox">
+            <div class="gl-truck-icon">🚚</div>
+            <h3>Giant Logistics Courier</h3>
+            <p>Is shipment weight is under 10 kg — this order should be handed over to:</p>
+            <div class="gl-weight-chip" id="glWeightDisplay">— kg</div>
+            <p style="font-size: 1.1rem; font-weight: 800; color: #60a5fa; margin: 0 0 24px;">Giant Logistics</p>
+            <div class="gl-btn-row">
+                <button id="btnGiantLogisticsYes">✅ Yes, Close Session</button>
+                <button id="btnGiantLogisticsCancel">Cancel</button>
             </div>
         </div>
     </div>

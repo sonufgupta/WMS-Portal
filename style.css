@@ -42,41 +42,10 @@
     --radius-lg: 16px;
     --radius-xl: 24px;
     
-    /* Layout & Animation - 100X Speed Optimized */
+    /* Layout & Animation */
     --sidebar-width: 260px;
     --header-height: 70px;
-    --transition-smooth: all 0.08s cubic-bezier(0, 0, 0.2, 1);
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
-   🔵 BLUE & WHITE CLEAN THEME
-   ══════════════════════════════════════════════════════════════════════════ */
-[data-theme="blue-white"] {
-    --bg-primary:   #f0f4ff;
-    --bg-secondary: #ffffff;
-    --bg-card:      #ffffff;
-    --border-color: #dbe4ff;
-    --text-primary:   #1e2a4a;
-    --text-secondary: #4a5980;
-    --text-muted:     #8a97b8;
-
-    --accent-red:         #2563eb;
-    --accent-red-bright:  #3b82f6;
-    --accent-red-glow:    rgba(37, 99, 235, 0.2);
-    --accent-red-subtle:  rgba(37, 99, 235, 0.08);
-    --accent-crimson-gradient: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-    --accent-ruby-glow:   0 0 20px rgba(37, 99, 235, 0.3);
-
-    --accent-blue:         #2563eb;
-    --accent-blue-glow:    rgba(37, 99, 235, 0.12);
-    --accent-emerald:      #10b981;
-    --accent-emerald-glow: rgba(16, 185, 129, 0.12);
-    --accent-amber:        #f59e0b;
-    --accent-amber-glow:   rgba(245, 158, 11, 0.12);
-    --accent-rose:         #ef4444;
-    --accent-rose-glow:    rgba(239, 68, 68, 0.1);
-    --accent-purple:       #8b5cf6;
-    --accent-purple-glow:  rgba(139, 92, 246, 0.12);
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Light Theme Variables (Crimson Light Mode) */
@@ -96,7 +65,166 @@
     --accent-rose-glow: rgba(244, 63, 94, 0.1);
 }
 
+/* ==========================================================================
+   FESTIVAL THEME TOKENS & 3D VISUAL EFFECTS ENGINE
+   ========================================================================== */
 
+/* 🇮🇳 15th August Independence Day Theme */
+[data-festival="independence"] {
+    --bg-primary: #0b0711;
+    --bg-secondary: #140e1e;
+    --bg-card: #1c1429;
+    --border-color: #3f2250;
+    --accent-red: #ea580c;
+    --accent-red-bright: #ff7700;
+    --accent-red-glow: rgba(249, 115, 22, 0.3);
+    --accent-red-subtle: rgba(249, 115, 22, 0.15);
+    --accent-crimson-gradient: linear-gradient(135deg, #f97316 0%, #16a34a 100%);
+    --accent-ruby-glow: 0 0 25px rgba(249, 115, 22, 0.5);
+    --text-primary: #ffffff;
+    --text-secondary: #cbd5e1;
+}
+
+/* 🪔 Diwali Theme (Golden Diya Night) */
+[data-festival="diwali"] {
+    --bg-primary: #0f0901;
+    --bg-secondary: #1a1002;
+    --bg-card: #261804;
+    --border-color: #4a300a;
+    --accent-red: #f59e0b;
+    --accent-red-bright: #fbbf24;
+    --accent-red-glow: rgba(245, 158, 11, 0.35);
+    --accent-red-subtle: rgba(245, 158, 11, 0.15);
+    --accent-crimson-gradient: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+    --accent-ruby-glow: 0 0 25px rgba(245, 158, 11, 0.6);
+    --text-primary: #fffbeb;
+    --text-secondary: #fcd34d;
+}
+
+/* 🪈 Janmashtami Theme (Peacock Sapphire Blue & Gold) */
+[data-festival="janmashtami"] {
+    --bg-primary: #050b18;
+    --bg-secondary: #0a142c;
+    --bg-card: #101d3f;
+    --border-color: #1c336b;
+    --accent-red: #2563eb;
+    --accent-red-bright: #60a5fa;
+    --accent-red-glow: rgba(37, 99, 235, 0.35);
+    --accent-red-subtle: rgba(37, 99, 235, 0.15);
+    --accent-crimson-gradient: linear-gradient(135deg, #1d4ed8 0%, #d97706 100%);
+    --accent-ruby-glow: 0 0 25px rgba(96, 165, 250, 0.5);
+    --text-primary: #f0f9ff;
+    --text-secondary: #93c5fd;
+}
+
+/* 🐘 Ganesh Chaturthi Theme (Marigold Orange & Gold) */
+[data-festival="ganesh"] {
+    --bg-primary: #120700;
+    --bg-secondary: #1f0c01;
+    --bg-card: #2d1302;
+    --border-color: #572504;
+    --accent-red: #ea580c;
+    --accent-red-bright: #fb923c;
+    --accent-red-glow: rgba(234, 88, 12, 0.35);
+    --accent-red-subtle: rgba(234, 88, 12, 0.15);
+    --accent-crimson-gradient: linear-gradient(135deg, #c2410c 0%, #eab308 100%);
+    --accent-ruby-glow: 0 0 25px rgba(251, 146, 60, 0.5);
+    --text-primary: #fff7ed;
+    --text-secondary: #fdba74;
+}
+
+/* 💃 Navratri / Durga Puja Theme (Vermilion Crimson & Gold) */
+[data-festival="navratri"] {
+    --bg-primary: #140406;
+    --bg-secondary: #22070b;
+    --bg-card: #330b11;
+    --border-color: #5c141e;
+    --accent-red: #dc2626;
+    --accent-red-bright: #f87171;
+    --accent-red-glow: rgba(220, 38, 38, 0.35);
+    --accent-red-subtle: rgba(220, 38, 38, 0.15);
+    --accent-crimson-gradient: linear-gradient(135deg, #b91c1c 0%, #eab308 100%);
+    --accent-ruby-glow: 0 0 25px rgba(248, 113, 113, 0.6);
+    --text-primary: #fef2f2;
+    --text-secondary: #fca5a5;
+}
+
+/* 🎨 Holi Theme (Rainbow Gulal) */
+[data-festival="holi"] {
+    --bg-primary: #0d0614;
+    --bg-secondary: #170b24;
+    --bg-card: #231137;
+    --border-color: #482270;
+    --accent-red: #ec4899;
+    --accent-red-bright: #f472b6;
+    --accent-red-glow: rgba(236, 72, 153, 0.35);
+    --accent-red-subtle: rgba(236, 72, 153, 0.15);
+    --accent-crimson-gradient: linear-gradient(135deg, #db2777 0%, #8b5cf6 50%, #06b6d4 100%);
+    --accent-ruby-glow: 0 0 25px rgba(244, 114, 182, 0.6);
+    --text-primary: #fdf2f8;
+    --text-secondary: #fbcfe8;
+}
+
+/* 🪁 Makar Sankranti Theme (Sky Blue & Sun Orange) */
+[data-festival="sankranti"] {
+    --bg-primary: #050e17;
+    --bg-secondary: #0a192a;
+    --bg-card: #10263f;
+    --border-color: #1e4570;
+    --accent-red: #0284c7;
+    --accent-red-bright: #38bdf8;
+    --accent-red-glow: rgba(56, 189, 248, 0.35);
+    --accent-red-subtle: rgba(56, 189, 248, 0.15);
+    --accent-crimson-gradient: linear-gradient(135deg, #0284c7 0%, #f97316 100%);
+    --accent-ruby-glow: 0 0 25px rgba(56, 189, 248, 0.5);
+    --text-primary: #f0f9ff;
+    --text-secondary: #bae6fd;
+}
+
+/* 🪢 Raksha Bandhan Theme (Silk Crimson & Gold) */
+[data-festival="raksha"] {
+    --bg-primary: #120509;
+    --bg-secondary: #1f0a10;
+    --bg-card: #2e0f19;
+    --border-color: #541c2e;
+    --accent-red: #e11d48;
+    --accent-red-bright: #fb7185;
+    --accent-red-glow: rgba(225, 29, 72, 0.35);
+    --accent-red-subtle: rgba(225, 29, 72, 0.15);
+    --accent-crimson-gradient: linear-gradient(135deg, #be123c 0%, #eab308 100%);
+    --accent-ruby-glow: 0 0 25px rgba(251, 113, 133, 0.6);
+    --text-primary: #fff1f2;
+    --text-secondary: #fecdd3;
+}
+
+/* 3D Canvas Background Element */
+#festivalCanvas3D {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.8;
+}
+
+/* 3D Card Tilt & Parallax */
+.tilt-3d-card {
+    transform-style: preserve-3d;
+    transition: transform 0.15s cubic-bezier(0.2, 0, 0.2, 1), box-shadow 0.3s ease;
+    will-change: transform;
+}
+
+.tilt-3d-card:hover {
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.35), var(--accent-ruby-glow);
+}
+
+/* Rotating Ashoka Chakra Animation */
+@keyframes chakraRotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
 
 .ashoka-chakra-icon {
     width: 24px;
@@ -126,14 +254,6 @@ body {
     overflow-x: hidden;
     min-height: 100vh;
     transition: background-color 0.3s ease, color 0.3s ease;
-}
-
-/* Blue-White theme body override */
-[data-theme="blue-white"] body,
-body[data-theme="blue-white"] {
-    background-image:
-        radial-gradient(circle at 10% 10%, rgba(37, 99, 235, 0.06) 0%, transparent 40%),
-        radial-gradient(circle at 90% 90%, rgba(99, 102, 241, 0.05) 0%, transparent 45%);
 }
 
 button, input, select, textarea {
@@ -217,12 +337,6 @@ a {
     border: 1px solid rgba(254, 205, 211, 0.2);
 }
 
-[data-theme="blue-white"] .logo-icon {
-    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
-    border-color: rgba(147, 197, 253, 0.3);
-}
-
 .logo-icon svg {
     width: 20px;
     height: 20px;
@@ -235,12 +349,6 @@ a {
     font-size: 1.18rem;
     letter-spacing: 0.5px;
     background: linear-gradient(135deg, #ffffff 0%, #fda4af 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-[data-theme="blue-white"] .logo-text {
-    background: linear-gradient(135deg, #1e2a4a 0%, #2563eb 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -280,11 +388,6 @@ a {
     border-left-color: rgba(225, 29, 72, 0.4);
 }
 
-[data-theme="blue-white"] .nav-link:hover {
-    border-left-color: rgba(37, 99, 235, 0.4);
-    background-color: rgba(37, 99, 235, 0.06);
-}
-
 .nav-link.active {
     background-color: var(--accent-red-subtle);
     color: #ffffff;
@@ -292,19 +395,8 @@ a {
     box-shadow: inset 3px 0 12px rgba(225, 29, 72, 0.15), 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-[data-theme="blue-white"] .nav-link.active {
-    background-color: rgba(37, 99, 235, 0.1);
-    color: #2563eb;
-    border-left-color: #2563eb;
-    box-shadow: inset 3px 0 12px rgba(37,99,235,0.1), 0 2px 8px rgba(37,99,235,0.08);
-}
-
 .nav-link.active svg {
     stroke: var(--accent-red-bright);
-}
-
-[data-theme="blue-white"] .nav-link.active svg {
-    stroke: #2563eb;
 }
 
 .sidebar-footer {
@@ -361,10 +453,6 @@ a {
     transition: var(--transition-smooth);
 }
 
-[data-theme="blue-white"] .app-header {
-    box-shadow: 0 1px 4px rgba(37,99,235,0.06);
-}
-
 .header-left {
     display: flex;
     align-items: center;
@@ -408,13 +496,6 @@ a {
     box-shadow: 0 0 10px rgba(225, 29, 72, 0.15);
 }
 
-[data-theme="blue-white"] .header-widget {
-    color: #2563eb;
-    background: rgba(37,99,235,0.08);
-    border-color: rgba(37,99,235,0.25);
-    box-shadow: none;
-}
-
 .theme-btn {
     width: 38px;
     height: 38px;
@@ -435,11 +516,6 @@ a {
     transform: rotate(15deg);
 }
 
-[data-theme="blue-white"] .theme-btn:hover {
-    border-color: #2563eb;
-    box-shadow: 0 0 10px rgba(37,99,235,0.2);
-}
-
 .theme-btn svg {
     width: 18px;
     height: 18px;
@@ -454,11 +530,12 @@ a {
     flex-direction: column;
 }
 
-/* Content Sections Toggling & Fast Instant Switching */
+/* Content Sections Toggling & Fade In Animation */
 .content-section {
     display: none;
     opacity: 0;
-    transition: opacity 0.05s ease-out;
+    transform: translateY(12px);
+    transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1), transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     flex: 1;
     flex-direction: column;
 }
@@ -466,6 +543,7 @@ a {
 .content-section.active {
     display: flex !important;
     opacity: 1;
+    transform: translateY(0);
 }
 
 /* Blank/Welcome Area Styling */
@@ -482,10 +560,6 @@ a {
     background: linear-gradient(180deg, rgba(26, 15, 24, 0.5) 0%, rgba(18, 10, 17, 0.2) 100%);
     position: relative;
     overflow: hidden;
-}
-
-[data-theme="blue-white"] .welcome-container {
-    background: linear-gradient(180deg, rgba(37,99,235,0.04) 0%, rgba(255,255,255,0) 100%);
 }
 
 .welcome-icon {
@@ -514,12 +588,6 @@ a {
     font-weight: 800;
     margin-bottom: 12px;
     background: linear-gradient(135deg, #ffffff 0%, #fda4af 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-[data-theme="blue-white"] .welcome-container h2 {
-    background: linear-gradient(135deg, #1e2a4a 0%, #2563eb 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -568,11 +636,6 @@ a {
     transform: translateY(-4px);
     border-color: var(--accent-red);
     box-shadow: 0 12px 24px rgba(225, 29, 72, 0.15);
-}
-
-[data-theme="blue-white"] .guide-card:hover {
-    border-color: #2563eb;
-    box-shadow: 0 8px 20px rgba(37,99,235,0.12);
 }
 
 .guide-card:hover::before {
@@ -696,10 +759,6 @@ a {
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
 
-[data-theme="blue-white"] .dashboard-card {
-    box-shadow: 0 2px 12px rgba(37,99,235,0.06), 0 1px 4px rgba(0,0,0,0.04);
-}
-
 .dashboard-card.table-card {
     padding: 28px 0 0 0; /* Let table bleed to edge */
 }
@@ -733,14 +792,6 @@ a {
     stroke: var(--accent-red-bright);
     width: 22px;
     height: 22px;
-}
-
-[data-theme="blue-white"] .card-icon.blue {
-    background-color: rgba(37,99,235,0.08);
-    border-color: rgba(37,99,235,0.2);
-}
-[data-theme="blue-white"] .card-icon.blue svg {
-    stroke: #2563eb;
 }
 
 .card-icon.emerald {
@@ -807,17 +858,6 @@ a {
     box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.25);
 }
 
-[data-theme="blue-white"] .form-group input,
-[data-theme="blue-white"] .form-group select {
-    background-color: #f8faff;
-    border-color: #dbe4ff;
-}
-[data-theme="blue-white"] .form-group input:focus,
-[data-theme="blue-white"] .form-group select:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
-}
-
 .form-group select {
     appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23f43f5e'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
@@ -858,16 +898,6 @@ a {
     background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
     transform: translateY(-2px);
     box-shadow: 0 8px 24px rgba(225, 29, 72, 0.5);
-}
-
-[data-theme="blue-white"] .btn-primary {
-    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-    box-shadow: 0 4px 14px rgba(37,99,235,0.35);
-    border-color: rgba(147,197,253,0.2);
-}
-[data-theme="blue-white"] .btn-primary:hover {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-    box-shadow: 0 8px 20px rgba(37,99,235,0.45);
 }
 
 .btn-primary svg {
@@ -937,16 +967,10 @@ a {
     letter-spacing: 0.5px;
 }
 
-[data-theme="blue-white"] .portal-table th {
-    background-color: #f0f4ff;
-    color: #4a5980;
-}
-
 .portal-table td {
     padding: 16px 28px;
     border-bottom: 1px solid var(--border-color);
     color: var(--text-primary);
-    vertical-align: top;
 }
 
 .portal-table tbody tr {
@@ -955,28 +979,6 @@ a {
 
 .portal-table tbody tr:hover {
     background-color: rgba(30, 41, 59, 0.3);
-}
-
-[data-theme="blue-white"] .portal-table tbody tr:hover {
-    background-color: rgba(37,99,235,0.04);
-}
-
-/* Outbound history table — compact overrides for 11-column layout */
-#outboundHistoryTable {
-    font-size: 0.8rem;
-}
-#outboundHistoryTable th {
-    padding: 10px 10px;
-    font-size: 0.68rem;
-    letter-spacing: 0.3px;
-    white-space: nowrap;
-}
-#outboundHistoryTable td {
-    padding: 10px 10px;
-    font-size: 0.8rem;
-}
-#outboundHistoryTable .font-mono {
-    font-size: 0.78rem;
 }
 
 .font-mono {
@@ -999,7 +1001,7 @@ a {
     justify-content: center;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.06s ease;
+    transition: opacity 0.3s ease;
 }
 
 .modal-overlay.active {
@@ -1015,8 +1017,8 @@ a {
     max-width: 460px;
     padding: 32px;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
-    transform: scale(0.97);
-    transition: transform 0.06s ease;
+    transform: scale(0.95);
+    transition: transform 0.3s ease;
     display: flex;
     flex-direction: column;
     gap: 24px;
@@ -1659,45 +1661,13 @@ a {
     background-color: #161e2f !important;
 }
 
-/* Blue-White theme alternating rows */
-[data-theme="blue-white"] .portal-table tr.white-row td {
-    background-color: #ffffff !important;
-    color: #1e2a4a !important;
-    border-bottom: 1px solid #dbe4ff !important;
-}
-[data-theme="blue-white"] .portal-table tr.white-row:hover td {
-    background-color: #f0f4ff !important;
-}
-[data-theme="blue-white"] .portal-table tr.black-row td {
-    background-color: #f8faff !important;
-    color: #1e2a4a !important;
-    border-bottom: 1px solid #dbe4ff !important;
-}
-[data-theme="blue-white"] .portal-table tr.black-row:hover td {
-    background-color: #eef2ff !important;
-}
-
+/* Mobile Log Cards Container */
 .mobile-log-cards {
     display: none;
     flex-direction: column;
     gap: 16px;
     width: 100%;
     margin-top: 12px;
-}
-
-/* Outbound Cards Grid - Always visible (Desktop & Mobile) */
-.outbound-cards-grid {
-    display: grid !important;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-    gap: 18px;
-    width: 100%;
-    margin-top: 12px;
-}
-
-@media (max-width: 600px) {
-    .outbound-cards-grid {
-        grid-template-columns: 1fr;
-    }
 }
 
 /* Individual Log Card */
@@ -1841,3 +1811,7 @@ a {
         font-size: 0.78rem !important;
     }
 }
+
+
+
+
