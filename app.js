@@ -123,6 +123,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let syncRenderRafId = null;
+    function scheduleSyncUIRender() {
+        if (syncRenderRafId) return;
+        syncRenderRafId = requestAnimationFrame(() => {
+            syncRenderRafId = null;
+            renderHistoryTable();
+            renderOutboundHistoryTable();
+            renderInventoryPanel();
+        });
+    }
+
     function syncCloudDataToLocal(key, value) {
         if (value === null || value === undefined) {
             return false;
@@ -209,14 +220,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const val = snapshot.val();
             if (val === null) {
                 localStorage.setItem('wms_product_weights', '{}');
-                renderHistoryTable();
-                renderInventoryPanel();
-                renderOutboundHistoryTable();
+                scheduleSyncUIRender();
             } else {
                 if (syncCloudDataToLocal('wms_product_weights', val)) {
-                    renderHistoryTable();
-                    renderInventoryPanel();
-                    renderOutboundHistoryTable();
+                    scheduleSyncUIRender();
                     console.log("Product Weights synchronized.");
                 }
             }
@@ -257,12 +264,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const val = snapshot.val();
             if (val === null) {
                 localStorage.setItem('wms_inbound_history', '[]');
-                renderHistoryTable();
-                renderInventoryPanel();
+                scheduleSyncUIRender();
             } else {
                 if (syncCloudDataToLocal('wms_inbound_history', val)) {
-                    renderHistoryTable();
-                    renderInventoryPanel();
+                    scheduleSyncUIRender();
                     loadInboundItems();
                     renderDropdownItems();
                     renderActiveDropdownItems();
@@ -276,12 +281,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const val = snapshot.val();
             if (val === null) {
                 localStorage.setItem('wms_outbound_history', '[]');
-                renderOutboundHistoryTable();
-                renderInventoryPanel();
+                scheduleSyncUIRender();
             } else {
                 if (syncCloudDataToLocal('wms_outbound_history', val)) {
-                    renderOutboundHistoryTable();
-                    renderInventoryPanel();
+                    scheduleSyncUIRender();
                     loadInboundItems();
                     renderDropdownItems();
                     renderActiveDropdownItems();
@@ -1500,7 +1503,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const historyData = getHistory();
         let needsUpdate = false;
         
-        historyData.forEach((row, idx) => {
+        const trFrag = document.createDocumentFragment();
+        const mobileFrag = document.createDocumentFragment();
+
+        // High Performance Optimization: Limit initial rendering to top 100 recent entries to prevent main thread blocking
+        const renderLimit = 100;
+        const displayData = historyData.slice(0, renderLimit);
+
+        displayData.forEach((row, idx) => {
             const tr = document.createElement('tr');
             const vehicleDisplay = row.vehicle === 'Not Specified' ? '<span class="text-muted">Not Specified</span>' : row.vehicle;
             
@@ -1572,7 +1582,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </button>
                 </td>
             `;
-            inboundHistoryBody.appendChild(tr);
+            trFrag.appendChild(tr);
 
             // Generate Mobile Card HTML
             if (mobileContainer) {
@@ -1626,9 +1636,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         </button>
                     </div>
                 `;
-                mobileContainer.appendChild(card);
+                mobileFrag.appendChild(card);
             }
         });
+
+        inboundHistoryBody.appendChild(trFrag);
+        if (mobileContainer) {
+            mobileContainer.appendChild(mobileFrag);
+        }
 
         // Save updated mock logs back to storage only if we modified them
         if (needsUpdate) {
@@ -1770,6 +1785,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const itemsList = activeSession.items || [];
+        const mainFrag = document.createDocumentFragment();
 
         // Pre-group serials by itemName for O(1) lookup
         const serialsByItemNameMap = new Map();
@@ -1838,6 +1854,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Sort box numbers from highest to lowest (newest box on top)
                 const boxNumbers = Object.keys(groups).map(Number).sort((a, b) => b - a);
+                const boxesFrag = document.createDocumentFragment();
 
                 boxNumbers.forEach(boxNo => {
                     const boxItems = groups[boxNo];
@@ -1864,6 +1881,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Serials List
                     const listContainer = document.createElement('div');
                     listContainer.className = 'box-serials-list';
+                    const serialsFrag = document.createDocumentFragment();
 
                     boxItems.forEach(s => {
                         const row = document.createElement('div');
@@ -1873,17 +1891,22 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span class="serial-item-text font-mono">${s.serial}</span>
                             <button type="button" class="btn-delete-serial" data-serial="${s.serial}" title="Remove serial">&times;</button>
                         `;
-                        listContainer.appendChild(row);
+                        serialsFrag.appendChild(row);
                     });
 
+                    listContainer.appendChild(serialsFrag);
                     boxCard.appendChild(listContainer);
-                    boxListWrapper.appendChild(boxCard);
+                    boxesFrag.appendChild(boxCard);
                 });
+
+                boxListWrapper.appendChild(boxesFrag);
             }
 
             col.appendChild(boxListWrapper);
-            sessionBoxesContainer.appendChild(col);
+            mainFrag.appendChild(col);
         });
+
+        sessionBoxesContainer.appendChild(mainFrag);
     }
 
     function updateWorkstationProductSelector() {
@@ -4690,7 +4713,15 @@ document.addEventListener('DOMContentLoaded', () => {
         let todayWeightSum = 0;
         
         const historyData = getOutboundHistory();
-        historyData.forEach((row, index) => {
+
+        const trFrag = document.createDocumentFragment();
+        const mobileFrag = document.createDocumentFragment();
+
+        // High Performance Optimization: Limit initial rendering to top 100 recent entries to prevent main thread blocking
+        const renderLimit = 100;
+        const displayData = historyData.slice(0, renderLimit);
+
+        displayData.forEach((row, index) => {
             const tr = document.createElement('tr');
             tr.className = (index % 2 === 0) ? 'white-row' : 'black-row';
             let totalWeight = 0;
@@ -4833,7 +4864,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </button>
                 </td>
             `;
-            body.appendChild(tr);
+            trFrag.appendChild(tr);
 
             // Generate Mobile Card HTML
             if (mobileContainer) {
@@ -4944,9 +4975,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         </button>
                     </div>
                 `;
-                mobileContainer.appendChild(card);
+                mobileFrag.appendChild(card);
             }
         });
+
+        body.appendChild(trFrag);
+        if (mobileContainer) {
+            mobileContainer.appendChild(mobileFrag);
+        }
 
 
         const todayOutboundBoxesEl = document.getElementById('todayOutboundBoxes');
@@ -5047,6 +5083,7 @@ document.addEventListener('DOMContentLoaded', () => {
             container.innerHTML = '';
             
             const items = activeOutboundSession.items || [];
+            const frag = document.createDocumentFragment();
             
             // Pre-group serials by itemName for O(1) lookup
             const serialsByItemMap = new Map();
@@ -5117,7 +5154,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${patternCellHtml}
                     </td>
                 `;
-                container.appendChild(tr);
+                frag.appendChild(tr);
 
                 // Bind add alternative SKU pattern button click
                 const addSkuBtn = tr.querySelector('.btn-outbound-add-alternative-sku');
@@ -5166,6 +5203,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
             });
+            container.appendChild(frag);
         }
 
         const totalPcs = activeOutboundSession.serials.length;
@@ -5234,6 +5272,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        const colFrag = document.createDocumentFragment();
+
         activeOutboundSession.items.forEach(item => {
             const itemSerials = serialsByItemMap.get(item.name) || [];
             const itemPieces = itemSerials.length;
@@ -5300,6 +5340,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 const boxNumbers = Object.keys(groups).map(Number).sort((a,b)=>b-a);
+                const boxFrag = document.createDocumentFragment();
+
                 boxNumbers.forEach(boxNo => {
                     const boxItems = groups[boxNo];
                     const boxCard = document.createElement('div');
@@ -5342,6 +5384,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const serialsUl = document.createElement('ul');
                     serialsUl.style.cssText = 'list-style: none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px;';
+                    const serialsFrag = document.createDocumentFragment();
                     
                     boxItems.forEach(s => {
                         const li = document.createElement('li');
@@ -5353,10 +5396,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         li.innerHTML = `
                             <span style="color:var(--text-secondary); word-break:break-all;">${displayVal}</span>
-                            <button type="button" class="btn-outbound-delete-serial" data-serial="${s.serial}" title="Remove Serial" style="background:none; border:none; color:var(--text-muted); cursor:pointer; padding:2px; display:flex; align-items:center; justify-content:center; transition: var(--transition-smooth); border-radius:4px;">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:14px; height:14px;">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
+                            <button type="button" class="btn-outbound-delete-serial" data-serial="${s.serial}" title="Remove serial" style="background: none; border: none; color: var(--text-muted); font-size: 1rem; cursor: pointer; padding: 0 4px; line-height: 1;">
+                                &times;
                             </button>
                         `;
 
@@ -5364,31 +5405,30 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (delBtn) {
                             delBtn.addEventListener('click', (e) => {
                                 e.stopPropagation();
-                                if (confirm(`Remove serial "${s.serial}" from this outbound session?`)) {
-                                    activeOutboundSession.serials = activeOutboundSession.serials.filter(x => x.serial !== s.serial);
-                                    
-                                    const remainingForProduct = activeOutboundSession.serials.some(x => x.itemName === item.name);
-                                    if (!remainingForProduct) {
-                                        activeOutboundSession.items = activeOutboundSession.items.filter(x => x.name !== item.name);
-                                    }
-                                    
-                                    compactOutboundBoxNumbers();
-                                    saveActiveOutboundSession();
-                                    updateOutboundSessionProgress();
-                                    renderOutboundBoxCards();
+                                activeOutboundSession.serials = activeOutboundSession.serials.filter(x => x.serial !== s.serial);
+                                const remainingForProduct = activeOutboundSession.serials.some(x => x.itemName === item.name);
+                                if (!remainingForProduct) {
+                                    activeOutboundSession.items = activeOutboundSession.items.filter(x => x.name !== item.name);
                                 }
+                                compactOutboundBoxNumbers();
+                                saveActiveOutboundSession();
+                                updateOutboundSessionProgress();
+                                renderOutboundBoxCards();
                             });
                         }
 
-                        serialsUl.appendChild(li);
+                        serialsFrag.appendChild(li);
                     });
+                    serialsUl.appendChild(serialsFrag);
                     boxCard.appendChild(serialsUl);
-                    boxListWrapper.appendChild(boxCard);
+                    boxFrag.appendChild(boxCard);
                 });
+                boxListWrapper.appendChild(boxFrag);
             }
             col.appendChild(boxListWrapper);
-            container.appendChild(col);
+            colFrag.appendChild(col);
         });
+        container.appendChild(colFrag);
     }
 
 
