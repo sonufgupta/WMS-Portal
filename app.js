@@ -3648,11 +3648,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function restoreOutboundSessionState() {
+        const outboundInactiveState = document.getElementById('outboundInactiveState');
+        const outboundActiveState = document.getElementById('outboundActiveState');
+        
         const saved = localStorage.getItem('wms_active_outbound_session');
-        if (saved) {
-            activeOutboundSession = JSON.parse(saved);
+        if (saved && saved !== 'null') {
+            try {
+                activeOutboundSession = JSON.parse(saved);
+            } catch (e) {
+                activeOutboundSession = null;
+            }
+        } else {
+            activeOutboundSession = null;
+        }
 
-            if (!activeOutboundSession) return;
+        if (activeOutboundSession) {
 
             if (activeOutboundSession && !activeOutboundSession.items) {
                 activeOutboundSession.items = [];
