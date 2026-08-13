@@ -4118,32 +4118,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // lookup helpers
     function lookupProductBySerial(serial) {
-        const history = getHistory();
-        for (const log of history) {
-            if (log.serials && log.serials.length > 0) {
-                const found = log.serials.find(s => s && s.serial === serial);
-                if (found) return found.itemName;
-            }
-            
-            // Fallback for mock logs and legacy records (always evaluated if no exact serial match found)
-            if (serial.startsWith("GXTFT")) {
-                const hasMonitor = (log.item && log.item.includes("LED Monitor")) || 
-                                   (log.items && log.items.some(i => {
-                                       const name = typeof i === 'string' ? i : (i.name || '');
-                                       return name.includes("LED Monitor");
-                                   }));
-                if (hasMonitor) return "LED Monitor 19.5\" (Geonix)";
-            }
-            if (serial.startsWith("BWR")) {
-                const hasWrap = (log.item && log.item.includes("Bubble Wrap")) || 
-                                 (log.items && log.items.some(i => {
-                                     const name = typeof i === 'string' ? i : (i.name || '');
-                                     return name.includes("Bubble Wrap");
-                                 }));
-                if (hasWrap) return "Bubble Wrap Roll";
-            }
+        if (!serial) return null;
+        const cleanUpper = serial.trim().toUpperCase();
+        const found = getInboundSerialLogMap().get(cleanUpper);
+        if (found && found.itemName) {
+            return found.itemName;
         }
-        return null;
+        if (cleanUpper.startsWith("GXTFT")) return 'LED Monitor 19.5" (Geonix)';
+        if (cleanUpper.startsWith("BWR")) return 'Bubble Wrap Roll';
+        return lookupProductBySkuPattern(serial);
     }
 
     function lookupProductBySkuPattern(serial) {
@@ -4817,28 +4800,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     })()}
                 </td>
                 <td>
-                    ${(() => {
-                        const isGiant = (row.courierRecommendation === 'Giant Logistics') || (totalWeight < 10);
-                        if (isGiant) {
-                            const hasImages = !!(row.invoiceImage && row.shipmentImage);
-                            const imgBadgeStyle = hasImages
-                                ? 'background: rgba(16, 185, 129, 0.15); border: 1px solid var(--accent-emerald); color: var(--accent-emerald);'
-                                : 'background: rgba(245, 158, 11, 0.15); border: 1px solid var(--accent-amber); color: var(--accent-amber);';
-                            const imgTitle = hasImages ? '2 Images Uploaded (Click to view/change)' : 'Upload Invoice & Shipment Images (Compulsory)';
-                            
-                            return `<div style="display:flex; align-items:center; gap:6px;">
-                                <button type="button" class="btn-giant-logistics-mail" data-id="${row.id}" title="Send Giant Logistics Pickup Mail" style="display:inline-flex; align-items:center; gap:5px; background:#1d4ed8; color:#fff; padding:4px 10px; border-radius:6px; font-size:0.75rem; font-weight:800; white-space:nowrap; border:none; cursor:pointer; box-shadow:0 2px 6px rgba(29,78,216,0.3);">
-                                    🚚 Giant Logistics
-                                </button>
-                                <button type="button" class="btn-giant-logistics-img" data-id="${row.id}" title="${imgTitle}" style="${imgBadgeStyle} padding:3px 7px; border-radius:6px; font-size:0.75rem; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:3px;">
-                                    📷 ${hasImages ? '✓' : '+'}
-                                </button>
-                            </div>`;
-                        } else if (row.courierRecommendation) {
-                            return `<span style="display:inline-flex; align-items:center; gap:5px; background:#1d4ed8; color:#fff; padding:3px 10px; border-radius:6px; font-size:0.75rem; font-weight:800; white-space:nowrap;">🚚 ${row.courierRecommendation}</span>`;
-                        }
-                        return `<span style="color:var(--text-muted); font-size:0.8rem;">—</span>`;
-                    })()}
+                    ${row.courierRecommendation 
+                        ? `<span style="display:inline-flex; align-items:center; gap:5px; background:#1d4ed8; color:#fff; padding:3px 10px; border-radius:6px; font-size:0.75rem; font-weight:800; white-space:nowrap;">🚚 ${row.courierRecommendation}</span>`
+                        : `<span style="color:var(--text-muted); font-size:0.8rem;">—</span>`}
                 </td>
                 <td style="padding: 10px 16px;">${itemNamesHtml}</td>
                 <td class="font-mono" style="font-size:1.15rem; font-weight:900; color:#fff;">${totalWeight.toFixed(3)} kg</td>
@@ -4943,19 +4907,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span style="font-weight: 600;">Total Weight:</span>
                             <span style="font-weight: 800; color: var(--accent-emerald); font-size: 1rem;">${totalWeight.toFixed(3)} kg</span>
                         </div>
-                        ${(() => {
-                            const isGiant = (row.courierRecommendation === 'Giant Logistics') || (totalWeight < 10);
-                            if (isGiant) {
-                                const hasImages = !!(row.invoiceImage && row.shipmentImage);
-                                const imgBadgeStyle = hasImages
-                                    ? 'background: rgba(16, 185, 129, 0.15); border: 1px solid var(--accent-emerald); color: var(--accent-emerald);'
-                                    : 'background: rgba(245, 158, 11, 0.15); border: 1px solid var(--accent-amber); color: var(--accent-amber);';
-                                return `<div style="margin-top:6px; display:flex; align-items:center; gap:8px; border-top: 1px dashed var(--border-color); padding-top:6px; flex-wrap:wrap;"><span style="font-size:0.8rem; color:var(--text-muted); font-weight: 600;">Courier:</span><button type="button" class="btn-giant-logistics-mail" data-id="${row.id}" style="background:#1d4ed8; color:#fff; padding:4px 10px; border-radius:6px; font-size:0.8rem; font-weight:800; border:none; cursor:pointer;">🚚 Giant Logistics</button><button type="button" class="btn-giant-logistics-img" data-id="${row.id}" style="${imgBadgeStyle} padding:4px 8px; border-radius:6px; font-size:0.75rem; font-weight:800; cursor:pointer;">📷 ${hasImages ? '2 Images Attached' : 'Upload Images'}</button></div>`;
-                            } else if (row.courierRecommendation) {
-                                return `<div style="margin-top:6px; display:flex; align-items:center; gap:6px; border-top: 1px dashed var(--border-color); padding-top:6px;"><span style="font-size:0.8rem; color:var(--text-muted); font-weight: 600;">Courier:</span><span style="background:#1d4ed8; color:#fff; padding:4px 12px; border-radius:6px; font-size:0.85rem; font-weight:800;">🚚 ${row.courierRecommendation}</span></div>`;
-                            }
-                            return '';
-                        })()}
+                        ${row.courierRecommendation 
+                            ? `<div style="margin-top:6px; display:flex; align-items:center; gap:6px; border-top: 1px dashed var(--border-color); padding-top:6px;"><span style="font-size:0.8rem; color:var(--text-muted); font-weight: 600;">Courier:</span><span style="background:#1d4ed8; color:#fff; padding:4px 12px; border-radius:6px; font-size:0.85rem; font-weight:800;">🚚 ${row.courierRecommendation}</span></div>`
+                            : ''}
                     </div>
                     <div class="mobile-log-card-actions" style="gap: 12px; padding-top: 14px;">
                         <button type="button" class="btn-show-outbound-box-details btn-mobile-action" data-id="${row.id}" style="background: rgba(244, 63, 94, 0.12); border-color: rgba(244, 63, 94, 0.35); color: var(--accent-rose); padding: 10px 18px; font-size: 1.05rem; font-weight: 800;">
@@ -5523,311 +5477,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Giant Logistics Mail & Image Upload Handlers for Outbound History
     // ─────────────────────────────────────────────────────────────────────────
     let currentGlRowId = null;
-    let currentTempInvoiceImage = '';
-    let currentTempShipmentImage = '';
-
-    function compressImageFile(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-                    const maxSide = 1000;
-                    if (width > height && width > maxSide) {
-                        height = Math.round((height * maxSide) / width);
-                        width = maxSide;
-                    } else if (height > maxSide) {
-                        width = Math.round((width * maxSide) / height);
-                        height = maxSide;
-                    }
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    resolve(canvas.toDataURL('image/jpeg', 0.75));
-                };
-                img.onerror = reject;
-                img.src = e.target.result;
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    }
-
-    function handleGiantLogisticsImgClick(logId) {
-        currentGlRowId = logId;
-        const historyData = getOutboundHistory();
-        const row = historyData.find(r => String(r.id) === String(logId));
-        if (!row) return;
-
-        currentTempInvoiceImage = row.invoiceImage || '';
-        currentTempShipmentImage = row.shipmentImage || '';
-
-        const invoiceStatus = document.getElementById('glInvoiceImageStatus');
-        const invoicePreview = document.getElementById('glInvoiceImagePreview');
-        const invoiceTag = document.getElementById('glInvoiceImgTag');
-        if (currentTempInvoiceImage) {
-            if (invoiceStatus) invoiceStatus.textContent = '✅ Image Loaded';
-            if (invoiceTag) invoiceTag.src = currentTempInvoiceImage;
-            if (invoicePreview) invoicePreview.style.display = 'block';
-        } else {
-            if (invoiceStatus) invoiceStatus.textContent = 'Not selected';
-            if (invoicePreview) invoicePreview.style.display = 'none';
-        }
-
-        const shipmentStatus = document.getElementById('glShipmentImageStatus');
-        const shipmentPreview = document.getElementById('glShipmentImagePreview');
-        const shipmentTag = document.getElementById('glShipmentImgTag');
-        if (currentTempShipmentImage) {
-            if (shipmentStatus) shipmentStatus.textContent = '✅ Image Loaded';
-            if (shipmentTag) shipmentTag.src = currentTempShipmentImage;
-            if (shipmentPreview) shipmentPreview.style.display = 'block';
-        } else {
-            if (shipmentStatus) shipmentStatus.textContent = 'Not selected';
-            if (shipmentPreview) shipmentPreview.style.display = 'none';
-        }
-
-        const invInput = document.getElementById('glInvoiceImageInput');
-        const shipInput = document.getElementById('glShipmentImageInput');
-        if (invInput) invInput.value = '';
-        if (shipInput) shipInput.value = '';
-
-        const modal = document.getElementById('glImageUploadModal');
-        if (modal) modal.classList.add('active');
-    }
-
-    function handleGiantLogisticsMailClick(logId) {
-        currentGlRowId = logId;
-        const historyData = getOutboundHistory();
-        const row = historyData.find(r => String(r.id) === String(logId));
-        if (!row) return;
-
-        if (!row.invoiceImage || !row.shipmentImage) {
-            alert('⚠️ Image upload compulsory!\n\nPlease upload both Invoice Image and Shipment Image before triggering Giant Logistics mail.');
-            handleGiantLogisticsImgClick(logId);
-            return;
-        }
-
-        openGlMailModal(row);
-    }
-
-    function openGlMailModal(row) {
-        let totalWeight = 0;
-        (row.serials || []).forEach(s => {
-            totalWeight += s.resolvedWeight !== undefined ? s.resolvedWeight : resolveItemWeight(s.serial, s.itemName);
-        });
-
-        const serialsByItemMap = new Map();
-        (row.serials || []).forEach(s => {
-            if (s && s.itemName) {
-                let list = serialsByItemMap.get(s.itemName);
-                if (!list) {
-                    list = [];
-                    serialsByItemMap.set(s.itemName, list);
-                }
-                list.push(s);
-            }
-        });
-
-        let totalBoxes = 0;
-        const rowItems = row.items || [];
-        rowItems.forEach(i => {
-            const itemSerials = serialsByItemMap.get(i.name) || [];
-            const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
-            totalBoxes += itemBoxes;
-        });
-        if (rowItems.length === 0 && (row.serials || []).length > 0) {
-            totalBoxes = new Set((row.serials || []).map(s => s.boxNo)).size;
-        }
-
-        const dropAddressStr = row.address || 'Address details not saved';
-
-        const mailBodyStr = `Dear GAINT LOGITSC TEAM,,
-
-Kindly arrange the pickup today for the below shipment.
-
-Pickup Details: Sonu Gupta (8261829125 )
-Ground Floor,H.NO. 833, Building No. D-7, Gala No. 40, Bhumi World Industrial Park,
-Mumbai Nasik, Highway, Shashtri Nahar Post office, Bhiwandi  Dist-Thane
-BHIWANDI Maharashtra 421302
-
-
-Drop Details:${row.shopName}
-${dropAddressStr}
-
-Total Box : ${totalBoxes}
-Total weight : ${totalWeight.toFixed(1)} kg
-
-The shipment is ready for pickup. Kindly schedule the pickup at the earliest and share the pickup confirmation once arranged.`;
-
-        const subjectStr = `Pickup Request - Giant Logistics - ${row.shopName} (${row.invoiceNo})`;
-
-        document.getElementById('glMailTo').value = 'sonu.gupta@geonix.in';
-        document.getElementById('glMailCc').value = '';
-        document.getElementById('glMailSubject').value = subjectStr;
-        document.getElementById('glMailBody').value = mailBodyStr;
-
-        const imgContainer = document.getElementById('glMailAttachedImages');
-        if (imgContainer) {
-            imgContainer.innerHTML = `
-                <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
-                    <img src="${row.invoiceImage}" alt="Invoice" style="height:70px; border-radius:4px; border:1px solid var(--border-color); object-fit:contain;">
-                    <span style="font-size:0.68rem; color:var(--text-muted);">Invoice Image</span>
-                </div>
-                <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
-                    <img src="${row.shipmentImage}" alt="Shipment" style="height:70px; border-radius:4px; border:1px solid var(--border-color); object-fit:contain;">
-                    <span style="font-size:0.68rem; color:var(--text-muted);">Shipment Image</span>
-                </div>
-            `;
-        }
-
-        const modal = document.getElementById('glMailModal');
-        if (modal) modal.classList.add('active');
-    }
-
-    // Global click listener delegation for Giant Logistics buttons in outbound history table/cards
-    document.addEventListener('click', (e) => {
-        const mailBtn = e.target.closest('.btn-giant-logistics-mail');
-        if (mailBtn) {
-            const id = mailBtn.getAttribute('data-id');
-            if (id) handleGiantLogisticsMailClick(id);
-            return;
-        }
-
-        const imgBtn = e.target.closest('.btn-giant-logistics-img');
-        if (imgBtn) {
-            const id = imgBtn.getAttribute('data-id');
-            if (id) handleGiantLogisticsImgClick(id);
-            return;
-        }
-    });
-
-    // File input listeners for image upload modal
-    const invInputEl = document.getElementById('glInvoiceImageInput');
-    if (invInputEl) {
-        invInputEl.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                try {
-                    currentTempInvoiceImage = await compressImageFile(file);
-                    const status = document.getElementById('glInvoiceImageStatus');
-                    const preview = document.getElementById('glInvoiceImagePreview');
-                    const tag = document.getElementById('glInvoiceImgTag');
-                    if (status) status.textContent = '✅ Image Selected';
-                    if (tag) tag.src = currentTempInvoiceImage;
-                    if (preview) preview.style.display = 'block';
-                } catch(err) {
-                    alert('Error reading invoice image.');
-                }
-            }
-        });
-    }
-
-    const shipInputEl = document.getElementById('glShipmentImageInput');
-    if (shipInputEl) {
-        shipInputEl.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                try {
-                    currentTempShipmentImage = await compressImageFile(file);
-                    const status = document.getElementById('glShipmentImageStatus');
-                    const preview = document.getElementById('glShipmentImagePreview');
-                    const tag = document.getElementById('glShipmentImgTag');
-                    if (status) status.textContent = '✅ Image Selected';
-                    if (tag) tag.src = currentTempShipmentImage;
-                    if (preview) preview.style.display = 'block';
-                } catch(err) {
-                    alert('Error reading shipment image.');
-                }
-            }
-        });
-    }
-
-    const btnSaveGlImages = document.getElementById('btnSaveGlImages');
-    if (btnSaveGlImages) {
-        btnSaveGlImages.addEventListener('click', () => {
-            if (!currentTempInvoiceImage || !currentTempShipmentImage) {
-                alert('⚠️ Both Invoice Image and Shipment Image are compulsory!\n\nPlease select both files before saving.');
-                return;
-            }
-
-            const historyData = getOutboundHistory();
-            const row = historyData.find(r => String(r.id) === String(currentGlRowId));
-            if (row) {
-                row.invoiceImage = currentTempInvoiceImage;
-                row.shipmentImage = currentTempShipmentImage;
-                saveOutboundHistory(historyData);
-                renderOutboundHistoryTable();
-
-                const uploadModal = document.getElementById('glImageUploadModal');
-                if (uploadModal) uploadModal.classList.remove('active');
-
-                openGlMailModal(row);
-            }
-        });
-    }
-
-    const btnCopyGlMailContent = document.getElementById('btnCopyGlMailContent');
-    if (btnCopyGlMailContent) {
-        btnCopyGlMailContent.addEventListener('click', () => {
-            const bodyText = document.getElementById('glMailBody').value;
-            navigator.clipboard.writeText(bodyText).then(() => {
-                btnCopyGlMailContent.textContent = '✅ Copied!';
-                setTimeout(() => {
-                    btnCopyGlMailContent.textContent = '📋 Copy Mail Text';
-                }, 2000);
-            }).catch(() => {
-                alert('Failed to copy text automatically.');
-            });
-        });
-    }
-
-    const btnSendGlMail = document.getElementById('btnSendGlMail');
-    if (btnSendGlMail) {
-        btnSendGlMail.addEventListener('click', () => {
-            const to = document.getElementById('glMailTo').value.trim();
-            const cc = document.getElementById('glMailCc').value.trim();
-            const subject = document.getElementById('glMailSubject').value.trim();
-            const body = document.getElementById('glMailBody').value;
-
-            let mailtoUrl = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-            if (cc) {
-                mailtoUrl += `&cc=${encodeURIComponent(cc)}`;
-            }
-            window.open(mailtoUrl, '_blank');
-        });
-    }
-
-    const closeGlImageUploadModalBtn = document.getElementById('closeGlImageUploadModalBtn');
-    const cancelGlImageUploadModalBtn = document.getElementById('cancelGlImageUploadModalBtn');
-    if (closeGlImageUploadModalBtn) {
-        closeGlImageUploadModalBtn.addEventListener('click', () => {
-            document.getElementById('glImageUploadModal').classList.remove('active');
-        });
-    }
-    if (cancelGlImageUploadModalBtn) {
-        cancelGlImageUploadModalBtn.addEventListener('click', () => {
-            document.getElementById('glImageUploadModal').classList.remove('active');
-        });
-    }
-
-    const closeGlMailModalBtn = document.getElementById('closeGlMailModalBtn');
-    const closeGlMailModalFooterBtn = document.getElementById('closeGlMailModalFooterBtn');
-    if (closeGlMailModalBtn) {
-        closeGlMailModalBtn.addEventListener('click', () => {
-            document.getElementById('glMailModal').classList.remove('active');
-        });
-    }
-    if (closeGlMailModalFooterBtn) {
-        closeGlMailModalFooterBtn.addEventListener('click', () => {
-            document.getElementById('glMailModal').classList.remove('active');
-        });
-    }
-
-
     if (cancelActiveOutboundSessionBtn) {
         cancelActiveOutboundSessionBtn.addEventListener('click', () => {
             if (confirm('Cancel outbound session? All scanned serials will be lost.')) {
