@@ -440,7 +440,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (targetSectionId === 'sectionInbound') {
                 renderHistoryTable();
             } else if (targetSectionId === 'sectionOutbound') {
-                renderOutboundHistoryTable();
+                restoreOutboundSessionState();
             }
             
             console.log(`Navigated to section: ${targetSectionId}`);
