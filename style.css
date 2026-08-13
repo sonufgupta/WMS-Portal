@@ -1818,11 +1818,15 @@ a {
    Outbound History Cards Layout - Responsive Web vs Mobile Separation
    ========================================================================== */
 
+/* ==========================================================================
+   Outbound History Cards Layout - Minimal Sales Orders Style
+   ========================================================================== */
+
 /* Base Grid Container */
 .outbound-cards-grid {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     width: 100%;
     margin-top: 12px;
 }
@@ -1832,50 +1836,22 @@ a {
     .outbound-cards-grid {
         display: grid !important;
         grid-template-columns: repeat(3, 1fr) !important;
-        gap: 16px !important;
-    }
-    
-    .outbound-card-inner-list {
-        max-height: 140px !important;
-        overflow-y: auto !important;
-    }
-    
-    .outbound-card-title {
-        font-size: 1.05rem !important;
-    }
-    
-    .outbound-card-btn {
-        padding: 8px 6px !important;
-        font-size: 0.85rem !important;
+        gap: 12px !important;
     }
 }
 
-@media (min-width: 769px) and (max-width: 1366px) {
+@media (min-width: 769px) and (max-width: 1280px) {
     .outbound-cards-grid {
         grid-template-columns: repeat(2, 1fr) !important;
     }
 }
 
-/* 2. Mobile Phone View (Original Full-Width 1 Card per Row Layout) */
+/* 2. Mobile Phone View (1 Card per Row) */
 @media (max-width: 768px) {
     .outbound-cards-grid {
         display: flex !important;
         flex-direction: column !important;
-        gap: 16px !important;
-    }
-    
-    .outbound-card-inner-list {
-        max-height: none !important;
-        overflow-y: visible !important;
-    }
-    
-    .outbound-card-title {
-        font-size: 1.15rem !important;
-    }
-    
-    .outbound-card-btn {
-        padding: 10px 16px !important;
-        font-size: 0.95rem !important;
+        gap: 12px !important;
     }
 }
 

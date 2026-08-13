@@ -4867,73 +4867,52 @@ document.addEventListener('DOMContentLoaded', () => {
                 const timestampDisplay = row.timestamp || 'N/A';
 
                 card.innerHTML = `
-                    <!-- 1. Top Header: Shop Name (Left) + Green PCS (BX) Badge (Right) -->
+                    <!-- 1. Top Row: Shop Name (Left) + Total PCs/Boxes (Right) -->
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; width: 100%;">
-                        <h4 class="outbound-card-title" style="font-weight: 800; color: #ffffff; margin: 0; text-transform: uppercase; line-height: 1.25; flex: 1; letter-spacing: 0.02em; word-break: break-word;">${row.shopName}</h4>
-                        <span style="font-size: 0.85rem; font-weight: 800; padding: 6px 14px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); color: #10b981; border-radius: 20px; text-transform: uppercase; white-space: nowrap; flex-shrink: 0;">${totalPcs} PCS (${totalBoxes} BX)</span>
+                        <h4 style="font-size: 1rem; font-weight: 800; color: #ffffff; margin: 0; line-height: 1.25; flex: 1; letter-spacing: 0.01em; word-break: break-word;">${row.shopName}</h4>
+                        <span style="font-size: 0.85rem; font-weight: 800; color: #ffffff; font-family: var(--font-mono); white-space: nowrap; flex-shrink: 0; background: rgba(255, 255, 255, 0.06); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border-color);">${totalPcs} PCs (${totalBoxes} BX)</span>
                     </div>
 
-                    <!-- 2. Sub-header Row: Time (Grey), Invoice No (Red), Pincode/ODA, Mark Checkmark (Right) -->
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%; margin-top: 4px;">
-                        <div style="display: flex; flex-direction: column; gap: 3px;">
-                            <span style="font-size: 0.88rem; font-weight: 500; color: #8a8f9e;">${timestampDisplay}</span>
-                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                <span style="font-family: var(--font-mono); font-size: 0.95rem; font-weight: 800; color: #f43f5e;">${row.invoiceNo}</span>
-                                ${(() => {
-                                    if (!row.pincode) return '';
-                                    const dist = row.distanceKm || calculateDistanceKm(row.pincode);
-                                    const distStr = dist ? ` • ${dist.toLocaleString('en-IN')} km` : '';
-                                    return `<span style="font-family: var(--font-mono); font-size: 0.82rem; color: #8a8f9e; font-weight: 700;">(${row.pincode}${distStr})</span>`;
-                                })()}
-                                ${mobileOdaBadge}
-                            </div>
+                    <!-- 2. Sub-header Row: Date/Time • Invoice No • CLOSED Status -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; font-size: 0.8rem; color: #8a8f9e; margin-top: 2px;">
+                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                            <span>${timestampDisplay}</span>
+                            <span>•</span>
+                            <span style="font-family: var(--font-mono); font-weight: 800; color: #f43f5e;">${row.invoiceNo}</span>
+                            ${row.pincode ? `<span style="color: #8a8f9e; font-family: var(--font-mono);">(${row.pincode})</span>` : ''}
+                            ${mobileOdaBadge}
                         </div>
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 0.78rem; color: #8a8f9e; text-transform: uppercase; font-weight: 700;">MARK:</span>
-                            <span class="btn-toggle-outbound-mark" data-id="${row.id}" style="display: inline-flex; align-items: center; justify-content: center; cursor: pointer;">
-                                ${mobileCheckIcon}
-                            </span>
-                        </div>
+                        <span style="font-size: 0.72rem; font-weight: 800; color: #10b981; text-transform: uppercase; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); padding: 1px 6px; border-radius: 4px;">CLOSED</span>
                     </div>
 
-                    <!-- 3. Inner Dark Box: Item List, Dashed Separator, Weight & Courier -->
-                    <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; width: 100%; box-sizing: border-box; margin-top: 4px;">
-                        <div class="outbound-card-inner-list" style="display: flex; flex-direction: column; gap: 6px; padding-right: 2px;">
+                    <!-- 3. Items Summary Box -->
+                    <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; width: 100%; box-sizing: border-box; margin-top: 4px;">
+                        <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.35; max-height: 70px; overflow-y: auto; padding-right: 2px;">
                             ${mobileItemsHtml}
                         </div>
-
-                        <div style="border-top: 1px dashed var(--border-color); margin: 2px 0;"></div>
-
-                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;">
-                            <span style="color: #8a8f9e; font-weight: 500;">Total Weight:</span>
-                            <span style="color: #10b981; font-weight: 800; font-family: var(--font-mono); font-size: 1.05rem;">${totalWeight.toFixed(3)} kg</span>
-                        </div>
-
-                        ${row.courierRecommendation 
-                            ? `<div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; border-top: 1px dashed var(--border-color); padding-top: 6px;">
-                                <span style="color: #8a8f9e; font-weight: 500;">Courier:</span>
-                                <span style="background: #1d4ed8; color: #ffffff; padding: 4px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 800; display: inline-flex; align-items: center; gap: 4px;">🚚 ${row.courierRecommendation}</span>
-                               </div>`
-                            : ''}
                     </div>
 
-                    <!-- 4. Bottom Action Buttons: Boxes (Red), Excel (Green), Restore (Purple/Indigo) -->
-                    <div style="display: flex; gap: 10px; width: 100%; margin-top: 4px;">
-                        <button type="button" class="btn-show-outbound-box-details outbound-card-btn" data-id="${row.id}" style="flex: 1; background: rgba(244, 63, 94, 0.08); border: 1px solid #f43f5e; color: #f43f5e; border-radius: 8px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
-                            <span>Boxes (${totalBoxes})</span>
-                        </button>
-                        <button type="button" class="btn-download-outbound-excel outbound-card-btn" data-id="${row.id}" style="flex: 1; background: rgba(16, 185, 129, 0.08); border: 1px solid #10b981; color: #10b981; border-radius: 8px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s;">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                            </svg>
-                            <span>Excel</span>
-                        </button>
-                        <button type="button" class="btn-restore-outbound-log outbound-card-btn" data-id="${row.id}" style="flex: 1; background: rgba(99, 102, 241, 0.08); border: 1px solid #6366f1; color: #818cf8; border-radius: 8px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s;">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                            </svg>
-                            <span>Restore</span>
-                        </button>
+                    <!-- 4. Bottom Pill Bar: Status Dots / Quick Actions & Weight -->
+                    <div style="border-top: 1px solid var(--border-color); margin-top: 4px; padding-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.78rem; width: 100%;">
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <button type="button" class="btn-show-outbound-box-details" data-id="${row.id}" style="background: none; border: none; padding: 0; color: #f43f5e; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 0.78rem;">
+                                <span style="width: 7px; height: 7px; border-radius: 50%; background: #f43f5e; display: inline-block;"></span>
+                                <span>Boxes (${totalBoxes})</span>
+                            </button>
+                            <button type="button" class="btn-download-outbound-excel" data-id="${row.id}" style="background: none; border: none; padding: 0; color: #10b981; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 0.78rem;">
+                                <span style="width: 7px; height: 7px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+                                <span>Excel</span>
+                            </button>
+                            <button type="button" class="btn-restore-outbound-log" data-id="${row.id}" style="background: none; border: none; padding: 0; color: #818cf8; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 0.78rem;">
+                                <span style="width: 7px; height: 7px; border-radius: 50%; background: #818cf8; display: inline-block;"></span>
+                                <span>Restore</span>
+                            </button>
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                            <span style="font-weight: 600; color: #8a8f9e;">Weight:</span>
+                            <span style="font-weight: 800; color: #10b981; font-family: var(--font-mono); font-size: 0.85rem;">${totalWeight.toFixed(3)} kg</span>
+                        </div>
                     </div>
                 `;
                 mobileFrag.appendChild(card);
