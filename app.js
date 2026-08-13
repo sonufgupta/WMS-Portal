@@ -4834,9 +4834,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (mobileContainer) {
                 const card = document.createElement('div');
                 card.className = 'mobile-log-card';
-                if (rowIsToday) {
-                    card.style.borderLeft = "4px solid var(--accent-emerald)";
-                }
+                card.style.cssText = `
+                    background: var(--bg-secondary);
+                    border: 1px solid var(--border-color);
+                    ${rowIsToday ? 'border-left: 4px solid var(--accent-emerald);' : ''}
+                    border-radius: 12px;
+                    padding: 12px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                    box-sizing: border-box;
+                    width: 100%;
+                    min-width: 0;
+                    overflow: hidden;
+                `;
 
                 // Checkbox mark status indicator
                 const mobileCheckIcon = isChecked
@@ -4847,9 +4858,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const mobileItemsHtml = (row.items || []).map(i => {
                     const count = (serialsByItemMap.get(i.name) || []).length;
                     return `
-                        <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.88rem; color: var(--text-primary); font-weight: 600; line-height: 1.4;">
-                            <span style="color: #f43f5e; font-size: 0.75rem; margin-top: 3px; flex-shrink: 0;">●</span>
-                            <span>${i.name} (${count} pcs)</span>
+                        <div style="display: flex; align-items: flex-start; gap: 6px; font-size: 0.8rem; color: var(--text-primary); font-weight: 600; line-height: 1.35;">
+                            <span style="color: #f43f5e; font-size: 0.7rem; margin-top: 2px; flex-shrink: 0;">●</span>
+                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${i.name} (${count} pcs)</span>
                         </div>
                     `;
                 }).join('');
@@ -4867,51 +4878,50 @@ document.addEventListener('DOMContentLoaded', () => {
                 const timestampDisplay = row.timestamp || 'N/A';
 
                 card.innerHTML = `
-                    <!-- 1. Top Row: Shop Name (Left) + Total PCs/Boxes (Right) -->
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; width: 100%;">
-                        <h4 style="font-size: 1rem; font-weight: 800; color: #ffffff; margin: 0; line-height: 1.25; flex: 1; letter-spacing: 0.01em; word-break: break-word;">${row.shopName}</h4>
-                        <span style="font-size: 0.85rem; font-weight: 800; color: #ffffff; font-family: var(--font-mono); white-space: nowrap; flex-shrink: 0; background: rgba(255, 255, 255, 0.06); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border-color);">${totalPcs} PCs (${totalBoxes} BX)</span>
+                    <!-- 1. Top Row: Shop Name (Truncated with Ellipsis) + Total PCs/Boxes (Right) -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-width: 0;">
+                        <h4 style="font-size: 0.95rem; font-weight: 800; color: #ffffff; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0;" title="${row.shopName}">${row.shopName}</h4>
+                        <span style="font-size: 0.78rem; font-weight: 800; color: #ffffff; font-family: var(--font-mono); white-space: nowrap; flex-shrink: 0; background: rgba(255, 255, 255, 0.06); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color);">${totalPcs} PCs (${totalBoxes} BX)</span>
                     </div>
 
-                    <!-- 2. Sub-header Row: Date/Time • Invoice No • CLOSED Status -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; font-size: 0.8rem; color: #8a8f9e; margin-top: 2px;">
-                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                            <span>${timestampDisplay}</span>
+                    <!-- 2. Sub-header Row: Date/Time • Invoice No • CLOSED Badge -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; min-width: 0; font-size: 0.75rem; color: #8a8f9e;">
+                        <div style="display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;">
+                            <span style="flex-shrink: 0;">${timestampDisplay}</span>
                             <span>•</span>
-                            <span style="font-family: var(--font-mono); font-weight: 800; color: #f43f5e;">${row.invoiceNo}</span>
-                            ${row.pincode ? `<span style="color: #8a8f9e; font-family: var(--font-mono);">(${row.pincode})</span>` : ''}
+                            <span style="font-family: var(--font-mono); font-weight: 800; color: #f43f5e; overflow: hidden; text-overflow: ellipsis;">${row.invoiceNo}</span>
+                            ${row.pincode ? `<span style="color: #8a8f9e; font-family: var(--font-mono); flex-shrink: 0;">(${row.pincode})</span>` : ''}
                             ${mobileOdaBadge}
                         </div>
-                        <span style="font-size: 0.72rem; font-weight: 800; color: #10b981; text-transform: uppercase; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); padding: 1px 6px; border-radius: 4px;">CLOSED</span>
+                        <span style="font-size: 0.68rem; font-weight: 800; color: #10b981; text-transform: uppercase; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); padding: 1px 5px; border-radius: 3px; flex-shrink: 0; margin-left: 4px;">CLOSED</span>
                     </div>
 
-                    <!-- 3. Items Summary Box -->
-                    <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; width: 100%; box-sizing: border-box; margin-top: 4px;">
-                        <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.35; max-height: 70px; overflow-y: auto; padding-right: 2px;">
+                    <!-- 3. Items Summary Box (Compact) -->
+                    <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; width: 100%; box-sizing: border-box; max-height: 75px; overflow-y: auto;">
+                        <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.35; padding-right: 2px;">
                             ${mobileItemsHtml}
                         </div>
                     </div>
 
                     <!-- 4. Bottom Pill Bar: Status Dots / Quick Actions & Weight -->
-                    <div style="border-top: 1px solid var(--border-color); margin-top: 4px; padding-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.78rem; width: 100%;">
-                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                            <button type="button" class="btn-show-outbound-box-details" data-id="${row.id}" style="background: none; border: none; padding: 0; color: #f43f5e; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 0.78rem;">
-                                <span style="width: 7px; height: 7px; border-radius: 50%; background: #f43f5e; display: inline-block;"></span>
+                    <div style="border-top: 1px solid var(--border-color); margin-top: 2px; padding-top: 6px; display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 0.75rem; width: 100%; min-width: 0; box-sizing: border-box;">
+                        <div style="display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden;">
+                            <button type="button" class="btn-show-outbound-box-details" data-id="${row.id}" style="background: none; border: none; padding: 0; color: #f43f5e; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 3px; font-size: 0.75rem; white-space: nowrap;">
+                                <span style="width: 6px; height: 6px; border-radius: 50%; background: #f43f5e; display: inline-block;"></span>
                                 <span>Boxes (${totalBoxes})</span>
                             </button>
-                            <button type="button" class="btn-download-outbound-excel" data-id="${row.id}" style="background: none; border: none; padding: 0; color: #10b981; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 0.78rem;">
-                                <span style="width: 7px; height: 7px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+                            <button type="button" class="btn-download-outbound-excel" data-id="${row.id}" style="background: none; border: none; padding: 0; color: #10b981; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 3px; font-size: 0.75rem; white-space: nowrap;">
+                                <span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
                                 <span>Excel</span>
                             </button>
-                            <button type="button" class="btn-restore-outbound-log" data-id="${row.id}" style="background: none; border: none; padding: 0; color: #818cf8; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 0.78rem;">
-                                <span style="width: 7px; height: 7px; border-radius: 50%; background: #818cf8; display: inline-block;"></span>
+                            <button type="button" class="btn-restore-outbound-log" data-id="${row.id}" style="background: none; border: none; padding: 0; color: #818cf8; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 3px; font-size: 0.75rem; white-space: nowrap;">
+                                <span style="width: 6px; height: 6px; border-radius: 50%; background: #818cf8; display: inline-block;"></span>
                                 <span>Restore</span>
                             </button>
                         </div>
 
-                        <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
-                            <span style="font-weight: 600; color: #8a8f9e;">Weight:</span>
-                            <span style="font-weight: 800; color: #10b981; font-family: var(--font-mono); font-size: 0.85rem;">${totalWeight.toFixed(3)} kg</span>
+                        <div style="display: flex; align-items: center; gap: 2px; flex-shrink: 0;">
+                            <span style="font-weight: 800; color: #10b981; font-family: var(--font-mono); font-size: 0.8rem;">${totalWeight.toFixed(3)} kg</span>
                         </div>
                     </div>
                 `;

@@ -1822,37 +1822,14 @@ a {
    Outbound History Cards Layout - Minimal Sales Orders Style
    ========================================================================== */
 
-/* Base Grid Container */
+/* Outbound History Cards Layout - Responsive Square Grid (Fits 3 to 4 cards per row, 0% edge cutoff) */
 .outbound-cards-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    width: 100%;
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)) !important;
+    gap: 12px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
     margin-top: 12px;
-}
-
-/* 1. Desktop Web Page View (3 Cards in 1 Row) */
-@media (min-width: 769px) {
-    .outbound-cards-grid {
-        display: grid !important;
-        grid-template-columns: repeat(3, 1fr) !important;
-        gap: 12px !important;
-    }
-}
-
-@media (min-width: 769px) and (max-width: 1280px) {
-    .outbound-cards-grid {
-        grid-template-columns: repeat(2, 1fr) !important;
-    }
-}
-
-/* 2. Mobile Phone View (1 Card per Row) */
-@media (max-width: 768px) {
-    .outbound-cards-grid {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 12px !important;
-    }
 }
 
 
