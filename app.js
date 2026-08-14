@@ -1584,10 +1584,23 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             trFrag.appendChild(tr);
 
-            // Generate Mobile Card HTML
+            // Generate Inbound Card HTML (Matching Outbound Card Style)
             if (mobileContainer) {
                 const card = document.createElement('div');
                 card.className = 'mobile-log-card';
+                card.style.cssText = `
+                    background: var(--bg-secondary);
+                    border: 1px solid var(--border-color);
+                    border-radius: 12px;
+                    padding: 14px;
+                    display: flex;
+                    flex-direction: column;
+                    height: 100%;
+                    box-sizing: border-box;
+                    width: 100%;
+                    min-width: 0;
+                    overflow: hidden;
+                `;
                 
                 const mobileItemsHtml = itemsList.map(item => {
                     const weight = resolveLogWeight(row, item.name);
@@ -1597,39 +1610,71 @@ document.addEventListener('DOMContentLoaded', () => {
                         : 'background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--accent-blue);';
                     
                     return `
-                        <div class="mobile-log-card-item">
-                            <span class="mobile-log-card-item-bullet">●</span>
-                            <button type="button" class="btn-item-weight-trigger" data-log-id="${row.id}" data-item-name="${escapeHtmlAttr(item.name)}" style="${badgeStyle} padding: 3px 6px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; border-style: solid; text-align: left; white-space: normal; word-break: break-word;">
+                        <div style="display: flex; align-items: flex-start; gap: 6px; font-size: 0.82rem; color: var(--text-primary); font-weight: 600; line-height: 1.35; word-break: break-word;">
+                            <span style="color: #f43f5e; font-size: 0.7rem; margin-top: 3px; flex-shrink: 0;">●</span>
+                            <button type="button" class="btn-item-weight-trigger" data-log-id="${row.id}" data-item-name="${escapeHtmlAttr(item.name)}" style="${badgeStyle} padding: 3px 7px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; border-style: solid; text-align: left; white-space: normal; word-break: break-word;">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 10px; height: 10px; stroke-width: 2.5; flex-shrink: 0;">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1M12 20v1M4 12H3m18 0h-1M6.343 6.343l.707.707M16.95 16.95l.707.707M6.343 17.657l-.707-.707m11.314-11.314l-.707.707M12 7a5 5 0 100 10 5 5 0 000-10z" />
                                 </svg>
-                                <span style="display: inline-block;">${item.name}${weightLabel}</span>
+                                <span>${item.name}${weightLabel}</span>
                             </button>
                         </div>
                     `;
                 }).join('');
 
+                // Format Full Date + Time Display
+                let timestampDisplay = row.timestamp || 'N/A';
+                let fullDateStr = '';
+                if (row.date) {
+                    fullDateStr = row.date;
+                } else if (row.id && !isNaN(parseInt(String(row.id).replace('log_', '')))) {
+                    const d = new Date(parseInt(String(row.id).replace('log_', '')));
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const month = months[d.getMonth()];
+                    const year = d.getFullYear();
+                    fullDateStr = `${day} ${month} ${year}`;
+                }
+                const fullDateTimeDisplay = fullDateStr ? `${fullDateStr} • ${timestampDisplay}` : timestampDisplay;
+                const vehicleText = row.vehicle && row.vehicle !== 'Not Specified' ? row.vehicle : 'Not Specified';
+
                 card.innerHTML = `
-                    <div class="mobile-log-card-header">
-                        <h4 class="mobile-log-card-title">Vehicle: ${row.vehicle || 'Not Specified'}</h4>
-                        <span class="mobile-log-card-badge">${countDisplay}</span>
+                    <!-- 1. Top Header: Vehicle No. + Distinct PCs Badge -->
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; width: 100%;">
+                        <h4 style="font-size: 1.05rem; font-weight: 800; color: #ffffff; margin: 0; line-height: 1.3; flex: 1; word-break: break-word; letter-spacing: 0.01em;">Vehicle: ${vehicleText}</h4>
+                        <span style="font-size: 0.82rem; font-weight: 800; color: #10b981; font-family: var(--font-mono); white-space: nowrap; flex-shrink: 0; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); padding: 4px 10px; border-radius: 6px; text-transform: uppercase;">${row.count} PCs</span>
                     </div>
-                    <div class="mobile-log-card-subtitle">
-                        <span>${row.timestamp}</span>
-                        <span style="color: var(--accent-emerald); font-weight: 700;">INBOUND</span>
+
+                    <!-- 2. Sub-header Row: Full Date + Time • INBOUND Badge -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 4px; font-size: 0.82rem;">
+                        <span style="color: #8a8f9e; font-weight: 500;">${fullDateTimeDisplay}</span>
+                        <span style="background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.35); padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase;">INBOUND</span>
                     </div>
-                    <div class="mobile-log-card-items">
-                        ${mobileItemsHtml}
+
+                    <!-- 3. Full Inner Product Box -->
+                    <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; width: 100%; box-sizing: border-box; margin-top: 4px;">
+                        <div style="display: flex; flex-direction: column; gap: 6px; width: 100%;">
+                            ${mobileItemsHtml}
+                        </div>
+
+                        <div style="border-top: 1px dashed var(--border-color); margin: 2px 0;"></div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+                            <span style="color: #8a8f9e; font-weight: 500;">Total Boxes:</span>
+                            <span style="color: #10b981; font-weight: 800; font-family: var(--font-mono); font-size: 0.95rem;">${finalBoxCount} Boxes</span>
+                        </div>
                     </div>
-                    <div class="mobile-log-card-actions">
-                        <button type="button" class="btn-download-excel btn-mobile-action btn-mobile-excel" data-id="${row.id}">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
+
+                    <!-- 4. Action Buttons Row (Excel, Delete - Always Positioned at Very Bottom) -->
+                    <div style="display: flex; gap: 8px; width: 100%; margin-top: auto; padding-top: 12px;">
+                        <button type="button" class="btn-download-excel" data-id="${row.id}" style="flex: 1; background: rgba(16, 185, 129, 0.08); border: 1px solid #10b981; color: #10b981; padding: 8px 6px; border-radius: 6px; font-weight: 800; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s;">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                             </svg>
                             <span>Excel</span>
                         </button>
-                        <button type="button" class="btn-delete-inbound-log btn-mobile-action btn-mobile-delete" data-id="${row.id}">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
+                        <button type="button" class="btn-delete-inbound-log" data-id="${row.id}" style="flex: 1; background: rgba(244, 63, 94, 0.08); border: 1px solid #f43f5e; color: #f43f5e; padding: 8px 6px; border-radius: 6px; font-weight: 800; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s;">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                             <span>Delete</span>

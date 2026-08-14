@@ -356,25 +356,18 @@
                             </div>
                         </div>
 
-                        <div class="dashboard-card table-card" style="padding: 24px;">
-                            <h3 style="margin-bottom: 20px; text-align: left;">Recent Inbound Logs</h3>
-                            <div class="table-container">
+                        <div class="dashboard-card table-card" style="padding: 20px; width: 100%; box-sizing: border-box; overflow: hidden;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap;">
+                                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">Recent Inbound Logs</h3>
+                            </div>
+                            <!-- Table hidden — card layout used for all screen sizes -->
+                            <div style="display:none;">
                                 <table class="portal-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Timestamp</th>
-                                            <th>Vehicle No.</th>
-                                            <th>Item Name</th>
-                                            <th>Total Scanned</th>
-                                            <th>Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="inboundHistoryBody">
-                                        <!-- History items will be logged here -->
-                                    </tbody>
+                                    <tbody id="inboundHistoryBody"></tbody>
                                 </table>
                             </div>
-                            <div class="mobile-log-cards" id="inboundHistoryMobileCards"></div>
+                            <!-- Card layout — shown on all screen sizes -->
+                            <div class="inbound-cards-grid" id="inboundHistoryMobileCards"></div>
                         </div>
                     </div>
 
