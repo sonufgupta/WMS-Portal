@@ -2061,7 +2061,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (activeSession.serials) {
-                activeSession.serials = activeSession.serials.filter(s => s && s.serial && s.serial.length <= 50);
+                activeSession.serials = activeSession.serials.filter(s => s && s.serial && (s.serial.length <= 150 || s.serial.includes('WOS')));
             }
 
             compactBoxNumbers();
@@ -3749,7 +3749,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (activeOutboundSession.serials) {
-                activeOutboundSession.serials = activeOutboundSession.serials.filter(s => s && s.serial && s.serial.length <= 50);
+                activeOutboundSession.serials = activeOutboundSession.serials.filter(s => s && s.serial && (s.serial.length <= 150 || s.serial.includes('WOS')));
             }
 
             document.getElementById('activeOutboundShop').textContent = activeOutboundSession.shopName;
@@ -5052,7 +5052,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sheetRows = itemSerials.map((s, idx) => ({
                     "S.No.": idx + 1,
                     "Box Number": `Box ${s.boxNo}`,
-                    "Serial Number": s.serial.startsWith("Without Serial Number") ? "Without Serial Number" : s.serial,
+                    "Serial Number": (s.serial.startsWith("Without Serial Number") || s.serial.startsWith("WOS-OUT-") || s.serial.includes("WOS-")) ? "Without Serial Number" : s.serial,
                     "Product Name": s.itemName
                 }));
 
@@ -5414,7 +5414,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const li = document.createElement('li');
                         li.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 4px; font-size:0.85rem; font-family:var(--font-mono); border: 1px solid rgba(255,255,255,0.04);';
                         
-                        const displayVal = s.serial.startsWith('WOS-OUT-') 
+                        const displayVal = (s.serial.startsWith('WOS-OUT-') || s.serial.startsWith('Without Serial Number') || s.serial.includes('WOS-')) 
                             ? `<span style="color: var(--accent-amber); font-weight: 700; font-style: italic; font-family: var(--font-sans);">[Non-Serial Item]</span>` 
                             : s.serial;
 
@@ -7141,7 +7141,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 for (let p = 1; p <= pcsInThisBox; p++) {
                     activeOutboundSession.serials.push({
-                        serial: `Without Serial Number (WOS-OUT-${Date.now()}-${boxNo}-${p})`,
+                        serial: `WOS-OUT-${Date.now()}-${boxNo}-${p}`,
                         boxNo: boxNo,
                         itemName: itemVal
                     });
