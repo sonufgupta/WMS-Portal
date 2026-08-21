@@ -2000,9 +2000,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Sort box numbers from highest to lowest (newest box on top)
                 const boxNumbers = Object.keys(groups).map(Number).sort((a, b) => b - a);
+                const MAX_VISIBLE_BOXES = activeItem.showAllBoxes ? boxNumbers.length : 40;
+                const visibleBoxNumbers = boxNumbers.slice(0, MAX_VISIBLE_BOXES);
                 const boxesFrag = document.createDocumentFragment();
 
-                boxNumbers.forEach(boxNo => {
+                visibleBoxNumbers.forEach(boxNo => {
                     const boxItems = groups[boxNo];
                     const boxCard = document.createElement('div');
                     boxCard.className = 'box-card';
@@ -2046,6 +2048,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 boxListWrapper.appendChild(boxesFrag);
+
+                if (boxNumbers.length > MAX_VISIBLE_BOXES) {
+                    const loadMoreBtn = document.createElement('button');
+                    loadMoreBtn.type = 'button';
+                    loadMoreBtn.className = 'btn-load-more-boxes';
+                    loadMoreBtn.style.cssText = 'background: rgba(59, 130, 246, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 8px 12px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; cursor: pointer; margin-top: 8px; width: 100%; text-align: center; font-family: var(--font-mono);';
+                    loadMoreBtn.textContent = `📦 Showing top 40 of ${boxNumbers.length} boxes (Click to show all ${boxNumbers.length} boxes)`;
+                    loadMoreBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        activeItem.showAllBoxes = true;
+                        renderBoxCards();
+                    });
+                    boxListWrapper.appendChild(loadMoreBtn);
+                }
             }
 
             col.appendChild(boxListWrapper);
@@ -5531,9 +5547,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 const boxNumbers = Object.keys(groups).map(Number).sort((a,b)=>b-a);
+                const MAX_VISIBLE_BOXES = item.showAllBoxes ? boxNumbers.length : 40;
+                const visibleBoxNumbers = boxNumbers.slice(0, MAX_VISIBLE_BOXES);
                 const boxFrag = document.createDocumentFragment();
 
-                boxNumbers.forEach(boxNo => {
+                visibleBoxNumbers.forEach(boxNo => {
                     const boxItems = groups[boxNo];
                     const boxCard = document.createElement('div');
                     boxCard.className = 'box-card';
@@ -5614,7 +5632,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     boxCard.appendChild(serialsUl);
                     boxFrag.appendChild(boxCard);
                 });
+
                 boxListWrapper.appendChild(boxFrag);
+
+                if (boxNumbers.length > MAX_VISIBLE_BOXES) {
+                    const loadMoreBtn = document.createElement('button');
+                    loadMoreBtn.type = 'button';
+                    loadMoreBtn.className = 'btn-load-more-boxes';
+                    loadMoreBtn.style.cssText = 'background: rgba(59, 130, 246, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 8px 12px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; cursor: pointer; margin-top: 8px; width: 100%; text-align: center; font-family: var(--font-mono);';
+                    loadMoreBtn.textContent = `📦 Showing top 40 of ${boxNumbers.length} boxes (Click to show all ${boxNumbers.length} boxes)`;
+                    loadMoreBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        item.showAllBoxes = true;
+                        renderOutboundBoxCards();
+                    });
+                    boxListWrapper.appendChild(loadMoreBtn);
+                }
             }
             col.appendChild(boxListWrapper);
             colFrag.appendChild(col);
