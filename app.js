@@ -1093,6 +1093,100 @@ document.addEventListener('DOMContentLoaded', () => {
         return str;
     }
 
+    function deriveProductNameFromPattern(serial, itemsList) {
+        if (!serial || !itemsList || itemsList.length === 0) return null;
+        const cleanSerial = serial.trim().toUpperCase();
+        const newPattern = extractAlphabetPattern(cleanSerial);
+
+        for (const item of itemsList) {
+            if (!item || !item.name) continue;
+            let patterns = item.allowedPatterns;
+            if (!patterns || patterns.length === 0) {
+                if (item.skuAlphabetPattern) {
+                    patterns = [{ pattern: item.skuAlphabetPattern, length: item.lockedLength || cleanSerial.length }];
+                }
+            }
+            if (!patterns) continue;
+
+            for (const cfg of patterns) {
+                if (!cfg || !cfg.pattern || cfg.length !== cleanSerial.length) continue;
+                const refPattern = cfg.pattern;
+                
+                let diffIndex = -1;
+                let diffCount = 0;
+                
+                const allKeys = new Set([...Object.keys(refPattern), ...Object.keys(newPattern)]);
+                for (const k of allKeys) {
+                    if (refPattern[k] !== newPattern[k]) {
+                        diffCount++;
+                        diffIndex = k;
+                    }
+                }
+
+                if (diffCount === 1 && diffIndex !== -1) {
+                    const oldChar = refPattern[diffIndex];
+                    const newChar = newPattern[diffIndex];
+                    if (oldChar && newChar && item.name.includes(oldChar)) {
+                        const derivedName = item.name.replace(oldChar, newChar);
+                        return derivedName;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    function sanitizeSessionItems(session) {
+        if (!session || !session.items || session.items.length === 0 || !session.serials) return;
+        
+        session.items.forEach(item => {
+            if (!item.allowedPatterns || item.allowedPatterns.length <= 1) return;
+            const itemSerials = session.serials.filter(s => s.itemName === item.name);
+            if (itemSerials.length > 0) {
+                const firstSerial = itemSerials[0].serial;
+                const primaryPattern = extractAlphabetPattern(firstSerial);
+                item.allowedPatterns = [{ pattern: primaryPattern, length: firstSerial.length }];
+                item.skuAlphabetPattern = primaryPattern;
+                item.lockedLength = firstSerial.length;
+            }
+        });
+
+        const serialsToReassign = [];
+        session.items.forEach(item => {
+            if (!item.allowedPatterns || item.allowedPatterns.length === 0) return;
+            const primaryCfg = item.allowedPatterns[0];
+            
+            const mismatched = session.serials.filter(s => {
+                return s.itemName === item.name && !matchesAlphabetPattern(s.serial, primaryCfg.pattern);
+            });
+
+            mismatched.forEach(s => {
+                const derivedName = deriveProductNameFromPattern(s.serial, session.items) || 'New Product';
+                serialsToReassign.push({ serialObj: s, derivedName: derivedName });
+            });
+        });
+
+        serialsToReassign.forEach(({ serialObj, derivedName }) => {
+            let target = session.items.find(i => i.name === derivedName);
+            if (!target) {
+                const pat = extractAlphabetPattern(serialObj.serial);
+                target = {
+                    name: derivedName,
+                    expectedQty: 0,
+                    skuAlphabetPattern: pat,
+                    lockedLength: serialObj.serial.length,
+                    allowedPatterns: [{ pattern: pat, length: serialObj.serial.length }],
+                    scannedCount: 0
+                };
+                session.items.push(target);
+            }
+            serialObj.itemName = derivedName;
+        });
+
+        compactOutboundBoxNumbers();
+        compactBoxNumbers();
+    }
+
     // --- State Persistence & LocalStorage Helpers ---
 
     function saveActiveSession() {
@@ -2071,6 +2165,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeSession.serials = activeSession.serials.filter(s => s && s.serial && (s.serial.length <= 150 || s.serial.includes('WOS')));
             }
 
+            sanitizeSessionItems(activeSession);
             compactBoxNumbers();
             updateSessionProgress();
             updateWorkstationProductSelector();
@@ -3817,6 +3912,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeOutboundSession.serials = activeOutboundSession.serials.filter(s => s && s.serial && (s.serial.length <= 150 || s.serial.includes('WOS')));
             }
 
+            sanitizeSessionItems(activeOutboundSession);
+
             document.getElementById('activeOutboundShop').textContent = activeOutboundSession.shopName;
             document.getElementById('activeOutboundInvoice').textContent = activeOutboundSession.invoiceNo;
             const pincodeEl = document.getElementById('activeOutboundPincode');
@@ -4392,6 +4489,9 @@ document.addEventListener('DOMContentLoaded', () => {
         let productName = lookupProductBySerial(serial);
         if (!productName) {
             productName = lookupProductBySkuPattern(serial);
+        }
+        if (!productName && activeOutboundSession && activeOutboundSession.items) {
+            productName = deriveProductNameFromPattern(serial, activeOutboundSession.items);
         }
 
         // Unrecognized barcode popup - directly reject scan
