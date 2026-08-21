@@ -2740,7 +2740,22 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 const firstConfig = matchedItem.allowedPatterns[0];
                 const expectedPatternStr = firstConfig ? formatAlphabetPattern(firstConfig.pattern, firstConfig.length) : 'Any Pattern';
-                showScanWarning('sku', expectedPatternStr, cleanSerial);
+                
+                lastRejectedSerial = cleanSerial;
+                lastRejectedItemName = lookupProductBySerial(cleanSerial) || lookupProductBySkuPattern(cleanSerial) || 'Another Product';
+                lastRejectedIsSequence = false;
+
+                showSkuWarningModal(
+                    'Another Product Detected!',
+                    `Scanned serial barcode "${cleanSerial}" belongs to product: "${lastRejectedItemName}". Do you want to add or switch to this product in the active session?`,
+                    'EXPECTED SKU:',
+                    expectedPatternStr,
+                    'SCANNED BARCODE:',
+                    `${lastRejectedItemName} (${cleanSerial})`,
+                    false, // showAllowLengthBtn
+                    true,  // showAddBtn (enables + Add Product button and double scan confirmation!)
+                    cleanSerial
+                );
             }
             return false;
         }
@@ -3508,6 +3523,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (warningAddProductBtn && skuWarningModal) {
         warningAddProductBtn.addEventListener('click', () => {
             skuWarningModal.classList.remove('active');
+            
+            // Outbound recovery & add product
             if (lastRejectedSerial && lastRejectedItemName && activeOutboundSession) {
                 let targetItem = activeOutboundSession.items.find(i => i.name === lastRejectedItemName);
                 if (!targetItem) {
@@ -3536,6 +3553,47 @@ document.addEventListener('DOMContentLoaded', () => {
                     generateOutboundSequenceSerials(lastRejectedSeqBase, lastRejectedSeqCount);
                 } else {
                     saveOutboundSerial(lastRejectedSerial, lastRejectedItemName);
+                }
+                return;
+            }
+
+            // Inbound recovery & add product
+            if (lastRejectedSerial && activeSession) {
+                const detectedProduct = lastRejectedItemName || lookupProductBySerial(lastRejectedSerial) || lookupProductBySkuPattern(lastRejectedSerial);
+                if (detectedProduct && detectedProduct !== 'Another Product' && detectedProduct !== 'Unknown Product') {
+                    let targetItem = activeSession.items.find(i => i.name === detectedProduct);
+                    if (!targetItem) {
+                        targetItem = {
+                            name: detectedProduct,
+                            expectedQty: 0,
+                            skuAlphabetPattern: null,
+                            lockedLength: null,
+                            allowedPatterns: [],
+                            scannedCount: 0
+                        };
+                        activeSession.items.push(targetItem);
+                    }
+                    const newPattern = extractAlphabetPattern(lastRejectedSerial);
+                    targetItem.skuAlphabetPattern = newPattern;
+                    targetItem.lockedLength = lastRejectedSerial.length;
+                    if (!targetItem.allowedPatterns) targetItem.allowedPatterns = [];
+                    const patternExists = targetItem.allowedPatterns.some(cfg => {
+                        return cfg.length === lastRejectedSerial.length && matchesAlphabetPattern(lastRejectedSerial, cfg.pattern);
+                    });
+                    if (!patternExists) {
+                        targetItem.allowedPatterns.push({ pattern: newPattern, length: lastRejectedSerial.length });
+                    }
+
+                    // Update workstation product selector if needed
+                    const workstationProductSelect = document.getElementById('workstationProductSelect');
+                    if (workstationProductSelect) {
+                        workstationProductSelect.value = detectedProduct;
+                    }
+
+                    addSerialToSession(lastRejectedSerial);
+                } else if (addProductToActiveSessionModal) {
+                    // Open add product modal if item name unknown
+                    addProductToActiveSessionModal.classList.add('active');
                 }
             }
         });
@@ -4435,13 +4493,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 );
             } else {
                 showSkuWarningModal(
-                    'SKU Mismatch Error!',
-                    `The scanned barcode does not match the alphabet structure of "${productName}".`,
+                    'Another Product Detected!',
+                    `Scanned serial barcode "${serial}" belongs to product: "${productName || 'Another Product'}". Do you want to add this product to the current outbound dispatch?`,
                     'EXPECTED SKU:',
-                    targetItem.skuAlphabetPattern ? Object.keys(targetItem.skuAlphabetPattern).sort((a,b)=>a-b).map(k=>targetItem.skuAlphabetPattern[k]).join('') : 'X',
+                    targetItem.skuAlphabetPattern ? formatAlphabetPattern(targetItem.skuAlphabetPattern, targetItem.lockedLength || serial.length) : 'Session SKU',
                     'SCANNED BARCODE:',
-                    serial,
-                    false
+                    `${productName || 'Detected'} (${serial})`,
+                    false, // showAllowLengthBtn
+                    true,  // showAddBtn (enables + Add Product button & double scan confirmation!)
+                    serial
                 );
             }
             return false;
