@@ -1030,6 +1030,13 @@ document.addEventListener('DOMContentLoaded', () => {
             // Check if it is a letter (A-Z, a-z)
             if (/[a-zA-Z]/.test(char)) {
                 pattern[i] = char.toUpperCase();
+            } else if (/[0-9]/.test(char)) {
+                // Include model digit if surrounded by letters (e.g., L7B in PL7BV vs PL1BV)
+                const prevChar = i > 0 ? serial[i - 1] : '';
+                const nextChar = i < serial.length - 1 ? serial[i + 1] : '';
+                if (/[a-zA-Z]/.test(prevChar) && /[a-zA-Z]/.test(nextChar)) {
+                    pattern[i] = char;
+                }
             }
         }
         return pattern;
@@ -1060,8 +1067,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const char = serial[idx];
                 const expectedChar = pattern[index];
                 if (expectedChar !== null && expectedChar !== undefined && expectedChar !== '') {
-                    // Only verify if the scanned serial also has a letter at this position
-                    if (/[a-zA-Z]/.test(char)) {
+                    // Verify if position has letter or digit
+                    if (/[a-zA-Z0-9]/.test(char)) {
                         checkedCount++;
                         if (char.toUpperCase() !== expectedChar) {
                             return false;
@@ -1070,7 +1077,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         }
-        return checkedCount >= 3; // Ensure at least 3 letters match
+        return checkedCount >= 3; // Ensure at least 3 characters match
     }
 
     function formatAlphabetPattern(pattern, length) {
