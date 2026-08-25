@@ -1050,16 +1050,24 @@
                         
                         <!-- Top actions / File Upload -->
                         <div class="dashboard-card" style="width: 100%; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; flex-wrap: wrap; gap: 12px;">
                                 <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--accent-blue); margin: 0; display: flex; align-items: center; gap: 8px;">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px; stroke-width: 2.5;">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                                     </svg>
                                     <span>ODA Pincode Register</span>
                                 </h3>
-                                <button type="button" id="btnClearOdaDatabase" class="btn-primary" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose); padding: 8px 16px; font-size: 0.8rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
-                                    Clear Database
-                                </button>
+                                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                                    <button type="button" id="btnExportAllOdaExcel" class="btn-primary" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--accent-emerald); padding: 8px 16px; font-size: 0.8rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                        </svg>
+                                        <span>Export All ODA (Excel)</span>
+                                    </button>
+                                    <button type="button" id="btnClearOdaDatabase" class="btn-primary" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose); padding: 8px 16px; font-size: 0.8rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
+                                        Clear Entire Database
+                                    </button>
+                                </div>
                             </div>
                             
                             <!-- File Upload Area -->
@@ -1089,33 +1097,63 @@
                                     <div id="odaUploadProgress" style="display: none; flex-direction: column; gap: 6px; margin-top: 10px;">
                                         <span id="odaUploadProgressText" style="font-size: 0.8rem; font-weight: 700; color: var(--accent-emerald);">Processing 0 rows...</span>
                                         <button type="button" id="btnSaveUploadedOda" class="btn-primary" style="background: var(--accent-emerald); border-color: var(--accent-emerald); color: white; width: 100%; font-weight: 700; font-size: 0.85rem; padding: 8px; border-radius: var(--radius-sm); cursor: pointer;">
-                                            Save & Sync ODA Database
+                                            + Add & Merge to ODA Database
                                         </button>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- ODA Database View Table -->
+                        <!-- Uploaded ODA Files History Card -->
+                        <div class="dashboard-card" style="width: 100%; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--accent-blue); margin: 0; display: flex; align-items: center; gap: 8px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span>Uploaded ODA Files History (<span id="odaFilesHistoryCount">0</span> files)</span>
+                                </h4>
+                            </div>
+                            <div class="table-container" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-x: auto; max-height: 250px;">
+                                <table class="portal-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                                    <thead>
+                                        <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">
+                                            <th style="padding: 10px 12px;">File Name</th>
+                                            <th style="padding: 10px 12px;">Upload Date & Time</th>
+                                            <th style="padding: 10px 12px;">Pincodes Count</th>
+                                            <th style="padding: 10px 12px; text-align: right;">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="odaFilesHistoryTableBody">
+                                        <tr>
+                                            <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px;">No ODA files uploaded yet.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Active ODA Database View Table -->
                         <div class="dashboard-card" style="width: 100%; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
                                 <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-secondary); margin: 0;">
-                                    Active ODA Database (<span id="odaRecordsCount">0</span> records)
+                                    Active ODA Database (<span id="odaRecordsCount">0</span> total pincodes)
                                 </h4>
-                                <input type="text" id="odaSearchInput" placeholder="Search pincode or courier name..." style="padding: 8px 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.8rem; outline: none; width: 220px;">
+                                <input type="text" id="odaSearchInput" placeholder="Search pincode, courier or file name..." style="padding: 8px 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.8rem; outline: none; width: 260px;">
                             </div>
                             <div class="table-container" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-x: auto; max-height: 400px;">
                                 <table class="portal-table" style="width: 100%; border-collapse: collapse; text-align: left;">
                                     <thead>
                                         <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">
-                                            <th style="padding: 10px 8px;">Pincode</th>
-                                            <th style="padding: 10px 8px;">Courier Name</th>
-                                            <th style="padding: 10px 8px;">Remark</th>
+                                            <th style="padding: 10px 12px;">Pincode</th>
+                                            <th style="padding: 10px 12px;">Courier Name</th>
+                                            <th style="padding: 10px 12px;">Remark</th>
+                                            <th style="padding: 10px 12px;">Source File</th>
                                         </tr>
                                     </thead>
                                     <tbody id="odaTableBody">
                                         <tr>
-                                            <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 24px;">No ODA pincode records loaded. Please upload a file above.</td>
+                                            <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">No ODA pincode records loaded. Please upload a file above.</td>
                                         </tr>
                                     </tbody>
                                 </table>

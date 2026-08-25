@@ -8142,6 +8142,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentOutboundHistoryRow = null;
     let archivedSequenceKeys = new Set();
     let archivedSequenceStack = [];
+    let singleModeSeqGroups = new Set();
 
     // Inject custom animation styles for barcode pulsing border
     if (!document.getElementById('barcode-animation-style')) {
@@ -8304,6 +8305,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const items = prefixGroups[prefix];
                     items.sort((a, b) => a.num - b.num);
 
+                    // 1. Group items into raw consecutive sequence blocks
+                    const rawSeqBlocks = [];
                     let currentSeq = null;
                     items.forEach(item => {
                         if (!currentSeq) {
@@ -8312,43 +8315,62 @@ document.addEventListener('DOMContentLoaded', () => {
                                 startNum: item.num,
                                 count: 1,
                                 startBox: item.boxNo,
-                                endBox: item.boxNo
+                                endBox: item.boxNo,
+                                serials: [item]
                             };
                         } else {
                             if (item.num === currentSeq.startNum + currentSeq.count) {
                                 currentSeq.count++;
                                 currentSeq.endBox = item.boxNo;
+                                currentSeq.serials.push(item);
                             } else {
-                                allSequences.push({
-                                    key: `${pIdx}_${prefIdx}_${allSequences.length}`,
-                                    pName: pName,
-                                    startSerial: currentSeq.startSerial,
-                                    startNum: currentSeq.startNum,
-                                    count: currentSeq.count,
-                                    startBox: currentSeq.startBox,
-                                    endBox: currentSeq.endBox
-                                });
+                                rawSeqBlocks.push(currentSeq);
                                 currentSeq = {
                                     startSerial: item.serial,
                                     startNum: item.num,
                                     count: 1,
                                     startBox: item.boxNo,
-                                    endBox: item.boxNo
+                                    endBox: item.boxNo,
+                                    serials: [item]
                                 };
                             }
                         }
                     });
                     if (currentSeq) {
-                        allSequences.push({
-                            key: `${pIdx}_${prefIdx}_${allSequences.length}`,
-                            pName: pName,
-                            startSerial: currentSeq.startSerial,
-                            startNum: currentSeq.startNum,
-                            count: currentSeq.count,
-                            startBox: currentSeq.startBox,
-                            endBox: currentSeq.endBox
-                        });
+                        rawSeqBlocks.push(currentSeq);
                     }
+
+                    // 2. Expand sequence blocks to 1 PC only if that count level is in singleModeSeqGroups
+                    rawSeqBlocks.forEach(seqBlock => {
+                        const groupKey = `${pName}_${seqBlock.count}`;
+                        const isSingleGroup = singleModeSeqGroups.has(groupKey);
+
+                        if (isSingleGroup && seqBlock.count > 1) {
+                            seqBlock.serials.forEach(sItem => {
+                                allSequences.push({
+                                    key: `${pIdx}_${prefIdx}_${allSequences.length}`,
+                                    pName: pName,
+                                    startSerial: sItem.serial,
+                                    startNum: sItem.num,
+                                    count: 1,
+                                    startBox: sItem.boxNo,
+                                    endBox: sItem.boxNo,
+                                    seqGroupKey: groupKey
+                                });
+                            });
+                        } else {
+                            allSequences.push({
+                                key: `${pIdx}_${prefIdx}_${allSequences.length}`,
+                                pName: pName,
+                                startSerial: seqBlock.startSerial,
+                                startNum: seqBlock.startNum,
+                                count: seqBlock.count,
+                                startBox: seqBlock.startBox,
+                                endBox: seqBlock.endBox,
+                                seqGroupKey: groupKey
+                            });
+                        }
+                    });
                 });
             });
 
@@ -8360,13 +8382,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 return a.count - b.count;
             });
 
-            // Insert preparation cards whenever the product name or count changes
+            // Insert preparation cards whenever the product name or count changes (for count > 1)
             const finalSequences = [];
             let lastProduct = null;
             let lastCount = null;
 
             allSequences.forEach((seq, index) => {
-                if (seq.pName !== lastProduct || seq.count !== lastCount) {
+                if (seq.count > 1 && (seq.pName !== lastProduct || seq.count !== lastCount)) {
                     lastProduct = seq.pName;
                     lastCount = seq.count;
 
@@ -8375,7 +8397,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         key: `prep_${index}`,
                         isPrepCard: true,
                         pName: seq.pName,
-                        count: seq.count
+                        count: seq.count,
+                        seqGroupKey: seq.seqGroupKey || `${seq.pName}_${seq.count}`
                     });
                 }
                 finalSequences.push(seq);
@@ -8428,17 +8451,25 @@ document.addEventListener('DOMContentLoaded', () => {
                             </p>
                         </div>
 
-                        <div style="display: flex; gap: 8px; width: 100%;">
+                        <div style="display: flex; gap: 8px; width: 100%; flex-wrap: wrap;">
                             ${currentIndex > 1 ? `
-                                <button type="button" class="btn-prev-seq-barcode" style="flex: 1; padding: 14px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: var(--radius-sm); color: #475569; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5; color: #475569;">
+                                <button type="button" class="btn-prev-seq-barcode" style="flex: 1; min-width: 75px; padding: 12px 8px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: var(--radius-sm); color: #475569; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5; color: #475569;">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
                                     </svg>
                                     <span>Back</span>
                                 </button>
                             ` : ''}
-                            <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="flex: 2; padding: 14px; background: #0f172a; border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                            ${seq.count > 1 ? `
+                                <button type="button" class="btn-skip-to-single-mode" data-groupkey="${escapeHtmlAttr(seq.seqGroupKey)}" data-prepkey="${escapeHtmlAttr(seq.key)}" style="flex: 1.2; min-width: 140px; padding: 12px 8px; background: #fff7ed; border: 1px solid #f97316; border-radius: var(--radius-sm); color: #c2410c; font-weight: 800; font-size: 0.85rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 6px;" title="Switch this ${seq.count}-PC sequence block to single 1-PC barcode mode">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5; color: #ea580c;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    </svg>
+                                    <span>Skip Sequence (1 PC Mode)</span>
+                                </button>
+                            ` : ''}
+                            <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="flex: 1.5; min-width: 140px; padding: 12px 8px; background: #0f172a; border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
@@ -8506,17 +8537,17 @@ document.addEventListener('DOMContentLoaded', () => {
                             <canvas id="activeQrCanvas" style="width: 160px; height: 160px;"></canvas>
                         </div>
 
-                        <div style="display: flex; gap: 8px; width: 100%;">
+                        <div style="display: flex; gap: 8px; width: 100%; flex-wrap: wrap;">
                             ${currentIndex > 1 ? `
-                                <button type="button" class="btn-prev-seq-barcode" style="flex: 1; padding: 14px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                                <button type="button" class="btn-prev-seq-barcode" style="flex: 1; min-width: 75px; padding: 12px 8px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
                                     </svg>
                                     <span>Back</span>
                                 </button>
                             ` : ''}
-                            <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="flex: 2; padding: 14px; background: ${theme.color}; border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                            <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="flex: 1.5; min-width: 140px; padding: 12px 8px; background: ${theme.color}; border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                                 </svg>
                                 <span>Archive QR Code</span>
@@ -8570,6 +8601,7 @@ document.addEventListener('DOMContentLoaded', () => {
         firstSerialsViewMode = 'list'; // Reset view mode to default List view when opened
         archivedSequenceKeys.clear(); // Clear any cached archives
         archivedSequenceStack = [];
+        singleModeSeqGroups.clear();
         
         renderFirstSerialsModalContent();
         
@@ -8602,6 +8634,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const outboundFirstSerialsModalBody = document.getElementById('outboundFirstSerialsModalBody');
     if (outboundFirstSerialsModalBody) {
         outboundFirstSerialsModalBody.addEventListener('click', (e) => {
+            const skipSingleBtn = e.target.closest('.btn-skip-to-single-mode');
+            if (skipSingleBtn) {
+                const groupKey = skipSingleBtn.getAttribute('data-groupkey');
+                const prepKey = skipSingleBtn.getAttribute('data-prepkey');
+                if (groupKey) {
+                    singleModeSeqGroups.add(groupKey);
+                    if (prepKey) {
+                        archivedSequenceKeys.add(prepKey);
+                        archivedSequenceStack.push(prepKey);
+                    }
+                    renderFirstSerialsModalContent();
+                }
+                return;
+            }
+
             const archiveBtn = e.target.closest('.btn-archive-seq-barcode');
             if (archiveBtn) {
                 const key = archiveBtn.getAttribute('data-key');
@@ -8625,6 +8672,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (resetBtn) {
                 archivedSequenceKeys.clear();
                 archivedSequenceStack = [];
+                singleModeSeqGroups.clear();
                 renderFirstSerialsModalContent();
                 return;
             }
@@ -9123,31 +9171,49 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -------------------------------------------------------------
-    // ODA REGISTER MODULE (Memory Cached & Map Indexed)
     // -------------------------------------------------------------
-    let uploadedOdaRecords = [];
-    let memoryOdaRecords = []; // Flat list of {pincode, courier, remark}
-    let memoryOdaMap = new Map(); // Fast Map: pincode -> array of {courier, remark}
+    // ODA REGISTER MODULE (Memory Cached, Cumulative & File History)
+    // -------------------------------------------------------------
+    let pendingUploadedOdaRecords = [];
+    let pendingUploadedFileName = '';
+    let memoryOdaRecords = []; // Flat list of {pincode, courier, remark, fileId, fileName}
+    let memoryOdaFilesHistory = []; // List of {fileId, fileName, uploadTime, recordsCount, records}
+    let memoryOdaMap = new Map(); // Fast Map: pincode -> array of {courier, remark, fileName}
 
-    function updateOdaMemoryCache(recordsData) {
+    function updateOdaMemoryCache(recordsData, filesHistoryData) {
         memoryOdaRecords = [];
         memoryOdaMap.clear();
+
+        if (Array.isArray(filesHistoryData)) {
+            memoryOdaFilesHistory = filesHistoryData;
+        } else {
+            memoryOdaFilesHistory = [];
+        }
+
         if (Array.isArray(recordsData)) {
             recordsData.forEach(r => {
                 let pincode = '';
                 let courier = '';
                 let remark = '';
+                let fileId = '';
+                let fileName = '';
+
                 if (Array.isArray(r)) {
                     pincode = String(r[0] || '').trim();
                     courier = String(r[1] || '').trim();
                     remark = String(r[2] || '').trim();
+                    fileId = String(r[3] || '').trim();
+                    fileName = String(r[4] || '').trim();
                 } else if (r && typeof r === 'object') {
                     pincode = String(r.pincode || '').trim();
                     courier = String(r.courier || '').trim();
                     remark = String(r.remark || '').trim();
+                    fileId = String(r.fileId || '').trim();
+                    fileName = String(r.fileName || '').trim();
                 }
+
                 if (pincode) {
-                    const record = { pincode, courier, remark };
+                    const record = { pincode, courier, remark, fileId, fileName };
                     memoryOdaRecords.push(record);
                     if (!memoryOdaMap.has(pincode)) {
                         memoryOdaMap.set(pincode, []);
@@ -9156,19 +9222,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
-        console.log(`WMS Cache: ODA loaded with ${memoryOdaRecords.length} records.`);
+        console.log(`WMS Cache: ODA loaded with ${memoryOdaRecords.length} records across ${memoryOdaFilesHistory.length} files.`);
     }
 
     function getOdaRecords() {
         return memoryOdaRecords;
     }
 
-    function saveOdaRecords(records) {
-        // Store compressed structure: [ [pincode, courier, remark], ... ]
-        const compressed = records.map(r => [r.pincode, r.courier, r.remark]);
-        localStorage.setItem('wms_oda_records', JSON.stringify(compressed));
-        updateOdaMemoryCache(compressed);
-        firebaseSet('oda_records', compressed);
+    function saveOdaData(records, filesHistory) {
+        // Compress records structure: [ [pincode, courier, remark, fileId, fileName], ... ]
+        const compressedRecords = records.map(r => [r.pincode, r.courier, r.remark, r.fileId || '', r.fileName || '']);
+        
+        localStorage.setItem('wms_oda_records', JSON.stringify(compressedRecords));
+        localStorage.setItem('wms_oda_files_history', JSON.stringify(filesHistory));
+
+        updateOdaMemoryCache(compressedRecords, filesHistory);
+
+        firebaseSet('oda_records', compressedRecords);
+        firebaseSet('oda_files_history', filesHistory);
     }
 
     function isOdaRemark(remark) {
@@ -9190,9 +9261,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderOdaUI() {
+        // 1. Update Record & File Counts
         const countSpan = document.getElementById('odaRecordsCount');
         if (countSpan) countSpan.textContent = memoryOdaRecords.length;
-        
+
+        const filesCountSpan = document.getElementById('odaFilesHistoryCount');
+        if (filesCountSpan) filesCountSpan.textContent = memoryOdaFilesHistory.length;
+
+        // 2. Render Uploaded ODA Files History Table
+        const filesBody = document.getElementById('odaFilesHistoryTableBody');
+        if (filesBody) {
+            filesBody.innerHTML = '';
+            if (memoryOdaFilesHistory.length === 0) {
+                filesBody.innerHTML = `
+                    <tr>
+                        <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px;">
+                            No ODA files uploaded yet. Upload a file above to build your active database.
+                        </td>
+                    </tr>
+                `;
+            } else {
+                memoryOdaFilesHistory.forEach(file => {
+                    const tr = document.createElement('tr');
+                    tr.style.borderBottom = '1px solid var(--border-color)';
+                    tr.innerHTML = `
+                        <td style="padding: 10px 12px; font-weight: 700; color: var(--text-primary);">${escapeHtml(file.fileName)}</td>
+                        <td style="padding: 10px 12px; color: var(--text-secondary); font-size: 0.82rem;">${escapeHtml(file.uploadTime)}</td>
+                        <td style="padding: 10px 12px; font-weight: 700; color: var(--accent-emerald); font-family: var(--font-mono);">${file.recordsCount} Pincodes</td>
+                        <td style="padding: 10px 12px; text-align: right;">
+                            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                                <button type="button" class="btn-download-oda-file" data-file-id="${escapeHtmlAttr(file.fileId)}" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: var(--accent-blue); padding: 6px 12px; font-size: 0.78rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                    📥 Download
+                                </button>
+                                <button type="button" class="btn-delete-oda-file" data-file-id="${escapeHtmlAttr(file.fileId)}" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose); padding: 6px 12px; font-size: 0.78rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                    🗑️ Delete
+                                </button>
+                            </div>
+                        </td>
+                    `;
+                    filesBody.appendChild(tr);
+                });
+            }
+        }
+
+        // 3. Render Active ODA Database Table
         const searchInput = document.getElementById('odaSearchInput');
         const filterText = searchInput ? searchInput.value.trim().toLowerCase() : '';
         
@@ -9205,14 +9317,15 @@ document.addEventListener('DOMContentLoaded', () => {
             filtered = memoryOdaRecords.filter(r => {
                 return r.pincode.includes(filterText) || 
                        r.courier.toLowerCase().includes(filterText) ||
-                       r.remark.toLowerCase().includes(filterText);
+                       r.remark.toLowerCase().includes(filterText) ||
+                       (r.fileName && r.fileName.toLowerCase().includes(filterText));
             });
         }
         
         if (filtered.length === 0) {
             body.innerHTML = `
                 <tr>
-                    <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                    <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">
                         ${memoryOdaRecords.length === 0 ? 'No ODA pincode records loaded. Please upload a file above.' : 'No records match search query.'}
                     </td>
                 </tr>
@@ -9220,15 +9333,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        const displayLimit = 150;
+        const displayLimit = 200;
         const displayList = filtered.slice(0, displayLimit);
         
         displayList.forEach(r => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td style="padding: 10px 8px; font-family: var(--font-mono); font-weight: 700; color: var(--text-primary);">${r.pincode}</td>
-                <td style="padding: 10px 8px; color: var(--text-secondary);">${escapeHtml(r.courier)}</td>
-                <td style="padding: 10px 8px;"><span style="color: ${isOdaRemark(r.remark) ? 'var(--accent-rose)' : 'var(--accent-emerald)'}; font-weight: 700;">${escapeHtml(r.remark)}</span></td>
+                <td style="padding: 10px 12px; font-family: var(--font-mono); font-weight: 700; color: var(--text-primary);">${r.pincode}</td>
+                <td style="padding: 10px 12px; color: var(--text-secondary);">${escapeHtml(r.courier)}</td>
+                <td style="padding: 10px 12px;"><span style="color: ${isOdaRemark(r.remark) ? 'var(--accent-rose)' : 'var(--accent-emerald)'}; font-weight: 700;">${escapeHtml(r.remark)}</span></td>
+                <td style="padding: 10px 12px; color: var(--text-muted); font-size: 0.8rem;">${escapeHtml(r.fileName || 'General')}</td>
             `;
             body.appendChild(tr);
         });
@@ -9236,8 +9350,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (filtered.length > displayLimit) {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td colspan="3" style="text-align: center; color: var(--text-muted); font-size: 0.75rem; font-style: italic; padding: 12px 8px;">
-                    Showing first ${displayLimit} of ${filtered.length} matching records. Use search above to narrow down.
+                <td colspan="4" style="text-align: center; color: var(--text-muted); font-size: 0.75rem; font-style: italic; padding: 12px 8px;">
+                    Showing first ${displayLimit} of ${filtered.length} matching pincode records. Use search above to narrow down.
                 </td>
             </tr>
             `;
@@ -9246,6 +9360,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleOdaFileUpload(file) {
+        pendingUploadedFileName = file.name || 'ODA_Sheet.xlsx';
         const reader = new FileReader();
         reader.onload = function(e) {
             try {
@@ -9301,11 +9416,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 
-                uploadedOdaRecords = parsedRecords;
+                pendingUploadedOdaRecords = parsedRecords;
                 const progressText = document.getElementById('odaUploadProgressText');
                 const progressContainer = document.getElementById('odaUploadProgress');
                 
-                if (progressText) progressText.textContent = `Successfully parsed ${parsedRecords.length} records. Ready to save.`;
+                if (progressText) progressText.textContent = `Successfully parsed ${parsedRecords.length} records from "${pendingUploadedFileName}". Ready to merge.`;
                 if (progressContainer) progressContainer.style.display = 'flex';
                 
             } catch (err) {
@@ -9322,6 +9437,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const odaFileInput = document.getElementById('odaFileInput');
     const btnSaveUploadedOda = document.getElementById('btnSaveUploadedOda');
     const btnClearOdaDatabase = document.getElementById('btnClearOdaDatabase');
+    const btnExportAllOdaExcel = document.getElementById('btnExportAllOdaExcel');
     const odaSearchInput = document.getElementById('odaSearchInput');
 
     if (odaDropZone && odaFileInput) {
@@ -9360,27 +9476,119 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnSaveUploadedOda) {
         btnSaveUploadedOda.addEventListener('click', () => {
-            if (uploadedOdaRecords && uploadedOdaRecords.length > 0) {
-                if (confirm(`Are you sure you want to replace the current database with ${uploadedOdaRecords.length} new records?`)) {
-                    saveOdaRecords(uploadedOdaRecords);
-                    uploadedOdaRecords = [];
-                    const progressContainer = document.getElementById('odaUploadProgress');
-                    if (progressContainer) progressContainer.style.display = 'none';
-                    alert("ODA database updated successfully!");
-                    renderOdaUI();
+            if (pendingUploadedOdaRecords && pendingUploadedOdaRecords.length > 0) {
+                const fileId = 'file_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+                const now = new Date();
+                const uploadTime = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + 
+                                   now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                const fileName = pendingUploadedFileName || `ODA_File_${now.toISOString().slice(0, 10)}.xlsx`;
+
+                const newTaggedRecords = pendingUploadedOdaRecords.map(r => ({
+                    pincode: r.pincode,
+                    courier: r.courier,
+                    remark: r.remark,
+                    fileId: fileId,
+                    fileName: fileName
+                }));
+
+                const updatedRecords = [...memoryOdaRecords, ...newTaggedRecords];
+
+                const newFileHistory = {
+                    fileId: fileId,
+                    fileName: fileName,
+                    uploadTime: uploadTime,
+                    recordsCount: newTaggedRecords.length,
+                    records: pendingUploadedOdaRecords
+                };
+
+                const updatedHistory = [newFileHistory, ...memoryOdaFilesHistory];
+
+                saveOdaData(updatedRecords, updatedHistory);
+
+                pendingUploadedOdaRecords = [];
+                pendingUploadedFileName = '';
+                const progressContainer = document.getElementById('odaUploadProgress');
+                if (progressContainer) progressContainer.style.display = 'none';
+                const odaFileInput = document.getElementById('odaFileInput');
+                if (odaFileInput) odaFileInput.value = '';
+
+                alert(`Successfully merged ${newTaggedRecords.length} pincodes from "${fileName}" into the Active ODA Database!\nTotal Active Pincodes: ${memoryOdaRecords.length}`);
+                renderOdaUI();
+            }
+        });
+    }
+
+    const odaFilesHistoryTableBody = document.getElementById('odaFilesHistoryTableBody');
+    if (odaFilesHistoryTableBody) {
+        odaFilesHistoryTableBody.addEventListener('click', (e) => {
+            // Download File
+            const dlBtn = e.target.closest('.btn-download-oda-file');
+            if (dlBtn) {
+                const fileId = dlBtn.getAttribute('data-file-id');
+                const fileObj = memoryOdaFilesHistory.find(f => f.fileId === fileId);
+                if (fileObj && window.XLSX) {
+                    const exportData = fileObj.records.map(r => ({
+                        'Courier Name': r.courier || 'Generic',
+                        'Pincode': r.pincode,
+                        'Remark / ODA Status': r.remark || 'ODA'
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(exportData);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "ODA_Pincodes");
+                    XLSX.writeFile(wb, fileObj.fileName || "ODA_Pincodes.xlsx");
                 }
+                return;
+            }
+
+            // Delete File
+            const delBtn = e.target.closest('.btn-delete-oda-file');
+            if (delBtn) {
+                const fileId = delBtn.getAttribute('data-file-id');
+                const fileObj = memoryOdaFilesHistory.find(f => f.fileId === fileId);
+                if (fileObj) {
+                    if (confirm(`Are you sure you want to delete file "${fileObj.fileName}"?\nThis will remove all ${fileObj.recordsCount} pincodes from the Active ODA Database.`)) {
+                        const updatedHistory = memoryOdaFilesHistory.filter(f => f.fileId !== fileId);
+                        const updatedRecords = memoryOdaRecords.filter(r => r.fileId !== fileId);
+
+                        saveOdaData(updatedRecords, updatedHistory);
+                        alert(`File "${fileObj.fileName}" and its ${fileObj.recordsCount} pincodes were deleted from history and Active ODA Database.`);
+                        renderOdaUI();
+                    }
+                }
+                return;
+            }
+        });
+    }
+
+    if (btnExportAllOdaExcel) {
+        btnExportAllOdaExcel.addEventListener('click', () => {
+            if (memoryOdaRecords.length === 0) {
+                alert("The Active ODA Database is empty.");
+                return;
+            }
+            if (window.XLSX) {
+                const exportData = memoryOdaRecords.map(r => ({
+                    'Pincode': r.pincode,
+                    'Courier Name': r.courier || 'Generic',
+                    'Remark / ODA Status': r.remark || 'ODA',
+                    'Source File': r.fileName || 'General'
+                }));
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "All_Active_ODA");
+                XLSX.writeFile(wb, `Active_ODA_Pincodes_Mix_${new Date().toISOString().slice(0, 10)}.xlsx`);
             }
         });
     }
 
     if (btnClearOdaDatabase) {
         btnClearOdaDatabase.addEventListener('click', () => {
-            if (confirm("Are you sure you want to clear the entire ODA database? This will disable ODA warnings during dispatch.")) {
+            if (confirm("Are you sure you want to clear the entire ODA database and history? This will disable ODA warnings during dispatch.")) {
                 const pwd = prompt("Enter passcode to confirm clearing ODA database:");
                 if (pwd === '2026' || pwd === '1998') {
-                    saveOdaRecords([]);
+                    saveOdaData([], []);
                     renderOdaUI();
-                    alert("ODA database cleared.");
+                    alert("ODA database and file history cleared.");
                 } else if (pwd !== null) {
                     alert("Incorrect passcode! Action denied.");
                 }
@@ -9405,11 +9613,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial load: Restore states on page load/reload
     const savedOda = localStorage.getItem('wms_oda_records');
+    const savedOdaHistory = localStorage.getItem('wms_oda_files_history');
     let parsedSavedOda = [];
+    let parsedSavedOdaHistory = [];
     try {
         parsedSavedOda = savedOda ? JSON.parse(savedOda) : [];
     } catch(e) {}
-    updateOdaMemoryCache(parsedSavedOda);
+    try {
+        parsedSavedOdaHistory = savedOdaHistory ? JSON.parse(savedOdaHistory) : [];
+    } catch(e) {}
+    updateOdaMemoryCache(parsedSavedOda, parsedSavedOdaHistory);
 
     restoreSidebarCollapsedState();
     restoreSessionState();
