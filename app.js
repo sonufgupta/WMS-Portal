@@ -9429,38 +9429,88 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const firstSheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[firstSheetName];
-                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
                 
-                if (jsonData.length < 2) {
-                    alert("The uploaded sheet appears to be empty or does not have headers.");
+                if (!jsonData || jsonData.length === 0) {
+                    alert("The uploaded sheet appears to be empty.");
                     return;
                 }
                 
-                const headers = jsonData[0].map(h => String(h || '').trim().toLowerCase());
+                // 1. Smart Header Row Detection (scan first 10 rows for keywords)
+                let headerRowIdx = 0;
+                let maxMatchedKeywords = 0;
+                for (let r = 0; r < Math.min(jsonData.length, 10); r++) {
+                    const row = jsonData[r];
+                    if (!row || !Array.isArray(row)) continue;
+                    const rowText = row.map(cell => String(cell || '').toLowerCase()).join(' ');
+                    let score = 0;
+                    if (rowText.includes('pin')) score += 2;
+                    if (rowText.includes('pincode') || rowText.includes('pin code') || rowText.includes('postal')) score += 3;
+                    if (rowText.includes('courier') || rowText.includes('carrier')) score += 2;
+                    if (rowText.includes('remark') || rowText.includes('oda') || rowText.includes('status')) score += 2;
+                    if (score > maxMatchedKeywords) {
+                        maxMatchedKeywords = score;
+                        headerRowIdx = r;
+                    }
+                }
+
+                const headers = (jsonData[headerRowIdx] || []).map(h => String(h || '').trim().toLowerCase());
                 
-                let courierIdx = headers.findIndex(h => h.includes('courier'));
-                let pincodeIdx = headers.findIndex(h => h.includes('pincode') || h.includes('pin_code') || h === 'pin');
-                let remarkIdx = headers.findIndex(h => h.includes('remark') || h.includes('oda') || h.includes('status'));
+                // 2. Comprehensive Column Index Identification
+                let courierIdx = headers.findIndex(h => h.includes('courier') || h.includes('carrier') || h.includes('partner') || h.includes('provider') || h.includes('vendor'));
+                let pincodeIdx = headers.findIndex(h => h.includes('pincode') || h.includes('pin_code') || h.includes('pin code') || h.includes('postal') || h.includes('zip') || h === 'pin' || h.includes('dest pin') || h.includes('destination pin'));
+                let remarkIdx = headers.findIndex(h => h.includes('remark') || h.includes('oda') || h.includes('status') || h.includes('servic') || h.includes('zone'));
                 
-                if (courierIdx === -1) courierIdx = 0;
-                if (pincodeIdx === -1) pincodeIdx = 1;
-                if (remarkIdx === -1) remarkIdx = 2;
+                // 3. Fallback Auto-Discovery: Inspect first 30 data rows for 6-digit pincode numbers!
+                if (pincodeIdx === -1) {
+                    const colScores = {};
+                    for (let r = headerRowIdx + 1; r < Math.min(jsonData.length, headerRowIdx + 30); r++) {
+                        const row = jsonData[r];
+                        if (!row || !Array.isArray(row)) continue;
+                        row.forEach((cell, cIdx) => {
+                            const digits = String(cell || '').trim().replace(/\D/g, '');
+                            if (digits.length === 6) {
+                                colScores[cIdx] = (colScores[cIdx] || 0) + 1;
+                            }
+                        });
+                    }
+                    let bestCol = -1;
+                    let maxScore = 0;
+                    Object.keys(colScores).forEach(cIdx => {
+                        if (colScores[cIdx] > maxScore) {
+                            maxScore = colScores[cIdx];
+                            bestCol = parseInt(cIdx);
+                        }
+                    });
+                    if (bestCol !== -1) pincodeIdx = bestCol;
+                }
+
+                if (pincodeIdx === -1) pincodeIdx = 0;
+                if (courierIdx === -1) courierIdx = (pincodeIdx === 0) ? 1 : 0;
+                if (remarkIdx === -1) remarkIdx = (pincodeIdx === 2 || courierIdx === 2) ? 3 : 2;
                 
                 const parsedRecords = [];
-                for (let i = 1; i < jsonData.length; i++) {
+                let skippedRowsCount = 0;
+
+                for (let i = headerRowIdx + 1; i < jsonData.length; i++) {
                     const row = jsonData[i];
-                    if (!row || row.length === 0) continue;
+                    if (!row || row.length === 0) {
+                        skippedRowsCount++;
+                        continue;
+                    }
                     
                     const courier = String(row[courierIdx] || '').trim() || derivedCourier;
                     const pincode = String(row[pincodeIdx] || '').trim().replace(/\D/g, '');
                     const remark = String(row[remarkIdx] || '').trim();
                     
-                    if (pincode) {
+                    if (pincode && pincode.length >= 3) {
                         parsedRecords.push({
                             courier: courier,
                             pincode: pincode,
                             remark: remark || 'ODA'
                         });
+                    } else {
+                        skippedRowsCount++;
                     }
                 }
                 
@@ -9473,7 +9523,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const progressText = document.getElementById('odaUploadProgressText');
                 const progressContainer = document.getElementById('odaUploadProgress');
                 
-                if (progressText) progressText.textContent = `Successfully parsed ${parsedRecords.length} records from "${pendingUploadedFileName}". Ready to merge.`;
+                const totalSheetRows = jsonData.length - headerRowIdx - 1;
+                const skippedMsg = skippedRowsCount > 0 ? ` (${skippedRowsCount} empty/header/summary rows skipped)` : '';
+                
+                if (progressText) {
+                    progressText.textContent = `Successfully parsed ${parsedRecords.length} valid pincodes from ${totalSheetRows} total rows${skippedMsg} in "${pendingUploadedFileName}". Ready to merge.`;
+                }
                 if (progressContainer) progressContainer.style.display = 'flex';
                 
             } catch (err) {
