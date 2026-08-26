@@ -3939,32 +3939,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (odaBadge) {
                 if (activeOutboundSession.pincode) {
                     const pincode = activeOutboundSession.pincode;
-                    const records = getOdaRecords();
-                    const matched = records.filter(r => String(r.pincode) === String(pincode));
-                    
-                    let statusText = '';
-                    let isOda = false;
-                    
-                    if (matched.length > 0) {
-                        isOda = matched.some(r => isOdaRemark(r.remark));
-                        const courierDetails = matched.map(r => `${r.courier}: ${r.remark}`).join(', ');
-                        statusText = isOda ? `⚠️ ODA (${courierDetails})` : `✅ NORMAL (${courierDetails})`;
-                    } else {
-                        statusText = `✅ NORMAL (Delivery: Normal)`;
-                    }
+                    const odaInfo = getMultiCourierOdaStatus(pincode);
                     
                     odaBadge.style.display = 'flex';
-                    odaBadge.textContent = statusText;
+                    odaBadge.innerHTML = `<span style="font-weight: 800; font-family: var(--font-mono); margin-right: 4px;">PIN ${pincode}:</span> ${odaInfo.badgeHtml}`;
                     
-                    if (isOda) {
-                        odaBadge.style.backgroundColor = 'rgba(244, 63, 94, 0.15)';
+                    if (odaInfo.isAnyOda) {
+                        odaBadge.style.backgroundColor = 'rgba(244, 63, 94, 0.1)';
                         odaBadge.style.borderColor = 'var(--accent-rose)';
-                        odaBadge.style.color = 'var(--accent-rose)';
                         odaBadge.style.animation = 'pulseOda 1.5s infinite';
                     } else {
-                        odaBadge.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
+                        odaBadge.style.backgroundColor = 'rgba(16, 185, 129, 0.08)';
                         odaBadge.style.borderColor = 'var(--accent-emerald)';
-                        odaBadge.style.color = 'var(--accent-emerald)';
                         odaBadge.style.animation = 'pulseOdaNormal 2s infinite';
                     }
                 } else {
@@ -5016,14 +5002,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="font-mono" style="font-size:1.05rem; font-weight:900; color:#fff;">${row.invoiceNo}</td>
                 <td>
                     ${(() => {
-                        const isOda = row.odaStatus === 'ODA';
-                        const badge = isOda 
-                            ? `<span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">⚠️ ODA</span>`
-                            : `<span style="background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">Normal</span>`;
-                        const pinText = row.pincode ? `<span style="font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">${row.pincode}</span>` : '';
-                        return `<div style="display: flex; flex-direction: column; gap: 2px;">
-                                    ${badge}
-                                    ${pinText}
+                        if (!row.pincode) return `<span style="color: var(--text-muted); font-size: 0.8rem;">—</span>`;
+                        const odaInfo = getMultiCourierOdaStatus(row.pincode);
+                        return `<div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono); font-weight: 700;">PIN: ${row.pincode}</span>
+                                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                        ${odaInfo.badgeHtml}
+                                    </div>
                                 </div>`;
                     })()}
                 </td>
@@ -5095,11 +5080,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 let mobileOdaBadge = '';
                 if (row.pincode) {
-                    const isOda = row.odaStatus === 'ODA';
-                    const odaLabel = isOda ? 'ODA' : 'Normal';
-                    const odaColor = isOda ? 'var(--accent-rose)' : 'var(--accent-emerald)';
-                    const odaBg = isOda ? 'rgba(244, 63, 94, 0.15)' : 'rgba(16, 185, 129, 0.1)';
-                    mobileOdaBadge = `<span style="background: ${odaBg}; color: ${odaColor}; border: 1px solid ${odaColor}; padding: 1px 5px; border-radius: 3px; font-size: 0.65rem; font-weight: 800; text-transform: uppercase;">${odaLabel}</span>`;
+                    const odaInfo = getMultiCourierOdaStatus(row.pincode);
+                    mobileOdaBadge = `<div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;">${odaInfo.badgeHtml}</div>`;
                 }
 
                 // Format Full Date + Time Display
@@ -9233,8 +9215,17 @@ document.addEventListener('DOMContentLoaded', () => {
         // Compress records structure: [ [pincode, courier, remark, fileId, fileName], ... ]
         const compressedRecords = records.map(r => [r.pincode, r.courier, r.remark, r.fileId || '', r.fileName || '']);
         
-        localStorage.setItem('wms_oda_records', JSON.stringify(compressedRecords));
-        localStorage.setItem('wms_oda_files_history', JSON.stringify(filesHistory));
+        try {
+            localStorage.setItem('wms_oda_records', JSON.stringify(compressedRecords));
+        } catch (e) {
+            console.warn("LocalStorage quota reached for full ODA records array. Maintained in RAM cache & Firebase sync.", e);
+        }
+
+        try {
+            localStorage.setItem('wms_oda_files_history', JSON.stringify(filesHistory));
+        } catch (e) {
+            console.warn("LocalStorage quota reached for ODA files history.", e);
+        }
 
         updateOdaMemoryCache(compressedRecords, filesHistory);
 
@@ -9248,6 +9239,57 @@ document.addEventListener('DOMContentLoaded', () => {
             return false;
         }
         return text.includes('oda') || text.includes('out of delivery') || text === 'yes' || text.includes('out-of-delivery') || text.includes('out of area');
+    }
+
+    function getMultiCourierOdaStatus(pincode) {
+        const cleanPin = String(pincode || '').trim().replace(/\D/g, '');
+        if (!cleanPin) {
+            return {
+                hasRecords: false,
+                isAnyOda: false,
+                summaryText: 'No Pincode',
+                courierStatuses: [],
+                badgeHtml: `<span style="color: var(--text-muted); font-size: 0.75rem;">No Pincode</span>`
+            };
+        }
+
+        const matched = memoryOdaMap.get(cleanPin) || [];
+        if (matched.length === 0) {
+            return {
+                hasRecords: false,
+                isAnyOda: false,
+                summaryText: 'Normal Delivery',
+                courierStatuses: [],
+                badgeHtml: `<span style="background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">🟢 Normal</span>`
+            };
+        }
+
+        const courierStatuses = matched.map(m => {
+            const oda = isOdaRemark(m.remark);
+            return {
+                courier: m.courier || 'Courier',
+                remark: m.remark || (oda ? 'ODA' : 'Normal'),
+                isOda: oda,
+                fileName: m.fileName || ''
+            };
+        });
+
+        const isAnyOda = courierStatuses.some(c => c.isOda);
+        const summaryText = courierStatuses.map(c => `${c.courier}: ${c.isOda ? '🔴 ODA' : '🟢 Normal'}`).join(' | ');
+
+        const badgeHtml = courierStatuses.map(c => {
+            return c.isOda
+                ? `<span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; white-space: nowrap; display: inline-flex; align-items: center; gap: 3px;">🔴 ${escapeHtml(c.courier)}: ODA</span>`
+                : `<span style="background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; white-space: nowrap; display: inline-flex; align-items: center; gap: 3px;">🟢 ${escapeHtml(c.courier)}: Normal</span>`;
+        }).join(' ');
+
+        return {
+            hasRecords: true,
+            isAnyOda: isAnyOda,
+            summaryText: summaryText,
+            courierStatuses: courierStatuses,
+            badgeHtml: badgeHtml
+        };
     }
 
     function escapeHtml(str) {
@@ -9361,6 +9403,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleOdaFileUpload(file) {
         pendingUploadedFileName = file.name || 'ODA_Sheet.xlsx';
+        
+        let derivedCourier = 'Generic';
+        if (file.name) {
+            const cleanName = file.name.split('.')[0]
+                .replace(/[-_]oda[-_]?/gi, ' ')
+                .replace(/[-_]pincodes?[-_]?/gi, ' ')
+                .replace(/[-_]list[-_]?/gi, ' ')
+                .trim();
+            if (cleanName) derivedCourier = cleanName;
+        }
+
         const reader = new FileReader();
         reader.onload = function(e) {
             try {
@@ -9398,13 +9451,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     const row = jsonData[i];
                     if (!row || row.length === 0) continue;
                     
-                    const courier = String(row[courierIdx] || '').trim();
+                    const courier = String(row[courierIdx] || '').trim() || derivedCourier;
                     const pincode = String(row[pincodeIdx] || '').trim().replace(/\D/g, '');
                     const remark = String(row[remarkIdx] || '').trim();
                     
                     if (pincode) {
                         parsedRecords.push({
-                            courier: courier || 'Generic',
+                            courier: courier,
                             pincode: pincode,
                             remark: remark || 'ODA'
                         });
