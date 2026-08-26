@@ -9689,6 +9689,34 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const btnDownloadSampleOdaTemplate = document.getElementById('btnDownloadSampleOdaTemplate');
+    if (btnDownloadSampleOdaTemplate) {
+        btnDownloadSampleOdaTemplate.addEventListener('click', () => {
+            if (window.XLSX) {
+                const sampleRows = [
+                    { "Courier Name": "Delhivery", "Pincode": "110001", "Remark / ODA Status": "ODA" },
+                    { "Courier Name": "Delhivery", "Pincode": "400001", "Remark / ODA Status": "Normal" },
+                    { "Courier Name": "Bluedart", "Pincode": "110001", "Remark / ODA Status": "Normal" },
+                    { "Courier Name": "Bluedart", "Pincode": "560001", "Remark / ODA Status": "ODA" },
+                    { "Courier Name": "Xpressbees", "Pincode": "700001", "Remark / ODA Status": "ODA" },
+                    { "Courier Name": "Xpressbees", "Pincode": "390001", "Remark / ODA Status": "Normal" }
+                ];
+
+                const ws = XLSX.utils.json_to_sheet(sampleRows);
+                ws['!cols'] = [
+                    { wch: 18 },
+                    { wch: 14 },
+                    { wch: 22 }
+                ];
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "ODA_Sample_Format");
+                XLSX.writeFile(wb, "Sample_ODA_Template.xlsx");
+            } else {
+                alert("Excel library not loaded.");
+            }
+        });
+    }
+
     if (btnClearOdaDatabase) {
         btnClearOdaDatabase.addEventListener('click', () => {
             if (confirm("Are you sure you want to clear the entire ODA database and history? This will disable ODA warnings during dispatch.")) {
