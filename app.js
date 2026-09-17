@@ -36,37 +36,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let cachedProductStockMap = null;
     let cachedDamageRecords = null;
 
-    function safeLocalStorageSet(key, data) {
-        if (data === null || data === undefined) {
-            try {
-                localStorage.removeItem(key);
-            } catch (e) {}
-            return;
-        }
-        try {
-            const jsonStr = typeof data === 'string' ? data : JSON.stringify(data);
-            localStorage.setItem(key, jsonStr);
-        } catch (e) {
-            console.warn(`LocalStorage quota exceeded for "${key}". Preserving full data in RAM cache & Firebase sync.`, e);
-            if (Array.isArray(data) && data.length > 1) {
-                try {
-                    const pruned = data.slice(0, Math.max(1, Math.floor(data.length / 2)));
-                    localStorage.setItem(key, JSON.stringify(pruned));
-                } catch (err2) {
-                    try {
-                        const minimal = data.slice(0, 1);
-                        localStorage.setItem(key, JSON.stringify(minimal));
-                    } catch (err3) {}
-                }
-            } else if (typeof data === 'object' && data && data.serials && Array.isArray(data.serials)) {
-                try {
-                    const sessionShell = { ...data, serials: data.serials.slice(-200) };
-                    localStorage.setItem(key, JSON.stringify(sessionShell));
-                } catch (err2) {}
-            }
-        }
-    }
-
     // O(1) Fast Index Lookup Maps for Instant Barcode Scanning
     let inboundSerialLogMap = null;    // cleanSerialUpper -> log
     let outboundSerialLogMap = null;   // cleanSerialUpper -> log
@@ -169,39 +138,36 @@ document.addEventListener('DOMContentLoaded', () => {
         if (value === null || value === undefined) {
             return false;
         }
-        
-        if (key === 'wms_inbound_history') {
-            cachedInboundHistory = Array.isArray(value) ? value : [];
-            inboundSerialLogMap = null;
-            weightResolutionCache = null;
-            cachedProductStockMap = null;
-        }
-        if (key === 'wms_outbound_history') {
-            cachedOutboundHistory = Array.isArray(value) ? value : [];
-            outboundSerialLogMap = null;
-            cachedProductStockMap = null;
-        }
-        if (key === 'wms_product_weights') {
-            if (Array.isArray(value)) {
-                const dict = {};
-                value.forEach(w => { if (w && w.name) dict[w.name] = parseFloat(w.weight) || 0; });
-                cachedProductWeights = dict;
-            } else {
-                cachedProductWeights = value || {};
+        const currentLocal = localStorage.getItem(key);
+        const newStr = JSON.stringify(value);
+        if (currentLocal !== newStr) {
+            localStorage.setItem(key, newStr);
+            if (key === 'wms_inbound_history') {
+                cachedInboundHistory = null;
+                inboundSerialLogMap = null;
+                weightResolutionCache = null;
+                cachedProductStockMap = null;
             }
-            weightResolutionCache = null;
+            if (key === 'wms_outbound_history') {
+                cachedOutboundHistory = null;
+                outboundSerialLogMap = null;
+                cachedProductStockMap = null;
+            }
+            if (key === 'wms_product_weights') {
+                cachedProductWeights = null;
+                weightResolutionCache = null;
+            }
+            if (key === 'wms_damage_records') {
+                cachedDamageRecords = null;
+                damageSerialsFastSet = null;
+                cachedProductStockMap = null;
+            }
+            if (key === 'wms_deleted_serials') {
+                deletedSerialsFastMap = null;
+            }
+            return true;
         }
-        if (key === 'wms_damage_records') {
-            cachedDamageRecords = Array.isArray(value) ? value : [];
-            damageSerialsFastSet = null;
-            cachedProductStockMap = null;
-        }
-        if (key === 'wms_deleted_serials') {
-            deletedSerialsFastMap = null;
-        }
-
-        safeLocalStorageSet(key, value);
-        return true;
+        return false;
     }
 
     if (isFirebaseConnected && db) {
@@ -630,36 +596,29 @@ document.addEventListener('DOMContentLoaded', () => {
             let sumBoxes = 0;
             let sumWeight = 0.0;
 
-            // Sort to place In-Stock items at the top, ordered by stock count descending
+            // Sort to place Out of Stock items at the top
             const sortedExcelStock = Object.values(productStock).sort((a, b) => {
                 const aIsOut = a.serialsCount === 0 ? 1 : 0;
                 const bIsOut = b.serialsCount === 0 ? 1 : 0;
                 if (aIsOut !== bIsOut) {
-                    return aIsOut - bIsOut; // In-stock first
-                }
-                if (a.serialsCount !== b.serialsCount) {
-                    return b.serialsCount - a.serialsCount; // Higher available stock first
+                    return bIsOut - aIsOut;
                 }
                 return a.name.localeCompare(b.name);
             });
 
             sortedExcelStock.forEach(item => {
-                const inwardQty = item.inboundCount || 0;
-                const availableQty = item.serialsCount;
-                const outwardQty = Math.max(0, inwardQty - availableQty);
+                const currentPcQty = item.serialsCount;
                 const currentBoxQty = item.boxNumbers.size;
                 const totalWeight = item.availableWeight;
 
                 sheetRows.push({
                     "S.No.": rowIdx++,
                     "Product Name": item.name,
-                    "Inward (PCs)": inwardQty,
-                    "Outward (PCs)": outwardQty,
-                    "Available Stock (PCs)": availableQty === 0 ? "Out of Stock" : availableQty,
+                    "Piece Quantity (PCs)": currentPcQty === 0 ? "Out of Stock" : currentPcQty,
                     "Total Weight (kg)": totalWeight > 0 ? parseFloat(totalWeight.toFixed(3)) : 0
                 });
 
-                sumPcs += availableQty;
+                sumPcs += currentPcQty;
                 sumBoxes += currentBoxQty;
                 sumWeight += totalWeight;
             });
@@ -1232,7 +1191,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveActiveSession() {
         if (activeSession) {
-            safeLocalStorageSet('wms_active_inbound_session', activeSession);
+            localStorage.setItem('wms_active_inbound_session', JSON.stringify(activeSession));
             firebaseSet('active_inbound_session', activeSession);
         } else {
             localStorage.removeItem('wms_active_inbound_session');
@@ -1610,7 +1569,7 @@ document.addEventListener('DOMContentLoaded', () => {
         inboundSerialLogMap = null;
         weightResolutionCache = null;
         cachedProductStockMap = null;
-        safeLocalStorageSet('wms_inbound_history', historyData);
+        localStorage.setItem('wms_inbound_history', JSON.stringify(historyData));
         firebaseSet('inbound_history', historyData);
     }
 
@@ -3923,7 +3882,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Outbound state storage and management
     function saveActiveOutboundSession() {
         if (activeOutboundSession) {
-            safeLocalStorageSet('wms_active_outbound_session', activeOutboundSession);
+            localStorage.setItem('wms_active_outbound_session', JSON.stringify(activeOutboundSession));
             firebaseSet('active_outbound_session', activeOutboundSession);
         } else {
             localStorage.removeItem('wms_active_outbound_session');
@@ -4933,7 +4892,7 @@ document.addEventListener('DOMContentLoaded', () => {
         cachedOutboundHistory = historyData;
         outboundSerialLogMap = null;
         cachedProductStockMap = null;
-        safeLocalStorageSet('wms_outbound_history', historyData);
+        localStorage.setItem('wms_outbound_history', JSON.stringify(historyData));
         firebaseSet('outbound_history', historyData);
     }
 
@@ -6098,15 +6057,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Render Detailed Stock Register Table Body based on available stock
         if (registerBody) {
-            // Sort to place In-Stock items at the top, ordered by stock count descending
+            // Sort to place Out of Stock items at the top
             const sortedRegisterStock = Object.values(productStock).sort((a, b) => {
                 const aIsOut = a.serialsCount === 0 ? 1 : 0;
                 const bIsOut = b.serialsCount === 0 ? 1 : 0;
                 if (aIsOut !== bIsOut) {
-                    return aIsOut - bIsOut; // In-stock first
-                }
-                if (a.serialsCount !== b.serialsCount) {
-                    return b.serialsCount - a.serialsCount; // Higher available stock first
+                    return bIsOut - aIsOut;
                 }
                 return a.name.localeCompare(b.name);
             });
@@ -6115,21 +6071,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const totalWeight = item.availableWeight;
                 const theme = productColorsMap[item.name] || colorThemes[0];
                 const isOut = item.serialsCount === 0;
-                const inwardQty = item.inboundCount || 0;
-                const outwardQty = Math.max(0, inwardQty - item.serialsCount);
                 
-                const stockHtml = isOut 
-                    ? `<span style="color: var(--accent-rose); font-weight: 800; background: rgba(244, 63, 94, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(244, 63, 94, 0.15); font-size: 0.72rem; text-transform: uppercase;">0 Pcs (Out of Stock)</span>` 
-                    : `<span style="color: var(--accent-emerald); font-weight: 800;">${item.serialsCount} Pcs</span>`;
+                const qtyHtml = isOut 
+                    ? `<span style="color: var(--accent-rose); font-weight: 800; background: rgba(244, 63, 94, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(244, 63, 94, 0.15); font-size: 0.72rem; text-transform: uppercase;">Out of Stock</span>` 
+                    : item.serialsCount;
                 
                 return `
-                    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05); ${isOut ? 'opacity: 0.65;' : ''}">
+                    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05); ${isOut ? 'opacity: 0.75;' : ''}">
                         <td style="padding: 10px 8px; font-weight: 700; color: var(--text-primary);" title="${item.name}">
                             <span style="border-left: 3px solid ${isOut ? 'var(--accent-rose)' : theme.text}; padding-left: 6px;">${item.name}</span>
                         </td>
-                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 600; color: var(--text-secondary);">${inwardQty}</td>
-                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 600; color: var(--accent-amber);">${outwardQty}</td>
-                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700;">${stockHtml}</td>
+                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: var(--text-secondary);">${qtyHtml}</td>
                         <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: ${isOut ? 'var(--text-muted)' : 'var(--accent-emerald)'};">${totalWeight.toFixed(3)} kg</td>
                     </tr>
                 `;
@@ -6138,7 +6090,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (registerRowsHtml) {
                 registerBody.innerHTML = registerRowsHtml;
             } else {
-                registerBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 20px;">No active stock registered.</td></tr>`;
+                registerBody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 20px;">No active stock registered.</td></tr>`;
             }
         }
 
