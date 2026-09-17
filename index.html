@@ -367,8 +367,14 @@
                         </div>
 
                         <div class="dashboard-card table-card" style="padding: 20px; width: 100%; box-sizing: border-box; overflow: hidden;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
                                 <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">Recent Inbound Logs</h3>
+                                <button type="button" id="btnExportAllInboundSerialsExcel" class="btn-primary" style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); padding: 6px 14px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-style: solid;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                    </svg>
+                                    <span>Export All Inbound Serials (Excel)</span>
+                                </button>
                             </div>
                             <!-- Table hidden — card layout used for all screen sizes -->
                             <div style="display:none;">
@@ -603,6 +609,12 @@
                             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; justify-content: space-between;">
                                 <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">Recent Outbound Logs</h3>
                                 <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                                    <button type="button" id="btnExportAllOutboundSerialsExcel" class="btn-primary" style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); padding: 6px 14px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-style: solid;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                        </svg>
+                                        <span>Export All Outbound Serials (Excel)</span>
+                                    </button>
                                     <div style="display: flex; align-items: center; gap: 6px; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); padding: 5px 12px; border-radius: var(--radius-sm); font-size: 0.82rem; font-weight: 700; color: var(--accent-blue);">
                                         📦 Today's Boxes: <span id="todayOutboundBoxes" style="margin-left:4px;">0</span>
                                     </div>

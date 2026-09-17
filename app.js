@@ -9826,6 +9826,147 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const btnExportAllInboundSerialsExcel = document.getElementById('btnExportAllInboundSerialsExcel');
+    if (btnExportAllInboundSerialsExcel) {
+        btnExportAllInboundSerialsExcel.addEventListener('click', () => {
+            const inboundHistory = getHistory();
+            if (!inboundHistory || inboundHistory.length === 0) {
+                alert("No Inbound Logs found to export.");
+                return;
+            }
+            if (window.XLSX) {
+                const exportRows = [];
+                inboundHistory.forEach(log => {
+                    const logTime = log.timestamp || 'N/A';
+                    const vehicle = log.vehicle || 'N/A';
+                    const supplier = log.supplier || 'N/A';
+                    
+                    if (log.serials && log.serials.length > 0) {
+                        log.serials.forEach(s => {
+                            const itemName = s.itemName || log.item || 'N/A';
+                            const weight = resolveItemWeight(s.serial, itemName);
+                            exportRows.push({
+                                'Inbound Log ID': log.id || 'N/A',
+                                'Inward Date & Time': logTime,
+                                'Vehicle Number': vehicle,
+                                'Supplier / Source': supplier,
+                                'Product Item Name': itemName,
+                                'Box Number': `Box #${s.boxNo || 1}`,
+                                'Serial Barcode Number': s.serial || 'N/A',
+                                'Weight (kg)': parseFloat(weight.toFixed(3)),
+                                'Entry Type': (s.serial && (s.serial.startsWith('WOS-') || s.serial.startsWith('Without Serial'))) ? 'Without Serial Inward' : 'Serial Barcode Inward'
+                            });
+                        });
+                    } else if (log.item && log.count > 0) {
+                        const itemName = log.item;
+                        const weight = resolveItemWeight('WOS-INWARD', itemName);
+                        exportRows.push({
+                            'Inbound Log ID': log.id || 'N/A',
+                            'Inward Date & Time': logTime,
+                            'Vehicle Number': vehicle,
+                            'Supplier / Source': supplier,
+                            'Product Item Name': itemName,
+                            'Box Number': `Box #${log.wosBoxNo || log.boxNo || 1}`,
+                            'Serial Barcode Number': 'WOS-INWARD (Quantity Entry)',
+                            'Weight (kg)': parseFloat((weight * log.count).toFixed(3)),
+                            'Entry Type': 'Without Serial Inward'
+                        });
+                    }
+                });
+
+                if (exportRows.length === 0) {
+                    alert("No Inbound serial records to export.");
+                    return;
+                }
+
+                const ws = XLSX.utils.json_to_sheet(exportRows);
+                ws['!cols'] = [
+                    { wch: 18 },
+                    { wch: 22 },
+                    { wch: 18 },
+                    { wch: 22 },
+                    { wch: 28 },
+                    { wch: 12 },
+                    { wch: 26 },
+                    { wch: 14 },
+                    { wch: 24 }
+                ];
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "All_Inbound_Serials_Log");
+                XLSX.writeFile(wb, `All_Inbound_Serials_Detailed_Log_${new Date().toISOString().slice(0, 10)}.xlsx`);
+            } else {
+                alert("Excel library not loaded.");
+            }
+        });
+    }
+
+    const btnExportAllOutboundSerialsExcel = document.getElementById('btnExportAllOutboundSerialsExcel');
+    if (btnExportAllOutboundSerialsExcel) {
+        btnExportAllOutboundSerialsExcel.addEventListener('click', () => {
+            const outboundHistory = getOutboundHistory();
+            if (!outboundHistory || outboundHistory.length === 0) {
+                alert("No Outbound Logs found to export.");
+                return;
+            }
+            if (window.XLSX) {
+                const exportRows = [];
+                outboundHistory.forEach(log => {
+                    const logTime = log.timestamp || 'N/A';
+                    const shopName = log.shopName || 'N/A';
+                    const invoiceNo = log.invoiceNo || 'N/A';
+                    const pincode = log.pincode || 'N/A';
+                    const odaStatus = log.odaStatus || 'Normal';
+                    const courier = log.courierRecommendation || 'Standard';
+
+                    if (log.serials && log.serials.length > 0) {
+                        log.serials.forEach(s => {
+                            const itemName = s.itemName || 'N/A';
+                            const weight = s.resolvedWeight || resolveItemWeight(s.serial, itemName);
+                            exportRows.push({
+                                'Outbound Log ID': log.id || 'N/A',
+                                'Dispatch Date & Time': logTime,
+                                'Shop Name': shopName,
+                                'Invoice Number': invoiceNo,
+                                'Pincode': pincode,
+                                'ODA Status': odaStatus,
+                                'Courier Partner': courier,
+                                'Product Item Name': itemName,
+                                'Box Number': `Box #${s.boxNo || 1}`,
+                                'Serial Barcode Number': s.serial || 'N/A',
+                                'Weight (kg)': parseFloat(weight.toFixed(3))
+                            });
+                        });
+                    }
+                });
+
+                if (exportRows.length === 0) {
+                    alert("No Outbound serial records to export.");
+                    return;
+                }
+
+                const ws = XLSX.utils.json_to_sheet(exportRows);
+                ws['!cols'] = [
+                    { wch: 18 },
+                    { wch: 22 },
+                    { wch: 26 },
+                    { wch: 18 },
+                    { wch: 12 },
+                    { wch: 14 },
+                    { wch: 18 },
+                    { wch: 28 },
+                    { wch: 12 },
+                    { wch: 26 },
+                    { wch: 14 }
+                ];
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "All_Outbound_Serials_Log");
+                XLSX.writeFile(wb, `All_Outbound_Serials_Detailed_Log_${new Date().toISOString().slice(0, 10)}.xlsx`);
+            } else {
+                alert("Excel library not loaded.");
+            }
+        });
+    }
+
     if (btnClearOdaDatabase) {
         btnClearOdaDatabase.addEventListener('click', () => {
             if (confirm("Are you sure you want to clear the entire ODA database and history? This will disable ODA warnings during dispatch.")) {
