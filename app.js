@@ -630,29 +630,36 @@ document.addEventListener('DOMContentLoaded', () => {
             let sumBoxes = 0;
             let sumWeight = 0.0;
 
-            // Sort to place Out of Stock items at the top
+            // Sort to place In-Stock items at the top, ordered by stock count descending
             const sortedExcelStock = Object.values(productStock).sort((a, b) => {
                 const aIsOut = a.serialsCount === 0 ? 1 : 0;
                 const bIsOut = b.serialsCount === 0 ? 1 : 0;
                 if (aIsOut !== bIsOut) {
-                    return bIsOut - aIsOut;
+                    return aIsOut - bIsOut; // In-stock first
+                }
+                if (a.serialsCount !== b.serialsCount) {
+                    return b.serialsCount - a.serialsCount; // Higher available stock first
                 }
                 return a.name.localeCompare(b.name);
             });
 
             sortedExcelStock.forEach(item => {
-                const currentPcQty = item.serialsCount;
+                const inwardQty = item.inboundCount || 0;
+                const availableQty = item.serialsCount;
+                const outwardQty = Math.max(0, inwardQty - availableQty);
                 const currentBoxQty = item.boxNumbers.size;
                 const totalWeight = item.availableWeight;
 
                 sheetRows.push({
                     "S.No.": rowIdx++,
                     "Product Name": item.name,
-                    "Piece Quantity (PCs)": currentPcQty === 0 ? "Out of Stock" : currentPcQty,
+                    "Inward (PCs)": inwardQty,
+                    "Outward (PCs)": outwardQty,
+                    "Available Stock (PCs)": availableQty === 0 ? "Out of Stock" : availableQty,
                     "Total Weight (kg)": totalWeight > 0 ? parseFloat(totalWeight.toFixed(3)) : 0
                 });
 
-                sumPcs += currentPcQty;
+                sumPcs += availableQty;
                 sumBoxes += currentBoxQty;
                 sumWeight += totalWeight;
             });
@@ -6091,12 +6098,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Render Detailed Stock Register Table Body based on available stock
         if (registerBody) {
-            // Sort to place Out of Stock items at the top
+            // Sort to place In-Stock items at the top, ordered by stock count descending
             const sortedRegisterStock = Object.values(productStock).sort((a, b) => {
                 const aIsOut = a.serialsCount === 0 ? 1 : 0;
                 const bIsOut = b.serialsCount === 0 ? 1 : 0;
                 if (aIsOut !== bIsOut) {
-                    return bIsOut - aIsOut;
+                    return aIsOut - bIsOut; // In-stock first
+                }
+                if (a.serialsCount !== b.serialsCount) {
+                    return b.serialsCount - a.serialsCount; // Higher available stock first
                 }
                 return a.name.localeCompare(b.name);
             });
@@ -6105,17 +6115,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 const totalWeight = item.availableWeight;
                 const theme = productColorsMap[item.name] || colorThemes[0];
                 const isOut = item.serialsCount === 0;
+                const inwardQty = item.inboundCount || 0;
+                const outwardQty = Math.max(0, inwardQty - item.serialsCount);
                 
-                const qtyHtml = isOut 
-                    ? `<span style="color: var(--accent-rose); font-weight: 800; background: rgba(244, 63, 94, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(244, 63, 94, 0.15); font-size: 0.72rem; text-transform: uppercase;">Out of Stock</span>` 
-                    : item.serialsCount;
+                const stockHtml = isOut 
+                    ? `<span style="color: var(--accent-rose); font-weight: 800; background: rgba(244, 63, 94, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(244, 63, 94, 0.15); font-size: 0.72rem; text-transform: uppercase;">0 Pcs (Out of Stock)</span>` 
+                    : `<span style="color: var(--accent-emerald); font-weight: 800;">${item.serialsCount} Pcs</span>`;
                 
                 return `
-                    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05); ${isOut ? 'opacity: 0.75;' : ''}">
+                    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05); ${isOut ? 'opacity: 0.65;' : ''}">
                         <td style="padding: 10px 8px; font-weight: 700; color: var(--text-primary);" title="${item.name}">
                             <span style="border-left: 3px solid ${isOut ? 'var(--accent-rose)' : theme.text}; padding-left: 6px;">${item.name}</span>
                         </td>
-                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: var(--text-secondary);">${qtyHtml}</td>
+                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 600; color: var(--text-secondary);">${inwardQty}</td>
+                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 600; color: var(--accent-amber);">${outwardQty}</td>
+                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700;">${stockHtml}</td>
                         <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: ${isOut ? 'var(--text-muted)' : 'var(--accent-emerald)'};">${totalWeight.toFixed(3)} kg</td>
                     </tr>
                 `;
@@ -6124,7 +6138,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (registerRowsHtml) {
                 registerBody.innerHTML = registerRowsHtml;
             } else {
-                registerBody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 20px;">No active stock registered.</td></tr>`;
+                registerBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 20px;">No active stock registered.</td></tr>`;
             }
         }
 
