@@ -258,30 +258,38 @@
                             </div>
                             
                             <!-- Summary Cards Side-by-Side -->
-                            <div style="display: flex; gap: 16px; flex-shrink: 0; width: 100%; flex-wrap: wrap;">
-                                <div style="flex: 1; min-width: 120px; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
-                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total PCs</span>
-                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-blue);" id="inventoryTotalItems">0</span>
+                            <div style="display: flex; gap: 12px; flex-shrink: 0; width: 100%; flex-wrap: wrap;">
+                                <div style="flex: 1; min-width: 110px; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.12); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">📥 Total Inward</span>
+                                    <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-blue);" id="inventoryTotalInboundCount">0</span>
                                 </div>
-                                <div style="flex: 1; min-width: 120px; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
-                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Unique Items</span>
-                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-emerald);" id="inventoryUniqueProducts">0</span>
+                                <div style="flex: 1; min-width: 110px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.12); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">📤 Total Outward</span>
+                                    <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-rose);" id="inventoryTotalOutboundCount">0</span>
                                 </div>
-                                <div style="flex: 1; min-width: 120px; background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
-                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Boxes</span>
-                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-purple);" id="inventoryTotalBoxes">0</span>
+                                <div style="flex: 1; min-width: 110px; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.12); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">📦 Available Stock</span>
+                                    <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-emerald);" id="inventoryTotalItems">0</span>
                                 </div>
-                                <div style="flex: 1; min-width: 120px; background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
-                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Weight</span>
-                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-amber);" id="inventoryTotalWeight">0.00 kg</span>
+                                <div style="flex: 1; min-width: 110px; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.12); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Unique Items</span>
+                                    <span style="font-size: 1.4rem; font-weight: 800; color: var(--text-primary);" id="inventoryUniqueProducts">0</span>
                                 </div>
-                                <div style="flex: 1; min-width: 120px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
-                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Out of Stock</span>
-                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-rose);" id="inventoryOutOfStockCount">0</span>
+                                <div style="flex: 1; min-width: 110px; background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.12); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Boxes</span>
+                                    <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-purple);" id="inventoryTotalBoxes">0</span>
                                 </div>
-                                <div style="flex: 1; min-width: 120px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.25); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
-                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Damaged</span>
-                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-rose);" id="inventoryTotalDamaged">0</span>
+                                <div style="flex: 1; min-width: 110px; background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.12); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Weight</span>
+                                    <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-amber);" id="inventoryTotalWeight">0.00 kg</span>
+                                </div>
+                                <div style="flex: 1; min-width: 110px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.12); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Out of Stock</span>
+                                    <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-rose);" id="inventoryOutOfStockCount">0</span>
+                                </div>
+                                <div style="flex: 1; min-width: 110px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.25); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Damaged</span>
+                                    <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-rose);" id="inventoryTotalDamaged">0</span>
                                 </div>
                             </div>
 
@@ -292,9 +300,11 @@
                                     <table class="portal-table" style="font-size: 0.85rem; margin: 0; width: 100%;">
                                         <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 10; border-bottom: 1px solid var(--border-color);">
                                             <tr>
-                                                <th style="padding: 10px 8px; font-weight: 700; text-align: left;">Item Name</th>
-                                                <th style="padding: 10px 8px; font-weight: 700; text-align: right; width: 80px;">PC Qty</th>
-                                                <th style="padding: 10px 8px; font-weight: 700; text-align: right; width: 100px;">Total Weight</th>
+                                                <th style="padding: 10px 12px; font-weight: 700; text-align: left;">Item Name</th>
+                                                <th style="padding: 10px 12px; font-weight: 700; text-align: center; width: 100px; color: var(--accent-blue);">📥 Inward</th>
+                                                <th style="padding: 10px 12px; font-weight: 700; text-align: center; width: 100px; color: var(--accent-rose);">📤 Outward</th>
+                                                <th style="padding: 10px 12px; font-weight: 700; text-align: center; width: 130px; color: var(--accent-emerald);">📦 Available Stock</th>
+                                                <th style="padding: 10px 12px; font-weight: 700; text-align: right; width: 120px;">Available Weight</th>
                                             </tr>
                                         </thead>
                                         <tbody id="inventoryStockRegisterBody">

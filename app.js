@@ -6022,9 +6022,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Set Overview Available Stock Counters
         const uniqueProductNames = Object.keys(productStock).filter(name => productStock[name].serialsCount > 0);
         const totalAvailableCount = Object.values(productStock).reduce((sum, item) => sum + item.serialsCount, 0);
+        const totalInboundCount = Object.values(productStock).reduce((sum, item) => sum + (item.inboundCount || 0), 0);
+        const totalOutboundCount = Object.keys(outboundCountsByProduct).reduce((sum, key) => sum + (outboundCountsByProduct[key] || 0), 0);
         const outOfStockProducts = Object.values(productStock).filter(item => item.serialsCount === 0);
         const outOfStockCount = outOfStockProducts.length;
         
+        const totalInboundEl = document.getElementById('inventoryTotalInboundCount');
+        const totalOutboundEl = document.getElementById('inventoryTotalOutboundCount');
         const totalBoxesEl = document.getElementById('inventoryTotalBoxes');
         const totalWeightEl = document.getElementById('inventoryTotalWeight');
         const outOfStockCountEl = document.getElementById('inventoryOutOfStockCount');
@@ -6034,6 +6038,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return sum + item.availableWeight;
         }, 0);
 
+        if (totalInboundEl) totalInboundEl.textContent = totalInboundCount;
+        if (totalOutboundEl) totalOutboundEl.textContent = totalOutboundCount;
         if (totalItemsEl) totalItemsEl.textContent = totalAvailableCount;
         if (uniqueProductsEl) uniqueProductsEl.textContent = uniqueProductNames.length;
         if (totalBoxesEl) totalBoxesEl.textContent = totalAvailableBoxes;
@@ -6071,18 +6077,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 const totalWeight = item.availableWeight;
                 const theme = productColorsMap[item.name] || colorThemes[0];
                 const isOut = item.serialsCount === 0;
+                const inwardQty = item.inboundCount || 0;
+                const outwardQty = outboundCountsByProduct[item.name] || 0;
+                const stockQty = item.serialsCount;
                 
-                const qtyHtml = isOut 
-                    ? `<span style="color: var(--accent-rose); font-weight: 800; background: rgba(244, 63, 94, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(244, 63, 94, 0.15); font-size: 0.72rem; text-transform: uppercase;">Out of Stock</span>` 
-                    : item.serialsCount;
+                const stockQtyHtml = isOut 
+                    ? `<span style="color: var(--accent-rose); font-weight: 800; background: rgba(244, 63, 94, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(244, 63, 94, 0.15); font-size: 0.72rem; text-transform: uppercase;">Out of Stock (0)</span>` 
+                    : `<span style="color: var(--accent-emerald); font-weight: 900; font-family: var(--font-mono); font-size: 0.95rem;">${stockQty} Pcs</span>`;
                 
                 return `
-                    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05); ${isOut ? 'opacity: 0.75;' : ''}">
-                        <td style="padding: 10px 8px; font-weight: 700; color: var(--text-primary);" title="${item.name}">
-                            <span style="border-left: 3px solid ${isOut ? 'var(--accent-rose)' : theme.text}; padding-left: 6px;">${item.name}</span>
+                    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05); ${isOut ? 'opacity: 0.85;' : ''}">
+                        <td style="padding: 10px 12px; font-weight: 700; color: var(--text-primary);" title="${escapeHtml(item.name)}">
+                            <span style="border-left: 3px solid ${isOut ? 'var(--accent-rose)' : theme.text}; padding-left: 6px;">${escapeHtml(item.name)}</span>
                         </td>
-                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: var(--text-secondary);">${qtyHtml}</td>
-                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: ${isOut ? 'var(--text-muted)' : 'var(--accent-emerald)'};">${totalWeight.toFixed(3)} kg</td>
+                        <td class="font-mono" style="padding: 10px 12px; text-align: center; font-weight: 800; color: var(--accent-blue);">${inwardQty}</td>
+                        <td class="font-mono" style="padding: 10px 12px; text-align: center; font-weight: 800; color: var(--accent-rose);">${outwardQty}</td>
+                        <td class="font-mono" style="padding: 10px 12px; text-align: center;">${stockQtyHtml}</td>
+                        <td class="font-mono" style="padding: 10px 12px; text-align: right; font-weight: 700; color: ${isOut ? 'var(--text-muted)' : 'var(--accent-emerald)'};">${totalWeight.toFixed(3)} kg</td>
                     </tr>
                 `;
             }).join('');
@@ -6090,7 +6101,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (registerRowsHtml) {
                 registerBody.innerHTML = registerRowsHtml;
             } else {
-                registerBody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 20px;">No active stock registered.</td></tr>`;
+                registerBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 20px;">No active stock registered.</td></tr>`;
             }
         }
 
@@ -9711,6 +9722,104 @@ document.addEventListener('DOMContentLoaded', () => {
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "ODA_Sample_Format");
                 XLSX.writeFile(wb, "Sample_ODA_Template.xlsx");
+            } else {
+                alert("Excel library not loaded.");
+            }
+        });
+    }
+
+    const btnDownloadStockReportBtn = document.getElementById('btnDownloadStockReportExcel');
+    if (btnDownloadStockReportBtn) {
+        btnDownloadStockReportBtn.addEventListener('click', () => {
+            if (window.XLSX) {
+                const outboundHistory = getOutboundHistory();
+                const inboundSerialsSet = new Set(getInboundSerialLogMap().keys());
+                const outboundSerialsSet = new Set(getOutboundSerialLogMap().keys());
+                const outboundCountsByProduct = {};
+                const unmatchedOutboundCounts = {};
+
+                outboundHistory.forEach(log => {
+                    if (log.serials) {
+                        log.serials.forEach(s => {
+                            if (!s || !s.serial) return;
+                            const cleanSerial = s.serial.trim().toUpperCase();
+                            const itemName = s.itemName;
+                            outboundCountsByProduct[itemName] = (outboundCountsByProduct[itemName] || 0) + 1;
+                            if (!inboundSerialsSet.has(cleanSerial) && !cleanSerial.includes('WOS-OUT-')) {
+                                unmatchedOutboundCounts[itemName] = (unmatchedOutboundCounts[itemName] || 0) + 1;
+                            }
+                        });
+                    }
+                });
+
+                const productStock = {};
+                const weights = getProductWeights();
+                const remainingUnmatchedOutbound = { ...unmatchedOutboundCounts };
+                const inboundHistory = getHistory();
+                const inboundHistoryReversed = [...inboundHistory].reverse();
+
+                inboundHistoryReversed.forEach(log => {
+                    const name = log.item;
+                    if (log.serials && log.serials.length > 0) {
+                        log.serials.forEach(s => {
+                            const itemName = s.itemName || name;
+                            const cleanInboundSerial = s.serial.trim().toUpperCase();
+                            const logW = resolveLogWeight(log, itemName);
+                            const unitWeight = (logW !== undefined) ? logW : (parseFloat(weights[itemName]) || 0);
+
+                            if (!productStock[itemName]) {
+                                productStock[itemName] = { name: itemName, inboundCount: 0, availableCount: 0, availableWeight: 0 };
+                            }
+                            productStock[itemName].inboundCount++;
+                            let isDispatched = false;
+                            if (outboundSerialsSet.has(cleanInboundSerial)) {
+                                isDispatched = true;
+                            } else if (remainingUnmatchedOutbound[itemName] && remainingUnmatchedOutbound[itemName] > 0) {
+                                isDispatched = true;
+                                remainingUnmatchedOutbound[itemName]--;
+                            }
+                            if (!isDispatched) {
+                                productStock[itemName].availableCount++;
+                                productStock[itemName].availableWeight += unitWeight;
+                            }
+                        });
+                    } else if (name && log.count > 0) {
+                        const logW = resolveLogWeight(log, name);
+                        const unitWeight = (logW !== undefined) ? logW : (parseFloat(weights[name]) || 0);
+                        if (!productStock[name]) {
+                            productStock[name] = { name: name, inboundCount: 0, availableCount: 0, availableWeight: 0 };
+                        }
+                        productStock[name].inboundCount += log.count;
+                    }
+                });
+
+                const sortedProducts = Object.values(productStock).sort((a, b) => a.name.localeCompare(b.name));
+                const exportData = sortedProducts.map(p => {
+                    const inQty = p.inboundCount || 0;
+                    const outQty = outboundCountsByProduct[p.name] || 0;
+                    const availableQty = p.availableCount || 0;
+                    return {
+                        'Product Name': p.name,
+                        'Total Inward Received (Pcs)': inQty,
+                        'Total Outward Dispatched (Pcs)': outQty,
+                        'Current Stock Available (Pcs)': availableQty,
+                        'Available Weight (kg)': parseFloat(p.availableWeight.toFixed(3)),
+                        'Stock Status': availableQty === 0 ? 'Out of Stock' : 'In Stock'
+                    };
+                });
+
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                ws['!cols'] = [
+                    { wch: 30 },
+                    { wch: 25 },
+                    { wch: 25 },
+                    { wch: 25 },
+                    { wch: 20 },
+                    { wch: 15 }
+                ];
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Stock_Reconciliation_Report");
+                XLSX.writeFile(wb, `WMS_Stock_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
             } else {
                 alert("Excel library not loaded.");
             }
