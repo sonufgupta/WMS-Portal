@@ -36,6 +36,37 @@ document.addEventListener('DOMContentLoaded', () => {
     let cachedProductStockMap = null;
     let cachedDamageRecords = null;
 
+    function safeLocalStorageSet(key, data) {
+        if (data === null || data === undefined) {
+            try {
+                localStorage.removeItem(key);
+            } catch (e) {}
+            return;
+        }
+        try {
+            const jsonStr = typeof data === 'string' ? data : JSON.stringify(data);
+            localStorage.setItem(key, jsonStr);
+        } catch (e) {
+            console.warn(`LocalStorage quota exceeded for "${key}". Preserving full data in RAM cache & Firebase sync.`, e);
+            if (Array.isArray(data) && data.length > 1) {
+                try {
+                    const pruned = data.slice(0, Math.max(1, Math.floor(data.length / 2)));
+                    localStorage.setItem(key, JSON.stringify(pruned));
+                } catch (err2) {
+                    try {
+                        const minimal = data.slice(0, 1);
+                        localStorage.setItem(key, JSON.stringify(minimal));
+                    } catch (err3) {}
+                }
+            } else if (typeof data === 'object' && data && data.serials && Array.isArray(data.serials)) {
+                try {
+                    const sessionShell = { ...data, serials: data.serials.slice(-200) };
+                    localStorage.setItem(key, JSON.stringify(sessionShell));
+                } catch (err2) {}
+            }
+        }
+    }
+
     // O(1) Fast Index Lookup Maps for Instant Barcode Scanning
     let inboundSerialLogMap = null;    // cleanSerialUpper -> log
     let outboundSerialLogMap = null;   // cleanSerialUpper -> log
@@ -141,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentLocal = localStorage.getItem(key);
         const newStr = JSON.stringify(value);
         if (currentLocal !== newStr) {
-            localStorage.setItem(key, newStr);
+            safeLocalStorageSet(key, value);
             if (key === 'wms_inbound_history') {
                 cachedInboundHistory = null;
                 inboundSerialLogMap = null;
@@ -1191,7 +1222,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveActiveSession() {
         if (activeSession) {
-            localStorage.setItem('wms_active_inbound_session', JSON.stringify(activeSession));
+            safeLocalStorageSet('wms_active_inbound_session', activeSession);
             firebaseSet('active_inbound_session', activeSession);
         } else {
             localStorage.removeItem('wms_active_inbound_session');
@@ -1569,7 +1600,7 @@ document.addEventListener('DOMContentLoaded', () => {
         inboundSerialLogMap = null;
         weightResolutionCache = null;
         cachedProductStockMap = null;
-        localStorage.setItem('wms_inbound_history', JSON.stringify(historyData));
+        safeLocalStorageSet('wms_inbound_history', historyData);
         firebaseSet('inbound_history', historyData);
     }
 
@@ -3882,7 +3913,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Outbound state storage and management
     function saveActiveOutboundSession() {
         if (activeOutboundSession) {
-            localStorage.setItem('wms_active_outbound_session', JSON.stringify(activeOutboundSession));
+            safeLocalStorageSet('wms_active_outbound_session', activeOutboundSession);
             firebaseSet('active_outbound_session', activeOutboundSession);
         } else {
             localStorage.removeItem('wms_active_outbound_session');
@@ -4892,7 +4923,7 @@ document.addEventListener('DOMContentLoaded', () => {
         cachedOutboundHistory = historyData;
         outboundSerialLogMap = null;
         cachedProductStockMap = null;
-        localStorage.setItem('wms_outbound_history', JSON.stringify(historyData));
+        safeLocalStorageSet('wms_outbound_history', historyData);
         firebaseSet('outbound_history', historyData);
     }
 
