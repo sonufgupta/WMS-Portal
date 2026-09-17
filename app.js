@@ -169,36 +169,39 @@ document.addEventListener('DOMContentLoaded', () => {
         if (value === null || value === undefined) {
             return false;
         }
-        const currentLocal = localStorage.getItem(key);
-        const newStr = JSON.stringify(value);
-        if (currentLocal !== newStr) {
-            safeLocalStorageSet(key, value);
-            if (key === 'wms_inbound_history') {
-                cachedInboundHistory = null;
-                inboundSerialLogMap = null;
-                weightResolutionCache = null;
-                cachedProductStockMap = null;
-            }
-            if (key === 'wms_outbound_history') {
-                cachedOutboundHistory = null;
-                outboundSerialLogMap = null;
-                cachedProductStockMap = null;
-            }
-            if (key === 'wms_product_weights') {
-                cachedProductWeights = null;
-                weightResolutionCache = null;
-            }
-            if (key === 'wms_damage_records') {
-                cachedDamageRecords = null;
-                damageSerialsFastSet = null;
-                cachedProductStockMap = null;
-            }
-            if (key === 'wms_deleted_serials') {
-                deletedSerialsFastMap = null;
-            }
-            return true;
+        
+        if (key === 'wms_inbound_history') {
+            cachedInboundHistory = Array.isArray(value) ? value : [];
+            inboundSerialLogMap = null;
+            weightResolutionCache = null;
+            cachedProductStockMap = null;
         }
-        return false;
+        if (key === 'wms_outbound_history') {
+            cachedOutboundHistory = Array.isArray(value) ? value : [];
+            outboundSerialLogMap = null;
+            cachedProductStockMap = null;
+        }
+        if (key === 'wms_product_weights') {
+            if (Array.isArray(value)) {
+                const dict = {};
+                value.forEach(w => { if (w && w.name) dict[w.name] = parseFloat(w.weight) || 0; });
+                cachedProductWeights = dict;
+            } else {
+                cachedProductWeights = value || {};
+            }
+            weightResolutionCache = null;
+        }
+        if (key === 'wms_damage_records') {
+            cachedDamageRecords = Array.isArray(value) ? value : [];
+            damageSerialsFastSet = null;
+            cachedProductStockMap = null;
+        }
+        if (key === 'wms_deleted_serials') {
+            deletedSerialsFastMap = null;
+        }
+
+        safeLocalStorageSet(key, value);
+        return true;
     }
 
     if (isFirebaseConnected && db) {
