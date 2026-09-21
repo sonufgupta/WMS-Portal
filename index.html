@@ -78,7 +78,7 @@
         #giantLogisticsPopupBox .gl-weight-chip {
             display: inline-block;
             background: rgba(245,158,11,0.18);
-            color: #fda4af;
+            color: #ffe36b;
             border: 1px solid #f59e0b;
             border-radius: 20px;
             padding: 4px 16px;
@@ -86,23 +86,23 @@
             font-weight: 800;
             font-size: 1rem;
             margin-bottom: 18px;
-            box-shadow: 0 0 12px rgba(225, 29, 72, 0.3);
+            box-shadow: 0 0 12px rgba(244, 196, 0, 0.22);
         }
         #giantLogisticsPopupBox .gl-btn-row {
             display: flex; gap: 14px; justify-content: center;
         }
         #giantLogisticsPopupBox #btnGiantLogisticsYes {
-            background: linear-gradient(135deg, #f59e0b 0%, #be123c 100%);
+            background: linear-gradient(135deg, #f59e0b 0%, #b88700 100%);
             color: #fff;
             border: 1px solid rgba(254, 205, 211, 0.2); border-radius: 10px;
             padding: 12px 32px; font-weight: 800; font-size: 0.95rem;
             cursor: pointer; transition: all 0.2s ease;
-            box-shadow: 0 4px 14px rgba(225, 29, 72, 0.4);
+            box-shadow: 0 4px 14px rgba(244, 196, 0, 0.28);
         }
         #giantLogisticsPopupBox #btnGiantLogisticsYes:hover {
             background: linear-gradient(135deg, #f59e0b 0%, #f59e0b 100%);
             transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(225, 29, 72, 0.6);
+            box-shadow: 0 6px 20px rgba(244, 196, 0, 0.38);
         }
         #giantLogisticsPopupBox #btnGiantLogisticsCancel {
             background: transparent; color: var(--text-muted, #6e5e6b);
@@ -206,7 +206,13 @@ td{color:#222!important;border-color:#eee7c9!important}
 .bg-red, .bg-rose, .text-red:not(.warning), .text-rose, .accent-red, .accent-rose { background-color:#f59e0b !important; color:#111111 !important; border-color:#f59e0b !important; }
 /* Keep red only for genuine warning/error states */
 .warning, .danger, .error, [class*="warning"], [class*="danger"], [class*="error"] { }
-#debugErrorLogger { background:#b91c1c !important; color:#fff !important; }
+#debugErrorLogger { background:#5c4700 !important; color:#fff !important; }
+</style>
+
+<style id="no-red-palette">
+.text-red,.text-danger,.text-rose,.bg-red,.bg-danger,.bg-rose,.badge-red,.badge-danger,.btn-danger,.btn-red { color:#111 !important; background:#f4c400 !important; border-color:#d4a200 !important; }
+.border-red,.border-danger,.border-rose { border-color:#d4a200 !important; }
+.icon-red,.icon-danger,.icon-rose { color:#f4c400 !important; }
 </style>
 </head>
 <body>
@@ -294,7 +300,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                     </svg>
                     <span>Device Approvals</span>
                 </button>
-                <button type="button" id="btnAdminResetPortal" class="btn-primary" style="display: none; background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2); color: var(--accent-rose); width: 100%; border-style: solid; padding: 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: var(--transition-smooth);">
+                <button type="button" id="btnAdminResetPortal" class="btn-primary" style="display: none; background: rgba(244, 196, 0, 0.08); border: 1px solid rgba(244, 196, 0, 0.2); color: var(--accent-rose); width: 100%; border-style: solid; padding: 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: var(--transition-smooth);">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
@@ -359,7 +365,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                                     <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">📥 Total Inward</span>
                                     <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-blue);" id="inventoryTotalInboundCount">0</span>
                                 </div>
-                                <div style="flex: 1; min-width: 110px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.12); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                <div style="flex: 1; min-width: 110px; background: rgba(244, 196, 0, 0.05); border: 1px solid rgba(244, 196, 0, 0.12); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
                                     <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">📤 Total Outward</span>
                                     <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-rose);" id="inventoryTotalOutboundCount">0</span>
                                 </div>
@@ -379,11 +385,11 @@ td{color:#222!important;border-color:#eee7c9!important}
                                     <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Weight</span>
                                     <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-amber);" id="inventoryTotalWeight">0.00 kg</span>
                                 </div>
-                                <div style="flex: 1; min-width: 110px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.12); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                <div style="flex: 1; min-width: 110px; background: rgba(244, 196, 0, 0.05); border: 1px solid rgba(244, 196, 0, 0.12); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
                                     <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Out of Stock</span>
                                     <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-rose);" id="inventoryOutOfStockCount">0</span>
                                 </div>
-                                <div style="flex: 1; min-width: 110px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.25); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                <div style="flex: 1; min-width: 110px; background: rgba(244, 196, 0, 0.05); border: 1px solid rgba(244, 196, 0, 0.25); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
                                     <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Damaged</span>
                                     <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-rose);" id="inventoryTotalDamaged">0</span>
                                 </div>
@@ -605,7 +611,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                                         </div>
                                         <div class="card-title-group" style="display: flex; align-items: center; gap: 12px;">
                                             <h2 style="margin: 0;">Scanned Serials</h2>
-                                            <button type="button" id="clearAllInboundSerialsBtn" class="btn-clear-all" title="Clear all scanned serials" style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2); color: var(--accent-rose); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth); display: inline-flex; align-items: center; gap: 4px;">
+                                            <button type="button" id="clearAllInboundSerialsBtn" class="btn-clear-all" title="Clear all scanned serials" style="background: rgba(244, 196, 0, 0.08); border: 1px solid rgba(244, 196, 0, 0.2); color: var(--accent-rose); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth); display: inline-flex; align-items: center; gap: 4px;">
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                 </svg>
@@ -777,7 +783,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                                         </svg>
                                         <span>End & Save Session</span>
                                     </button>
-                                    <button type="button" class="btn-secondary-link" id="cancelActiveOutboundSessionBtn" style="color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.2); background: rgba(244, 63, 94, 0.05); padding: 10px 18px; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
+                                    <button type="button" class="btn-secondary-link" id="cancelActiveOutboundSessionBtn" style="color: var(--accent-rose); border: 1px solid rgba(244, 196, 0, 0.2); background: rgba(244, 196, 0, 0.05); padding: 10px 18px; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
                                         Cancel Session
                                     </button>
                                 </div>
@@ -1007,7 +1013,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                             </div>
                             
                             <!-- Right Column: Deleted Serials (Trash Bin) -->
-                            <div class="dashboard-card" style="padding: 24px; display: flex; flex-direction: column; gap: 16px; height: 680px; overflow: hidden; border: 1px dashed rgba(244, 63, 94, 0.35); background: rgba(244, 63, 94, 0.01);">
+                            <div class="dashboard-card" style="padding: 24px; display: flex; flex-direction: column; gap: 16px; height: 680px; overflow: hidden; border: 1px dashed rgba(244, 196, 0, 0.35); background: rgba(244, 196, 0, 0.01);">
                                 <div style="display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px;">
                                     <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--accent-rose); margin: 0; display: flex; align-items: center; gap: 8px;">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px;">
@@ -1094,7 +1100,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                                     <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Inward Pcs</span>
                                     <span style="font-size: 1.3rem; font-weight: 800; color: var(--accent-blue);" id="misTotalInwardPcs">0</span>
                                 </div>
-                                <div style="flex: 1 1 180px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                <div style="flex: 1 1 180px; background: rgba(244, 196, 0, 0.05); border: 1px solid rgba(244, 196, 0, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
                                     <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Outward Pcs</span>
                                     <span style="font-size: 1.3rem; font-weight: 800; color: var(--accent-rose);" id="misTotalOutwardPcs">0</span>
                                 </div>
@@ -1123,7 +1129,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                             </div>
                             
                             <!-- Scanner Input Row -->
-                            <div style="display: flex; gap: 12px; align-items: center; background: rgba(244, 63, 94, 0.02); border: 1px dashed rgba(244, 63, 94, 0.3); padding: 16px; border-radius: var(--radius-md);">
+                            <div style="display: flex; gap: 12px; align-items: center; background: rgba(244, 196, 0, 0.02); border: 1px dashed rgba(244, 196, 0, 0.3); padding: 16px; border-radius: var(--radius-md);">
                                 <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
                                     <label style="font-size: 0.78rem; font-weight: 700; color: var(--text-secondary);">Scan Damaged Product Serial Number</label>
                                     <input type="text" id="damageSerialInput" placeholder="Scan or enter damaged serial number..." style="width: 100%; padding: 10px 14px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.9rem; font-family: var(--font-mono); outline: none;">
@@ -1188,7 +1194,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                                         </svg>
                                         <span>Export All ODA (Excel)</span>
                                     </button>
-                                    <button type="button" id="btnClearOdaDatabase" class="btn-primary" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose); padding: 8px 16px; font-size: 0.8rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
+                                    <button type="button" id="btnClearOdaDatabase" class="btn-primary" style="background: rgba(244, 196, 0, 0.1); border: 1px solid rgba(244, 196, 0, 0.3); color: var(--accent-rose); padding: 8px 16px; font-size: 0.8rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
                                         Clear Entire Database
                                     </button>
                                 </div>
@@ -1409,7 +1415,7 @@ td{color:#222!important;border-color:#eee7c9!important}
     </div>
     <!-- Custom Reject Modal for Scan Validation Mismatches -->
     <div class="modal-overlay" id="skuWarningModal">
-        <div class="modal-card" style="border-color: var(--accent-rose); box-shadow: 0 20px 50px rgba(244, 63, 94, 0.15);">
+        <div class="modal-card" style="border-color: var(--accent-rose); box-shadow: 0 20px 50px rgba(244, 196, 0, 0.15);">
             <div class="modal-header" style="color: var(--accent-rose);">
                 <h3 style="display: flex; align-items: center; gap: 8px;">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:24px; height:24px; stroke-width: 2.5;">
@@ -1449,7 +1455,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                 <button type="button" id="warningAddProductBtn" style="display: none; border: 1px solid var(--accent-blue); color: var(--accent-blue); background: rgba(59,130,246,0.05); flex: 1; border-radius: var(--radius-sm); font-weight: 700; padding: 12px; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); text-align: center;">
                     Add Product
                 </button>
-                <button type="button" class="btn-primary" id="rejectScanBtn" style="background-color: var(--accent-rose); box-shadow: 0 4px 12px rgba(244, 63, 94, 0.2); flex: 1; width: 100%;">
+                <button type="button" class="btn-primary" id="rejectScanBtn" style="background-color: var(--accent-rose); box-shadow: 0 4px 12px rgba(244, 196, 0, 0.2); flex: 1; width: 100%;">
                     Reject & Dismiss Scan
                 </button>
             </div>
@@ -1734,7 +1740,7 @@ td{color:#222!important;border-color:#eee7c9!important}
             </div>
             
             <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; margin-top: auto;">
-                <button type="button" class="btn-danger" id="btnClearAllDevicesBtn" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose); padding: 8px 16px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-style: solid;">
+                <button type="button" class="btn-danger" id="btnClearAllDevicesBtn" style="background: rgba(244, 196, 0, 0.1); border: 1px solid rgba(244, 196, 0, 0.3); color: var(--accent-rose); padding: 8px 16px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-style: solid;">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
