@@ -112,6 +112,213 @@
         }
         #giantLogisticsPopupBox #btnGiantLogisticsCancel:hover { background: rgba(225,29,72,0.1); color: #ffffff; }
     </style>
+
+<!-- PREMIUM WMS THEME v2 -->
+<style id="premium-wms-theme">
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap');
+
+:root {
+  --font-sans: 'Inter', 'Segoe UI', Arial, sans-serif !important;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace !important;
+  --bg-primary: #070b14 !important;
+  --bg-card: rgba(15, 23, 42, 0.88) !important;
+  --bg-card-hover: rgba(20, 30, 52, 0.96) !important;
+  --border-color: rgba(148, 163, 184, 0.14) !important;
+  --text-primary: #f8fafc !important;
+  --text-secondary: #b8c4d6 !important;
+  --text-muted: #718096 !important;
+  --accent-blue: #5b8cff !important;
+  --accent-emerald: #2dd4bf !important;
+  --accent-amber: #f6c453 !important;
+  --accent-rose: #fb7185 !important;
+  --accent-purple: #a78bfa !important;
+  --accent-blue-glow: rgba(91,140,255,.13) !important;
+  --accent-emerald-glow: rgba(45,212,191,.13) !important;
+  --radius-sm: 9px !important;
+  --radius-md: 13px !important;
+  --radius-lg: 17px !important;
+  --radius-xl: 22px !important;
+  --transition-smooth: 180ms cubic-bezier(.2,.8,.2,1) !important;
+}
+
+html, body {
+  font-family: var(--font-sans);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(91,140,255,.11), transparent 28%),
+    radial-gradient(circle at 88% 18%, rgba(167,139,250,.08), transparent 25%),
+    radial-gradient(circle at 55% 100%, rgba(45,212,191,.06), transparent 30%),
+    #070b14 !important;
+  color: var(--text-primary) !important;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: .34;
+  background-image:
+    linear-gradient(rgba(148,163,184,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148,163,184,.025) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(to bottom, black, transparent 88%);
+}
+
+.app-container, .main-panel, .content-area {
+  position: relative;
+  z-index: 1;
+}
+
+.app-sidebar {
+  background:
+    linear-gradient(180deg, rgba(11,18,32,.98), rgba(7,11,20,.98)) !important;
+  border-right: 1px solid rgba(148,163,184,.13) !important;
+  box-shadow: 18px 0 55px rgba(0,0,0,.22) !important;
+  backdrop-filter: blur(18px);
+}
+
+.sidebar-logo {
+  border-bottom: 1px solid rgba(148,163,184,.11) !important;
+}
+
+.logo-icon, .card-icon {
+  background: linear-gradient(135deg, #5b8cff, #8b5cf6) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 26px rgba(91,140,255,.22) !important;
+}
+
+.logo-text, .header-title h1, h1, h2, h3, h4 {
+  font-family: 'Manrope', var(--font-sans);
+  letter-spacing: -.025em;
+}
+
+.nav-link {
+  border: 1px solid transparent !important;
+  color: #93a4bc !important;
+  border-radius: 11px !important;
+  margin: 3px 10px !important;
+  transition: var(--transition-smooth) !important;
+}
+
+.nav-link:hover {
+  color: #eef4ff !important;
+  background: rgba(91,140,255,.07) !important;
+  border-color: rgba(91,140,255,.12) !important;
+  transform: translateX(2px);
+}
+
+.nav-link.active {
+  color: #ffffff !important;
+  background: linear-gradient(90deg, rgba(91,140,255,.18), rgba(139,92,246,.08)) !important;
+  border-color: rgba(91,140,255,.22) !important;
+  box-shadow: inset 3px 0 0 #5b8cff, 0 7px 22px rgba(0,0,0,.14) !important;
+}
+
+.app-header {
+  background: rgba(7,11,20,.78) !important;
+  border-bottom: 1px solid rgba(148,163,184,.11) !important;
+  backdrop-filter: blur(18px) saturate(130%);
+}
+
+.header-widget, .theme-btn {
+  background: rgba(15,23,42,.75) !important;
+  border: 1px solid rgba(148,163,184,.15) !important;
+  color: #dbe7f7 !important;
+  box-shadow: 0 7px 25px rgba(0,0,0,.14);
+}
+
+.dashboard-card, .session-bar-card, .welcome-container, .table-card {
+  background:
+    linear-gradient(145deg, rgba(17,27,47,.92), rgba(10,17,30,.91)) !important;
+  border: 1px solid rgba(148,163,184,.14) !important;
+  border-radius: var(--radius-xl) !important;
+  box-shadow:
+    0 18px 45px rgba(0,0,0,.20),
+    inset 0 1px 0 rgba(255,255,255,.025) !important;
+  backdrop-filter: blur(16px);
+}
+
+.dashboard-card:hover {
+  border-color: rgba(91,140,255,.22) !important;
+}
+
+.portal-table thead, table thead {
+  background: rgba(8,13,24,.88) !important;
+}
+
+.portal-table th, table th {
+  color: #9fb0c7 !important;
+  letter-spacing: .045em;
+}
+
+.portal-table td, table td {
+  border-color: rgba(148,163,184,.09) !important;
+}
+
+input, select, textarea {
+  background: rgba(5,10,19,.78) !important;
+  color: #f1f5f9 !important;
+  border-color: rgba(148,163,184,.16) !important;
+  border-radius: 11px !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: rgba(91,140,255,.72) !important;
+  box-shadow: 0 0 0 3px rgba(91,140,255,.12), 0 8px 25px rgba(0,0,0,.16) !important;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #5b8cff 0%, #7c5cff 100%) !important;
+  border-color: rgba(255,255,255,.08) !important;
+  color: #fff !important;
+  border-radius: 11px !important;
+  box-shadow: 0 8px 22px rgba(91,140,255,.20) !important;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 11px 28px rgba(91,140,255,.28) !important;
+}
+
+.btn-secondary {
+  background: rgba(15,23,42,.65) !important;
+  border-radius: 11px !important;
+}
+
+.status-badge {
+  background: rgba(45,212,191,.06) !important;
+  border: 1px solid rgba(45,212,191,.16) !important;
+  border-radius: 10px !important;
+}
+
+.table-container {
+  background: rgba(5,10,19,.55) !important;
+  border-color: rgba(148,163,184,.11) !important;
+}
+
+::selection {
+  background: rgba(91,140,255,.35);
+  color: #fff;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(#334155, #475569);
+  border-radius: 20px;
+}
+::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+@media (max-width: 900px) {
+  .dashboard-card, .session-bar-card, .welcome-container {
+    border-radius: 16px !important;
+  }
+}
+</style>
+
 </head>
 <body>
     <div class="app-container">
