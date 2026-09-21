@@ -6075,25 +6075,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const registerRowsHtml = sortedRegisterStock.map(item => {
                 const totalWeight = item.availableWeight;
-                const theme = productColorsMap[item.name] || colorThemes[0];
-                const isOut = item.serialsCount === 0;
-                const inwardQty = item.inboundCount || 0;
-                const outwardQty = outboundCountsByProduct[item.name] || 0;
                 const stockQty = item.serialsCount;
-                
-                const stockQtyHtml = isOut 
-                    ? `<span style="color: var(--accent-rose); font-weight: 800; background: rgba(244, 63, 94, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(244, 63, 94, 0.15); font-size: 0.72rem; text-transform: uppercase;">Out of Stock (0)</span>` 
-                    : `<span style="color: var(--accent-emerald); font-weight: 900; font-family: var(--font-mono); font-size: 0.95rem;">${stockQty} Pcs</span>`;
-                
+
                 return `
-                    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05); ${isOut ? 'opacity: 0.85;' : ''}">
-                        <td style="padding: 10px 12px; font-weight: 700; color: var(--text-primary);" title="${escapeHtml(item.name)}">
-                            <span style="border-left: 3px solid ${isOut ? 'var(--accent-rose)' : theme.text}; padding-left: 6px;">${escapeHtml(item.name)}</span>
-                        </td>
-                        <td class="font-mono" style="padding: 10px 12px; text-align: center; font-weight: 800; color: var(--accent-blue);">${inwardQty}</td>
-                        <td class="font-mono" style="padding: 10px 12px; text-align: center; font-weight: 800; color: var(--accent-rose);">${outwardQty}</td>
-                        <td class="font-mono" style="padding: 10px 12px; text-align: center;">${stockQtyHtml}</td>
-                        <td class="font-mono" style="padding: 10px 12px; text-align: right; font-weight: 700; color: ${isOut ? 'var(--text-muted)' : 'var(--accent-emerald)'};">${totalWeight.toFixed(3)} kg</td>
+                    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
+                        <td style="padding: 10px 12px; font-weight: 700; color: var(--text-primary);" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</td>
+                        <td class="font-mono" style="padding: 10px 12px; text-align: center; font-weight: 800; color: var(--accent-emerald);">${stockQty}</td>
+                        <td class="font-mono" style="padding: 10px 12px; text-align: right; font-weight: 700; color: var(--accent-amber);">${totalWeight.toFixed(3)} kg</td>
                     </tr>
                 `;
             }).join('');
@@ -6101,7 +6089,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (registerRowsHtml) {
                 registerBody.innerHTML = registerRowsHtml;
             } else {
-                registerBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 20px;">No active stock registered.</td></tr>`;
+                registerBody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 20px;">No active stock registered.</td></tr>`;
             }
         }
 
