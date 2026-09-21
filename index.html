@@ -214,6 +214,29 @@ td{color:#222!important;border-color:#eee7c9!important}
 .border-red,.border-danger,.border-rose { border-color:#d4a200 !important; }
 .icon-red,.icon-danger,.icon-rose { color:#f4c400 !important; }
 </style>
+
+<style id="final-white-yellow-black-theme">
+/* FINAL PALETTE: red/pink is removed from normal UI. */
+:root {
+  --accent-rose: #f4c400 !important;
+  --accent-red: #f4c400 !important;
+  --danger-accent: #f4c400 !important;
+}
+/* Any red/rose UI element now uses the approved yellow accent with black text. */
+.text-red,.text-rose,.text-danger,.accent-red,.accent-rose,
+.bg-red,.bg-rose,.bg-danger,.badge-red,.badge-rose,.badge-danger,
+.btn-red,.btn-danger {
+  color:#111111 !important;
+  background:#f4c400 !important;
+  border-color:#d4a200 !important;
+}
+.border-red,.border-rose,.border-danger { border-color:#d4a200 !important; }
+.icon-red,.icon-rose,.icon-danger { color:#f4c400 !important; }
+/* Status labels that were pink/red become yellow status labels. */
+[class*="red"], [class*="rose"] {
+  --accent-rose:#f4c400 !important;
+}
+</style>
 </head>
 <body>
     <div class="app-container">
