@@ -19,7 +19,7 @@
             if (!errDiv) {
                 errDiv = document.createElement('div');
                 errDiv.id = 'debugErrorLogger';
-                errDiv.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; background: #f43f5e; color: white; padding: 12px; font-family: monospace; z-index: 999999; font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-height: 150px; overflow-y: auto;';
+                errDiv.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; background: #f59e0b; color: white; padding: 12px; font-family: monospace; z-index: 999999; font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-height: 150px; overflow-y: auto;';
                 document.body.appendChild(errDiv);
             }
             errDiv.innerHTML += '<div><b>Runtime Error:</b> ' + e.message + ' at ' + e.filename + ':' + e.lineno + '</div>';
@@ -27,9 +27,9 @@
     </script>
     <style>
         @keyframes pulseOda {
-            0% { transform: scale(1); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
-            50% { transform: scale(1.05); box-shadow: 0 4px 20px rgba(239, 68, 68, 0.5); }
-            100% { transform: scale(1); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
+            0% { transform: scale(1); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2); }
+            50% { transform: scale(1.05); box-shadow: 0 4px 20px rgba(245, 158, 11, 0.5); }
+            100% { transform: scale(1); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2); }
         }
         @keyframes pulseOdaNormal {
             0% { transform: scale(1); }
@@ -37,9 +37,9 @@
             100% { transform: scale(1); }
         }
         @keyframes giantBadgePulse {
-            0%   { box-shadow: 0 4px 14px rgba(225,29,72,0.35); }
-            50%  { box-shadow: 0 4px 24px rgba(225,29,72,0.7); }
-            100% { box-shadow: 0 4px 14px rgba(225,29,72,0.35); }
+            0%   { box-shadow: 0 4px 14px rgba(245,158,11,0.35); }
+            50%  { box-shadow: 0 4px 24px rgba(245,158,11,0.7); }
+            100% { box-shadow: 0 4px 14px rgba(245,158,11,0.35); }
         }
         /* Giant Logistics Confirm Popup */
         #giantLogisticsPopup {
@@ -51,13 +51,13 @@
         #giantLogisticsPopup.visible { display: flex; }
         #giantLogisticsPopupBox {
             background: var(--bg-card, #1a0f18);
-            border: 2px solid #e11d48;
+            border: 2px solid #f59e0b;
             border-radius: 16px;
             padding: 36px 40px;
             max-width: 440px;
             width: 90%;
             text-align: center;
-            box-shadow: 0 20px 60px rgba(225,29,72,0.25);
+            box-shadow: 0 20px 60px rgba(245,158,11,0.25);
             animation: popIn 0.25s cubic-bezier(0.34,1.56,0.64,1);
         }
         @keyframes popIn {
@@ -68,7 +68,7 @@
             font-size: 3rem; margin-bottom: 12px;
         }
         #giantLogisticsPopupBox h3 {
-            font-size: 1.3rem; font-weight: 800; color: #f43f5e;
+            font-size: 1.3rem; font-weight: 800; color: #f59e0b;
             margin: 0 0 10px;
         }
         #giantLogisticsPopupBox p {
@@ -77,9 +77,9 @@
         }
         #giantLogisticsPopupBox .gl-weight-chip {
             display: inline-block;
-            background: rgba(225,29,72,0.18);
+            background: rgba(245,158,11,0.18);
             color: #fda4af;
-            border: 1px solid #e11d48;
+            border: 1px solid #f59e0b;
             border-radius: 20px;
             padding: 4px 16px;
             font-family: var(--font-mono, monospace);
@@ -92,7 +92,7 @@
             display: flex; gap: 14px; justify-content: center;
         }
         #giantLogisticsPopupBox #btnGiantLogisticsYes {
-            background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
+            background: linear-gradient(135deg, #f59e0b 0%, #be123c 100%);
             color: #fff;
             border: 1px solid rgba(254, 205, 211, 0.2); border-radius: 10px;
             padding: 12px 32px; font-weight: 800; font-size: 0.95rem;
@@ -100,7 +100,7 @@
             box-shadow: 0 4px 14px rgba(225, 29, 72, 0.4);
         }
         #giantLogisticsPopupBox #btnGiantLogisticsYes:hover {
-            background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+            background: linear-gradient(135deg, #f59e0b 0%, #f59e0b 100%);
             transform: translateY(-1px);
             box-shadow: 0 6px 20px rgba(225, 29, 72, 0.6);
         }
@@ -110,7 +110,7 @@
             padding: 12px 28px; font-weight: 700; font-size: 0.95rem;
             cursor: pointer; transition: background 0.2s;
         }
-        #giantLogisticsPopupBox #btnGiantLogisticsCancel:hover { background: rgba(225,29,72,0.1); color: #ffffff; }
+        #giantLogisticsPopupBox #btnGiantLogisticsCancel:hover { background: rgba(245,158,11,0.1); color: #ffffff; }
     </style>
 <style id="premium-white-yellow-theme">
 :root{
@@ -199,6 +199,15 @@ td{color:#222!important;border-color:#eee7c9!important}
 .white-surface,.empty-state,.dropdown-menu,.menu-panel{background:#fff!important;color:#111!important}
 </style>
 
+
+<style id="premium-white-yellow-black-red-cleanup">
+:root { --danger-accent:#f59e0b; --warning-accent:#f59e0b; }
+/* Remove decorative red/rose from normal UI */
+.bg-red, .bg-rose, .text-red:not(.warning), .text-rose, .accent-red, .accent-rose { background-color:#f59e0b !important; color:#111111 !important; border-color:#f59e0b !important; }
+/* Keep red only for genuine warning/error states */
+.warning, .danger, .error, [class*="warning"], [class*="danger"], [class*="error"] { }
+#debugErrorLogger { background:#b91c1c !important; color:#fff !important; }
+</style>
 </head>
 <body>
     <div class="app-container">
