@@ -32,6 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let cachedInboundHistory = null;
     let cachedOutboundHistory = null;
     let cachedProductWeights = null;
+    let cachedHiddenProducts = null;      // product names deleted from the Stock Register
+    let registerEditList = [];            // latest rows shown in the Edit Stock Register popup
     let weightResolutionCache = null;
     let cachedProductStockMap = null;
     let cachedDamageRecords = null;
@@ -165,6 +167,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (key === 'wms_deleted_serials') {
                 deletedSerialsFastMap = null;
             }
+            if (key === 'wms_hidden_products') {
+                cachedHiddenProducts = null;
+            }
             return true;
         }
         return false;
@@ -225,6 +230,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (syncCloudDataToLocal('wms_product_weights', val)) {
                     scheduleSyncUIRender();
                     console.log("Product Weights synchronized.");
+                }
+            }
+        });
+
+        // 3b. Sync deleted (hidden) products of the Stock Register
+        db.ref('wms_data/hidden_products').on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val === null) {
+                localStorage.setItem('wms_hidden_products', '[]');
+                cachedHiddenProducts = null;
+                scheduleSyncUIRender();
+            } else {
+                if (syncCloudDataToLocal('wms_hidden_products', val)) {
+                    scheduleSyncUIRender();
                 }
             }
         });
@@ -597,7 +616,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let sumWeight = 0.0;
 
             // Sort to place Out of Stock items at the top
-            const sortedExcelStock = Object.values(productStock).sort((a, b) => {
+            const sortedExcelStock = Object.values(productStock).filter(p => !getHiddenProducts().has(p.name)).sort((a, b) => {
                 const aIsOut = a.serialsCount === 0 ? 1 : 0;
                 const bIsOut = b.serialsCount === 0 ? 1 : 0;
                 if (aIsOut !== bIsOut) {
@@ -688,6 +707,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             wos_items: null,
                             inbound_items: null,
                             deleted_serials: null,
+                            hidden_products: null,
                             reset_timestamp: resetTime
                         };
 
@@ -1020,6 +1040,30 @@ document.addEventListener('DOMContentLoaded', () => {
         
         localStorage.setItem('wms_product_weights', JSON.stringify(weightsArray));
         firebaseSet('product_weights', weightsArray);
+    }
+
+    // --- Deleted (hidden) products of the Product Stock Register ---
+    function getHiddenProducts() {
+        if (cachedHiddenProducts !== null) {
+            return cachedHiddenProducts;
+        }
+        let list = [];
+        try {
+            const saved = localStorage.getItem('wms_hidden_products');
+            const parsed = saved ? JSON.parse(saved) : [];
+            if (Array.isArray(parsed)) list = parsed.filter(n => typeof n === 'string');
+        } catch (e) {
+            list = [];
+        }
+        cachedHiddenProducts = new Set(list);
+        return cachedHiddenProducts;
+    }
+
+    function saveHiddenProducts(hiddenSet) {
+        cachedHiddenProducts = hiddenSet;
+        const arr = Array.from(hiddenSet);
+        localStorage.setItem('wms_hidden_products', JSON.stringify(arr));
+        firebaseSet('hidden_products', arr);
     }
 
     // --- Auto-SKU Alphabet Pattern Extraction and Matching Helpers ---
@@ -2282,8 +2326,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Add any missing items to inboundItems list
         let updated = false;
+        const hiddenProducts = getHiddenProducts();
         uniqueItems.forEach(item => {
-            if (item && !inboundItems.includes(item)) {
+            if (item && !hiddenProducts.has(item) && !inboundItems.includes(item)) {
                 inboundItems.push(item);
                 updated = true;
             }
@@ -2429,6 +2474,11 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const itemName = newItemNameInput.value.trim();
             if (itemName) {
+                const hiddenSet = getHiddenProducts();
+                if (hiddenSet.has(itemName)) {
+                    hiddenSet.delete(itemName);
+                    saveHiddenProducts(hiddenSet);
+                }
                 if (!inboundItems.includes(itemName)) {
                     inboundItems.push(itemName);
                     saveInboundItems();
@@ -5856,6 +5906,105 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- Product Stock Register: Edit popup (list all products + delete) ---
+    function renderEditStockRegisterList() {
+        const modal = document.getElementById('editStockRegisterModal');
+        const body = document.getElementById('editStockRegisterBody');
+        if (!modal || !body || !modal.classList.contains('active')) return;
+
+        body.innerHTML = '';
+        if (registerEditList.length === 0) {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = 4;
+            td.textContent = 'No products found.';
+            td.style.cssText = 'text-align: center; color: var(--text-muted); font-style: italic; padding: 20px;';
+            tr.appendChild(td);
+            body.appendChild(tr);
+            return;
+        }
+
+        registerEditList.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid rgba(255, 255, 255, 0.05)';
+
+            const tdName = document.createElement('td');
+            tdName.style.cssText = 'padding: 10px 12px; font-weight: 700; color: var(--text-primary); word-break: break-word;';
+            tdName.textContent = item.name;
+
+            const tdQty = document.createElement('td');
+            tdQty.className = 'font-mono';
+            tdQty.style.cssText = 'padding: 10px 12px; text-align: center; font-weight: 800; color: var(--accent-emerald);';
+            tdQty.textContent = item.qty;
+
+            const tdWeight = document.createElement('td');
+            tdWeight.className = 'font-mono';
+            tdWeight.style.cssText = 'padding: 10px 12px; text-align: right; font-weight: 700; color: var(--accent-amber); white-space: nowrap;';
+            tdWeight.textContent = item.weight.toFixed(3) + ' kg';
+
+            const tdAction = document.createElement('td');
+            tdAction.style.cssText = 'padding: 10px 12px; text-align: right;';
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.title = 'Delete product';
+            delBtn.style.cssText = 'background: #fff0f3; color: #ef3b6d; border: 1px solid #ef3b6d; border-radius: var(--radius-sm); padding: 6px 12px; font-size: 0.78rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;';
+            delBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 13px; height: 13px; stroke-width: 2.5;"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg><span>Delete</span>';
+            delBtn.addEventListener('click', () => deleteRegisterProduct(item));
+            tdAction.appendChild(delBtn);
+
+            tr.appendChild(tdName);
+            tr.appendChild(tdQty);
+            tr.appendChild(tdWeight);
+            tr.appendChild(tdAction);
+            body.appendChild(tr);
+        });
+    }
+
+    function deleteRegisterProduct(item) {
+        const stockNote = item.qty > 0 ? ` (${item.qty} pcs still in stock)` : '';
+        const pwd = prompt(`Delete product "${item.name}"${stockNote} from the Stock Register?\n\nEnter password to confirm:`);
+        if (pwd === null) return;
+        if (pwd !== '2026') {
+            alert('Incorrect password! Product was not deleted.');
+            return;
+        }
+
+        // Hide from Stock Register (inbound/outbound logs stay untouched)
+        const hidden = getHiddenProducts();
+        hidden.add(item.name);
+        saveHiddenProducts(hidden);
+
+        // Remove the name from the product dropdown lists too
+        inboundItems = inboundItems.filter(i => i !== item.name);
+        saveInboundItems();
+        saveWosItems(getWosItems().filter(i => i !== item.name));
+        renderDropdownItems();
+        renderActiveDropdownItems();
+        renderWosDropdownItems();
+
+        renderInventoryPanel();
+    }
+
+    const btnEditStockRegister = document.getElementById('btnEditStockRegister');
+    const editStockRegisterModal = document.getElementById('editStockRegisterModal');
+    function closeEditStockRegisterModal() {
+        if (editStockRegisterModal) editStockRegisterModal.classList.remove('active');
+    }
+    if (btnEditStockRegister && editStockRegisterModal) {
+        btnEditStockRegister.addEventListener('click', () => {
+            editStockRegisterModal.classList.add('active');
+            renderInventoryPanel();
+            renderEditStockRegisterList();
+        });
+        const closeEditBtn = document.getElementById('closeEditStockRegisterModalBtn');
+        const closeEditFooterBtn = document.getElementById('closeEditStockRegisterModalFooterBtn');
+        if (closeEditBtn) closeEditBtn.addEventListener('click', closeEditStockRegisterModal);
+        if (closeEditFooterBtn) closeEditFooterBtn.addEventListener('click', closeEditStockRegisterModal);
+        editStockRegisterModal.addEventListener('click', (e) => {
+            if (e.target === editStockRegisterModal) closeEditStockRegisterModal();
+        });
+    }
+
     // --- Inventory Section Log Rendering & Search ---
     let productColorsMap = {};
     const colorThemes = [
@@ -5917,6 +6066,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const availableSerials = [];
         const productStock = {};
+        const hiddenProducts = getHiddenProducts();
         const weights = getProductWeights();
         const damageRecords = getDamageRecords();
         const damageSerials = new Set(damageRecords.map(r => r.serial.trim().toUpperCase()));
@@ -5941,6 +6091,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (log.serials && log.serials.length > 0) {
                 log.serials.forEach(s => {
                     const itemName = s.itemName || name; // Fallback if name is missing
+                    if (hiddenProducts.has(itemName)) return; // deleted from Stock Register
                     const cleanInboundSerial = s.serial.trim().toUpperCase();
 
                     const logW = resolveLogWeight(log, itemName);
@@ -5983,7 +6134,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             } else {
                 // Support "Without Serial Number Inward" math fallback (WOS)
-                if (name && log.count > 0) {
+                if (name && log.count > 0 && !hiddenProducts.has(name)) {
                     const logW = resolveLogWeight(log, name);
                     const unitWeight = (logW !== undefined) ? logW : (parseFloat(weights[name]) || 0);
                     
@@ -6085,6 +6236,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     </tr>
                 `;
             }).join('');
+
+            registerEditList = sortedRegisterStock.map(item => ({
+                name: item.name,
+                qty: item.serialsCount,
+                weight: item.availableWeight
+            }));
+            renderEditStockRegisterList();
 
             if (registerRowsHtml) {
                 registerBody.innerHTML = registerRowsHtml;
@@ -7101,6 +7259,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const newName = prompt('Enter new Without Serial Number Product Name:');
             if (newName && newName.trim()) {
                 const cleanName = newName.trim();
+                const hiddenSetWos = getHiddenProducts();
+                if (hiddenSetWos.has(cleanName)) {
+                    hiddenSetWos.delete(cleanName);
+                    saveHiddenProducts(hiddenSetWos);
+                }
                 const currentWosItems = getWosItems();
                 if (!currentWosItems.includes(cleanName)) {
                     currentWosItems.push(cleanName);
@@ -9781,7 +9944,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
-                const sortedProducts = Object.values(productStock).sort((a, b) => a.name.localeCompare(b.name));
+                const sortedProducts = Object.values(productStock).filter(p => !getHiddenProducts().has(p.name)).sort((a, b) => a.name.localeCompare(b.name));
                 const exportData = sortedProducts.map(p => {
                     const inQty = p.inboundCount || 0;
                     const outQty = outboundCountsByProduct[p.name] || 0;

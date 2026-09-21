@@ -433,14 +433,22 @@ td{color:#222!important;border-color:#eee7c9!important}
 
                             <!-- Detailed Stock Register Table -->
                             <div style="flex: 1; display: flex; flex-direction: column; gap: 10px; overflow: hidden; width: 100%;">
-                                <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-secondary); margin: 0; flex-shrink: 0;">Product Stock Register</h4>
+                                <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-shrink: 0; width: 100%;">
+                                    <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-secondary); margin: 0;">Product Stock Register</h4>
+                                    <button type="button" id="btnEditStockRegister" class="btn-secondary" style="padding: 6px 14px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; height: auto;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                        </svg>
+                                        <span>Edit</span>
+                                    </button>
+                                </div>
                                 <div class="table-container" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-y: auto; background: var(--bg-primary); flex: 1; width: 100%;">
                                     <table class="portal-table" style="font-size: 0.85rem; margin: 0; width: 100%;">
                                         <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 10; border-bottom: 1px solid var(--border-color);">
                                             <tr>
                                                 <th style="padding: 10px 12px; font-weight: 700; text-align: left;">Product Name</th>
-                                                <th style="padding: 10px 12px; font-weight: 700; text-align: center; width: 150px; color: var(--accent-emerald);">📦 Current Stock</th>
-                                                <th style="padding: 10px 12px; font-weight: 700; text-align: right; width: 140px; color: var(--accent-amber);">⚖️ Weight</th>
+                                                <th style="padding: 10px 12px; font-weight: 700; text-align: center; width: 150px; color: var(--accent-emerald);">Product Total PC</th>
+                                                <th style="padding: 10px 12px; font-weight: 700; text-align: right; width: 140px; color: var(--accent-amber);">Total Weight</th>
                                             </tr>
                                         </thead>
                                         <tbody id="inventoryStockRegisterBody">
@@ -1680,6 +1688,34 @@ td{color:#222!important;border-color:#eee7c9!important}
                     <button type="button" class="btn-secondary-link" id="cancelOutboundAddProductBtn" style="border:1px solid var(--border-color); color:var(--text-secondary); background:none; border-radius:var(--radius-sm); font-weight:600; padding:10px 16px; font-size:0.9rem; cursor:pointer; text-align:center;">Reject Scan</button>
                     <button type="button" class="btn-primary" id="confirmOutboundAddProductBtn" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(244, 196, 0, 0.2); border-radius:var(--radius-sm); font-weight:600; padding:10px 20px; font-size:0.9rem; cursor:pointer; color:white; border-style:solid;">Add Product</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Product Stock Register Modal -->
+    <div class="modal-overlay" id="editStockRegisterModal">
+        <div class="modal-card" style="max-width: 680px; max-height: 85vh; box-sizing: border-box;">
+            <div class="modal-header">
+                <h3>Edit Product Stock Register</h3>
+                <button class="modal-close" id="closeEditStockRegisterModalBtn" aria-label="Close modal">&times;</button>
+            </div>
+            <div style="overflow-y: auto; flex: 1; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                <table class="portal-table" style="width: 100%; margin: 0; font-size: 0.85rem;">
+                    <thead style="position: sticky; top: 0; z-index: 5;">
+                        <tr>
+                            <th style="padding: 10px 12px; font-weight: 700; text-align: left;">Product Name</th>
+                            <th style="padding: 10px 12px; font-weight: 700; text-align: center;">Product Total PC</th>
+                            <th style="padding: 10px 12px; font-weight: 700; text-align: right;">Total Weight</th>
+                            <th style="padding: 10px 12px; font-weight: 700; text-align: right;">Delete</th>
+                        </tr>
+                    </thead>
+                    <tbody id="editStockRegisterBody">
+                        <!-- Populated dynamically by JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary-link" id="closeEditStockRegisterModalFooterBtn">Close</button>
             </div>
         </div>
     </div>
