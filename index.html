@@ -237,6 +237,28 @@ td{color:#222!important;border-color:#eee7c9!important}
   --accent-rose:#f4c400 !important;
 }
 </style>
+
+<style id="final-light-background-fix">
+/* FINAL LIGHT SURFACE FIX: remove dark/black UI backgrounds; preserve black typography. */
+.bg-black,.bg-dark,.dark,.terminal,.audit-log-terminal,.code-block,
+.sidebar,.side-nav,.navbar,.topbar,
+.portal-table th,.portal-table thead th,
+.portal-table tr.black-row td,
+[style*="background:#111"],[style*="background: #111"],[style*="background:#222"],[style*="background: #222"],
+[style*="background:#0d1321"],[style*="background: #0d1321"] {
+  background:#ffffff !important;
+  color:#111111 !important;
+  border-color:#e8dfb8 !important;
+}
+.bg-black *,.bg-dark *,.dark *,.terminal *,.audit-log-terminal *,.code-block *,
+.sidebar *,.side-nav *,.navbar *,.topbar *,
+.portal-table th *,.portal-table tr.black-row td * { color:#111111 !important; }
+.portal-table tr.black-row:hover td { background:#fff9dc !important; color:#111111 !important; }
+.btn-primary:hover,.btn-accent:hover,.btn-success:hover,.btn-warning:hover,.btn-main:hover,
+.btn-secondary:hover,.btn-outline:hover,.btn-secondary-link:hover {
+  background:#f5c400 !important; color:#111111 !important; border-color:#dca900 !important;
+}
+</style>
 </head>
 <body>
     <div class="app-container">

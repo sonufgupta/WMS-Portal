@@ -1886,3 +1886,18 @@ body{background:#fff!important;color:#111!important;background-image:radial-grad
 .form-group input:focus,.form-group select:focus,input:focus,select:focus,textarea:focus{border-color:#f4c400!important;box-shadow:0 0 0 3px rgba(244,196,0,.18)!important}
 .switch-toggle input:checked+.slider-round{background:#f4c400!important}
 .portal-table tr.white-row td{background:#fff!important;color:#111!important}.portal-table tr.black-row td{background:#111!important;color:#fff!important}.portal-table tr.black-row:hover td{background:#222!important}
+
+
+/* FINAL LIGHT BACKGROUND FIX — White + Yellow + Black */
+.bg-black,.bg-dark,.dark,.terminal,.audit-log-terminal,.code-block,
+.sidebar,.side-nav,.navbar,.topbar,
+.portal-table th,.portal-table thead th,
+.portal-table tr.black-row td {
+  background:#ffffff !important;
+  color:#111111 !important;
+  border-color:#e8dfb8 !important;
+}
+.bg-black *,.bg-dark *,.dark *,.terminal *,.audit-log-terminal *,.code-block *,
+.sidebar *,.side-nav *,.navbar *,.topbar *,
+.portal-table th *,.portal-table tr.black-row td * { color:#111111 !important; }
+.portal-table tr.black-row:hover td { background:#fff9dc !important; color:#111111 !important; }
