@@ -1901,3 +1901,36 @@ body{background:#fff!important;color:#111!important;background-image:radial-grad
 .sidebar *,.side-nav *,.navbar *,.topbar *,
 .portal-table th *,.portal-table tr.black-row td * { color:#111111 !important; }
 .portal-table tr.black-row:hover td { background:#fff9dc !important; color:#111111 !important; }
+
+/* FINAL SCREEN-MATCHED LIGHT THEME */
+:root,[data-theme="dark"],[data-theme="light"]{
+  --bg-primary:#ffffff;
+  --bg-secondary:#fffdf5;
+  --bg-card:#ffffff;
+  --border-color:#e8dfb8;
+  --text-primary:#111111;
+  --text-secondary:#6b7280;
+  --text-muted:#8a8f98;
+  --accent-blue:#f4c400;
+  --accent-purple:#111111;
+  --accent-red:#f4c400;
+  --accent-red-bright:#dca900;
+  --accent-rose:#ef3b6d;
+  --accent-rose-glow:rgba(239,59,109,.12);
+}
+html,body{background:#fff!important;color:#111!important}
+.bg-black,.bg-dark,.dark,.terminal,.audit-log-terminal,.code-block,
+.portal-table tr.black-row td,
+[style*="background:#111"],[style*="background: #111"],[style*="background:#222"],[style*="background: #222"],[style*="background:#0d1321"],[style*="background: #0d1321"]{
+  background:#fff!important;color:#111!important;border-color:#e8dfb8!important;
+}
+.bg-black *,.bg-dark *,.dark *,.terminal *,.audit-log-terminal *,.code-block *,
+.portal-table tr.black-row td *{color:#111!important}
+.dashboard-card,.card,.main-card,.side-card,.metric-card,.stat-card,.panel,.table-container,.modal-content,.wizard-container,.section-card,.activity-card,.box-card,.serial-item-row{background:#fff!important;color:#111!important}
+.portal-table th,.portal-table thead th{background:#111!important;color:#fff!important}
+/* Match reference: only destructive/delete actions retain pink-red */
+.btn-danger,.btn-delete-row:hover,.btn-delete-box:hover,.btn-delete-serial:hover,.btn-delete-dropdown-item:hover,
+.text-danger,.text-red,.text-rose,.bg-danger,.bg-red,.bg-rose,.badge-danger,.badge-red,.badge-rose{
+  background:#fff0f3!important;color:#ef3b6d!important;border-color:#ef3b6d!important;
+}
+.btn-danger:hover{background:#ef3b6d!important;color:#fff!important}

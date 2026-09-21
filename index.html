@@ -1818,3 +1818,21 @@ td{color:#222!important;border-color:#eee7c9!important}
     <script src="app.js"></script>
 </body>
 </html>
+
+<style id="final-screen-matched-light-theme">
+/* Match the supplied reference: light white surfaces; yellow primary actions; black typography; pink only for Delete/danger. */
+html,body{background:#fff!important;color:#111!important}
+.bg-black,.bg-dark,.dark,.terminal,.audit-log-terminal,.code-block,
+.portal-table tr.black-row td,
+[style*="background:#111"],[style*="background: #111"],[style*="background:#222"],[style*="background: #222"],[style*="background:#0d1321"],[style*="background: #0d1321"]{
+ background:#fff!important;color:#111!important;border-color:#e8dfb8!important;
+}
+.bg-black *,.bg-dark *,.dark *,.terminal *,.audit-log-terminal *,.code-block *,.portal-table tr.black-row td *{color:#111!important}
+.dashboard-card,.card,.main-card,.side-card,.metric-card,.stat-card,.panel,.table-container,.modal-content,.wizard-container,.section-card,.activity-card,.box-card,.serial-item-row{background:#fff!important;color:#111!important}
+/* Delete/danger remains the only pink-red accent, as in the reference screenshot. */
+.btn-danger,.btn-delete-row:hover,.btn-delete-box:hover,.btn-delete-serial:hover,.btn-delete-dropdown-item:hover,
+.text-danger,.text-red,.text-rose,.bg-danger,.bg-red,.bg-rose,.badge-danger,.badge-red,.badge-rose{
+ background:#fff0f3!important;color:#ef3b6d!important;border-color:#ef3b6d!important;
+}
+.btn-danger:hover{background:#ef3b6d!important;color:#fff!important}
+</style>
