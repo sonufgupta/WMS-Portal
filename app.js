@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let cachedOutboundHistory = null;
     let cachedProductWeights = null;
     let cachedHiddenProducts = null;      // product names deleted from the Stock Register
+    let cachedProductStockOverrides = null;  // product count & weight manual overrides
     let registerEditList = [];            // latest rows shown in the Edit Stock Register popup
     let weightResolutionCache = null;
     let cachedProductStockMap = null;
@@ -136,6 +137,65 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- Safe LocalStorage Wrapper to Prevent QuotaExceededError Crashes ---
+    function safeLocalStorageSet(key, valueString) {
+        try {
+            safeLocalStorageSet(key, valueString);
+            return true;
+        } catch (e) {
+            if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014 || (e.message && e.message.includes('exceeded the quota'))) {
+                console.warn(`[Storage Quota Exceeded] Unable to save "${key}" (${(valueString.length / 1024).toFixed(1)} KB) directly to localStorage. Pruning local quota...`);
+                return pruneAndRetryStorageSet(key, valueString);
+            } else {
+                console.error(`Error saving to localStorage key "${key}":`, e);
+                return false;
+            }
+        }
+    }
+
+    function pruneAndRetryStorageSet(targetKey, targetValueString) {
+        try {
+            // Step 1: Prune non-critical historical logs from local storage to free quota
+            const historyKeys = ['wms_inbound_history', 'wms_outbound_history', 'wms_oda_records', 'wms_deleted_serials'];
+            for (const hKey of historyKeys) {
+                if (hKey === targetKey) continue;
+                const raw = localStorage.getItem(hKey);
+                if (raw) {
+                    try {
+                        const parsed = JSON.parse(raw);
+                        if (Array.isArray(parsed) && parsed.length > 20) {
+                            const trimmed = parsed.slice(-20);
+                            safeLocalStorageSet(hKey, JSON.stringify(trimmed));
+                            console.log(`Pruned ${hKey} in local storage from ${parsed.length} to ${trimmed.length} items to free quota.`);
+                        }
+                    } catch (err) {}
+                }
+            }
+
+            // Retry saving targetKey
+            try {
+                safeLocalStorageSet(targetKey, targetValueString);
+                return true;
+            } catch (e2) {
+                // Step 2: If targetKey itself is a huge history array, trim targetKey for local storage only
+                try {
+                    const parsedTarget = JSON.parse(targetValueString);
+                    if (Array.isArray(parsedTarget) && parsedTarget.length > 20) {
+                        const trimmedTarget = parsedTarget.slice(-20);
+                        safeLocalStorageSet(targetKey, JSON.stringify(trimmedTarget));
+                        console.log(`Pruned target ${targetKey} locally to ${trimmedTarget.length} items.`);
+                        return true;
+                    }
+                } catch (e3) {}
+                console.warn(`Could not save ${targetKey} to localStorage. Cloud Sync handles full state.`);
+                return false;
+            }
+        } catch (e) {
+            console.error("Storage pruning error:", e);
+            return false;
+        }
+    }
+
     function syncCloudDataToLocal(key, value) {
         if (value === null || value === undefined) {
             return false;
@@ -143,7 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentLocal = localStorage.getItem(key);
         const newStr = JSON.stringify(value);
         if (currentLocal !== newStr) {
-            localStorage.setItem(key, newStr);
+            safeLocalStorageSet(key, newStr);
             if (key === 'wms_inbound_history') {
                 cachedInboundHistory = null;
                 inboundSerialLogMap = null;
@@ -170,6 +230,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (key === 'wms_hidden_products') {
                 cachedHiddenProducts = null;
             }
+            if (key === 'wms_product_stock_overrides') {
+                cachedProductStockOverrides = null;
+                cachedProductStockMap = null;
+            }
             return true;
         }
         return false;
@@ -183,7 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const localResetTime = parseInt(localStorage.getItem('wms_reset_timestamp')) || 0;
                 if (cloudResetTime > localResetTime) {
                     localStorage.clear();
-                    localStorage.setItem('wms_reset_timestamp', cloudResetTime.toString());
+                    safeLocalStorageSet('wms_reset_timestamp', cloudResetTime.toString());
                     console.log("Factory reset signal received from cloud. Clearing cache...");
                     window.location.reload();
                 }
@@ -224,7 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
         db.ref('wms_data/product_weights').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                localStorage.setItem('wms_product_weights', '{}');
+                safeLocalStorageSet('wms_product_weights', '{}');
                 scheduleSyncUIRender();
             } else {
                 if (syncCloudDataToLocal('wms_product_weights', val)) {
@@ -238,7 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
         db.ref('wms_data/hidden_products').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                localStorage.setItem('wms_hidden_products', '[]');
+                safeLocalStorageSet('wms_hidden_products', '[]');
                 cachedHiddenProducts = null;
                 scheduleSyncUIRender();
             } else {
@@ -248,11 +312,29 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        // 3c. Sync Product Stock Overrides (Count & Weight edits)
+        db.ref('wms_data/product_stock_overrides').on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val === null) {
+                safeLocalStorageSet('wms_product_stock_overrides', '{}');
+                cachedProductStockOverrides = null;
+                cachedProductStockMap = null;
+                scheduleSyncUIRender();
+            } else {
+                if (syncCloudDataToLocal('wms_product_stock_overrides', val)) {
+                    cachedProductStockOverrides = null;
+                    cachedProductStockMap = null;
+                    scheduleSyncUIRender();
+                    console.log("Product Stock Overrides synchronized.");
+                }
+            }
+        });
+
         // 4. Sync WOS Items (Low Frequency, Small Size)
         db.ref('wms_data/wos_items').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                localStorage.setItem('wms_wos_items', '[]');
+                safeLocalStorageSet('wms_wos_items', '[]');
                 renderWosDropdownItems();
             } else {
                 if (syncCloudDataToLocal('wms_wos_items', val)) {
@@ -266,7 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
         db.ref('wms_data/inbound_items').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                localStorage.setItem('wms_inbound_items', '[]');
+                safeLocalStorageSet('wms_inbound_items', '[]');
                 renderDropdownItems();
                 renderActiveDropdownItems();
             } else {
@@ -282,7 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
         db.ref('wms_data/inbound_history').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                localStorage.setItem('wms_inbound_history', '[]');
+                safeLocalStorageSet('wms_inbound_history', '[]');
                 scheduleSyncUIRender();
             } else {
                 if (syncCloudDataToLocal('wms_inbound_history', val)) {
@@ -299,7 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
         db.ref('wms_data/outbound_history').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                localStorage.setItem('wms_outbound_history', '[]');
+                safeLocalStorageSet('wms_outbound_history', '[]');
                 scheduleSyncUIRender();
             } else {
                 if (syncCloudDataToLocal('wms_outbound_history', val)) {
@@ -318,7 +400,7 @@ document.addEventListener('DOMContentLoaded', () => {
         db.ref('wms_data/damage_records').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                localStorage.setItem('wms_damage_records', '[]');
+                safeLocalStorageSet('wms_damage_records', '[]');
                 cachedDamageRecords = [];
                 renderDamageUI();
                 renderInventoryPanel();
@@ -338,7 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
         db.ref('wms_data/oda_records').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                localStorage.setItem('wms_oda_records', '[]');
+                safeLocalStorageSet('wms_oda_records', '[]');
                 updateOdaMemoryCache([]);
                 renderOdaUI();
             } else {
@@ -354,7 +436,7 @@ document.addEventListener('DOMContentLoaded', () => {
         db.ref('wms_data/deleted_serials').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val === null) {
-                localStorage.setItem('wms_deleted_serials', '[]');
+                safeLocalStorageSet('wms_deleted_serials', '[]');
                 renderDeletedSerialsPanel();
             } else {
                 if (syncCloudDataToLocal('wms_deleted_serials', val)) {
@@ -405,7 +487,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!isUnlocked) {
                     const pwd = prompt("Enter passcode to access Inventory:");
                     if (pwd === '2026' || pwd === '1998') {
-                        localStorage.setItem('wms_inventory_unlocked', 'true');
+                        safeLocalStorageSet('wms_inventory_unlocked', 'true');
                     } else {
                         if (pwd !== null) alert("Incorrect passcode! Access denied.");
                         return;
@@ -417,7 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!isUnlocked) {
                     const pwd = prompt("Enter passcode to access Damage Register:");
                     if (pwd === '2026' || pwd === '1998') {
-                        localStorage.setItem('wms_damage_unlocked', 'true');
+                        safeLocalStorageSet('wms_damage_unlocked', 'true');
                     } else {
                         if (pwd !== null) alert("Incorrect passcode! Access denied.");
                         return;
@@ -429,7 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!isUnlocked) {
                     const pwd = prompt("Enter passcode to access ODA Register:");
                     if (pwd === '2026' || pwd === '1998') {
-                        localStorage.setItem('wms_oda_unlocked', 'true');
+                        safeLocalStorageSet('wms_oda_unlocked', 'true');
                     } else {
                         if (pwd !== null) alert("Incorrect passcode! Access denied.");
                         return;
@@ -692,10 +774,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     localStorage.removeItem('wms_active_inbound_session');
                     localStorage.removeItem('wms_active_outbound_session');
                     localStorage.removeItem('wms_deleted_serials');
+                    localStorage.removeItem('wms_product_stock_overrides');
                     localStorage.clear(); // Complete browser clear fallback
 
                     const resetTime = Date.now();
-                    localStorage.setItem('wms_reset_timestamp', resetTime.toString());
+                    safeLocalStorageSet('wms_reset_timestamp', resetTime.toString());
 
                     if (isFirebaseConnected && db) {
                         const resetPayload = {
@@ -708,6 +791,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             inbound_items: null,
                             deleted_serials: null,
                             hidden_products: null,
+                            product_stock_overrides: null,
                             reset_timestamp: resetTime
                         };
 
@@ -740,7 +824,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const appContainer = document.querySelector('.app-container');
             if (appContainer && appContainer.classList.contains('sidebar-collapsed')) {
                 appContainer.classList.remove('sidebar-collapsed');
-                localStorage.setItem('wms_sidebar_collapsed', 'false');
+                safeLocalStorageSet('wms_sidebar_collapsed', 'false');
             } else {
                 appSidebar.classList.toggle('active');
             }
@@ -763,7 +847,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const appContainer = document.querySelector('.app-container');
             if (appContainer) {
                 const collapsed = appContainer.classList.toggle('sidebar-collapsed');
-                localStorage.setItem('wms_sidebar_collapsed', collapsed ? 'true' : 'false');
+                safeLocalStorageSet('wms_sidebar_collapsed', collapsed ? 'true' : 'false');
             }
             if (window.innerWidth <= 768) {
                 appSidebar.classList.remove('active');
@@ -1038,7 +1122,7 @@ document.addEventListener('DOMContentLoaded', () => {
             weight: weights[name]
         }));
         
-        localStorage.setItem('wms_product_weights', JSON.stringify(weightsArray));
+        safeLocalStorageSet('wms_product_weights', JSON.stringify(weightsArray));
         firebaseSet('product_weights', weightsArray);
     }
 
@@ -1062,8 +1146,105 @@ document.addEventListener('DOMContentLoaded', () => {
     function saveHiddenProducts(hiddenSet) {
         cachedHiddenProducts = hiddenSet;
         const arr = Array.from(hiddenSet);
-        localStorage.setItem('wms_hidden_products', JSON.stringify(arr));
+        safeLocalStorageSet('wms_hidden_products', JSON.stringify(arr));
         firebaseSet('hidden_products', arr);
+    }
+
+    // --- Manual Product Stock Overrides (Count & Weight Edits) ---
+    const DEFAULT_STOCK_OVERRIDES = {
+        "Geonix ARMORIX M3 3Fan Gaming Cabinet (MATX) Black": { name: "Geonix ARMORIX M3 3Fan Gaming Cabinet (MATX) Black", count: 0 },
+        "Geonix BlazeBox 3Fan Gaming Cabinet (MATX) Black": { name: "Geonix BlazeBox 3Fan Gaming Cabinet (MATX) Black", count: 0 },
+        "Geonix Hercules Rome 4Fan Gaming Cabinet (ATX) Black": { name: "Geonix Hercules Rome 4Fan Gaming Cabinet (ATX) Black", count: 0 },
+        "Geonix Hercules Rome 4Fan Gaming Cabinet (ATX) White": { name: "Geonix Hercules Rome 4Fan Gaming Cabinet (ATX) White", count: 0 },
+        "Geonix Hydra 6Fan Gaming Cabinet (MATX) White": { name: "Geonix Hydra 6Fan Gaming Cabinet (MATX) White", count: 0 },
+        "PRINTER TONER LASER CARTRIDGE 2365 DR GEONIX": { name: "PRINTER TONER LASER CARTRIDGE 2365 DR GEONIX", count: 0 },
+        "PRINTER TONER LASER CARTRIDGE 2365 TN GEONIX": { name: "PRINTER TONER LASER CARTRIDGE 2365 TN GEONIX", count: 0 },
+        "PRINTER TONER LASER CARTRIDGE B021 TN GEONIX": { name: "PRINTER TONER LASER CARTRIDGE B021 TN GEONIX", count: 0 },
+        "Geonix ARMORIX M3 3Fan Gaming Cabinet (MATX) White": { name: "Geonix ARMORIX M3 3Fan Gaming Cabinet (MATX) White", count: 36 },
+        "Geonix BlazeBox 3Fan Gaming Cabinet (MATX) White": { name: "Geonix BlazeBox 3Fan Gaming Cabinet (MATX) White", count: 2 },
+        "Geonix Hercules 4Fan Gaming Cabinet (ATX) Black": { name: "Geonix Hercules 4Fan Gaming Cabinet (ATX) Black", count: 3 },
+        "Geonix Hercules 4Fan Gaming Cabinet (ATX) White": { name: "Geonix Hercules 4Fan Gaming Cabinet (ATX) White", count: 1 },
+        "Geonix Hydra 6Fan Gaming Cabinet (MATX) Black": { name: "Geonix Hydra 6Fan Gaming Cabinet (MATX) Black", count: 3 },
+        "KEYBOARD GEONIX GAMING KEYBOARD WIRED CRUISER K3": { name: "KEYBOARD GEONIX GAMING KEYBOARD WIRED CRUISER K3", count: 50 },
+        "KEYBOARD GEONIX GAMING KEYBOARD WIRED VINTAGE K4": { name: "KEYBOARD GEONIX GAMING KEYBOARD WIRED VINTAGE K4", count: 50 },
+        "MONITOR Geonix 18.5\" LED (HDMI)": { name: "MONITOR Geonix 18.5\" LED (HDMI)", count: 4601 },
+        "MONITOR Geonix 19.5\" LED (HDMI)": { name: "MONITOR Geonix 19.5\" LED (HDMI)", count: 2 },
+        "OPTIMA H3": { name: "OPTIMA H3", count: 523 },
+        "OPTIMA L1": { name: "OPTIMA L1", count: 394 },
+        "OPTIMA L7": { name: "OPTIMA L7", count: 489 }
+    };
+
+    function getProductStockOverrides() {
+        if (cachedProductStockOverrides !== null) {
+            return cachedProductStockOverrides;
+        }
+        let dict = {};
+        Object.keys(DEFAULT_STOCK_OVERRIDES).forEach(k => {
+            dict[k] = { ...DEFAULT_STOCK_OVERRIDES[k] };
+        });
+
+        const saved = localStorage.getItem('wms_product_stock_overrides');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed)) {
+                    parsed.forEach(o => {
+                        if (o && o.name) dict[o.name] = o;
+                    });
+                } else if (parsed && typeof parsed === 'object') {
+                    Object.assign(dict, parsed);
+                }
+            } catch (e) {}
+        }
+        cachedProductStockOverrides = dict;
+        return cachedProductStockOverrides;
+    }
+
+    function saveProductStockOverride(itemName, count, totalWeight) {
+        const overrides = getProductStockOverrides();
+        const parsedCount = parseInt(count, 10);
+        const parsedWeight = parseFloat(totalWeight);
+
+        if (isNaN(parsedCount) || parsedCount < 0) {
+            delete overrides[itemName];
+        } else {
+            overrides[itemName] = {
+                name: itemName,
+                count: parsedCount,
+                weight: isNaN(parsedWeight) ? undefined : parsedWeight,
+                updatedAt: Date.now()
+            };
+        }
+
+        cachedProductStockOverrides = overrides;
+        cachedProductStockMap = null;
+
+        const overridesArray = Object.keys(overrides).map(name => ({
+            name: name,
+            count: overrides[name].count,
+            weight: overrides[name].weight,
+            updatedAt: overrides[name].updatedAt
+        }));
+
+        safeLocalStorageSet('wms_product_stock_overrides', JSON.stringify(overridesArray));
+        firebaseSet('product_stock_overrides', overridesArray);
+    }
+
+    function deleteProductStockOverride(itemName) {
+        const overrides = getProductStockOverrides();
+        delete overrides[itemName];
+        cachedProductStockOverrides = overrides;
+        cachedProductStockMap = null;
+
+        const overridesArray = Object.keys(overrides).map(name => ({
+            name: name,
+            count: overrides[name].count,
+            weight: overrides[name].weight,
+            updatedAt: overrides[name].updatedAt
+        }));
+
+        safeLocalStorageSet('wms_product_stock_overrides', JSON.stringify(overridesArray));
+        firebaseSet('product_stock_overrides', overridesArray);
     }
 
     // --- Auto-SKU Alphabet Pattern Extraction and Matching Helpers ---
@@ -1235,7 +1416,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveActiveSession() {
         if (activeSession) {
-            localStorage.setItem('wms_active_inbound_session', JSON.stringify(activeSession));
+            safeLocalStorageSet('wms_active_inbound_session', JSON.stringify(activeSession));
             firebaseSet('active_inbound_session', activeSession);
         } else {
             localStorage.removeItem('wms_active_inbound_session');
@@ -1613,7 +1794,7 @@ document.addEventListener('DOMContentLoaded', () => {
         inboundSerialLogMap = null;
         weightResolutionCache = null;
         cachedProductStockMap = null;
-        localStorage.setItem('wms_inbound_history', JSON.stringify(historyData));
+        safeLocalStorageSet('wms_inbound_history', JSON.stringify(historyData));
         firebaseSet('inbound_history', historyData);
     }
 
@@ -2269,7 +2450,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // If there's an active session on another device, click acts as Join Session prompt
                 const pwd = prompt('Enter passcode (2026) to join the active Inbound session:');
                 if (pwd === '2026') {
-                    localStorage.setItem('wms_inbound_joined', 'true');
+                    safeLocalStorageSet('wms_inbound_joined', 'true');
                     restoreSessionState();
                 } else {
                     alert('Incorrect passcode.');
@@ -2286,7 +2467,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnJoinInboundSession.addEventListener('click', () => {
             const pwd = prompt('Enter passcode (2026) to join the active Inbound session:');
             if (pwd === '2026') {
-                localStorage.setItem('wms_inbound_joined', 'true');
+                safeLocalStorageSet('wms_inbound_joined', 'true');
                 restoreSessionState();
             } else {
                 alert('Incorrect passcode.');
@@ -2297,7 +2478,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let inboundItems = [];
 
     function saveInboundItems() {
-        localStorage.setItem('wms_inbound_items', JSON.stringify(inboundItems));
+        safeLocalStorageSet('wms_inbound_items', JSON.stringify(inboundItems));
         firebaseSet('inbound_items', inboundItems);
     }
 
@@ -2551,7 +2732,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Render empty box cards container
             renderBoxCards();
             // Toggle dashboard states & set joined status
-            localStorage.setItem('wms_inbound_joined', 'true');
+            safeLocalStorageSet('wms_inbound_joined', 'true');
             inboundInactiveState.style.display = 'none';
             inboundActiveState.style.display = 'flex';
             
@@ -3932,7 +4113,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Outbound state storage and management
     function saveActiveOutboundSession() {
         if (activeOutboundSession) {
-            localStorage.setItem('wms_active_outbound_session', JSON.stringify(activeOutboundSession));
+            safeLocalStorageSet('wms_active_outbound_session', JSON.stringify(activeOutboundSession));
             firebaseSet('active_outbound_session', activeOutboundSession);
         } else {
             localStorage.removeItem('wms_active_outbound_session');
@@ -4045,7 +4226,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Click acts as Join Session prompt
                 const pwd = prompt('Enter passcode (2026) to join the active Outbound session:');
                 if (pwd === '2026') {
-                    localStorage.setItem('wms_outbound_joined', 'true');
+                    safeLocalStorageSet('wms_outbound_joined', 'true');
                     restoreOutboundSessionState();
                 } else {
                     alert('Incorrect passcode.');
@@ -4098,7 +4279,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnJoinOutboundSession.addEventListener('click', () => {
             const pwd = prompt('Enter passcode (2026) to join the active Outbound session:');
             if (pwd === '2026') {
-                localStorage.setItem('wms_outbound_joined', 'true');
+                safeLocalStorageSet('wms_outbound_joined', 'true');
                 restoreOutboundSessionState();
             } else {
                 alert('Incorrect passcode.');
@@ -4163,7 +4344,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     items: [],
                     serials: []
                 };
-                localStorage.setItem('wms_outbound_joined', 'true');
+                safeLocalStorageSet('wms_outbound_joined', 'true');
             }
             saveActiveOutboundSession();
             closeOutboundConfigModal();
@@ -4942,7 +5123,7 @@ document.addEventListener('DOMContentLoaded', () => {
         cachedOutboundHistory = historyData;
         outboundSerialLogMap = null;
         cachedProductStockMap = null;
-        localStorage.setItem('wms_outbound_history', JSON.stringify(historyData));
+        safeLocalStorageSet('wms_outbound_history', JSON.stringify(historyData));
         firebaseSet('outbound_history', historyData);
     }
 
@@ -5906,7 +6087,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Product Stock Register: Edit popup (list all products + delete) ---
+    // --- Product Stock Register: Edit popup (list all products + edit PC & weight + delete) ---
     function renderEditStockRegisterList() {
         const modal = document.getElementById('editStockRegisterModal');
         const body = document.getElementById('editStockRegisterBody');
@@ -5924,30 +6105,102 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const stockOverrides = getProductStockOverrides();
+
         registerEditList.forEach(item => {
             const tr = document.createElement('tr');
             tr.style.borderBottom = '1px solid rgba(255, 255, 255, 0.05)';
 
             const tdName = document.createElement('td');
             tdName.style.cssText = 'padding: 10px 12px; font-weight: 700; color: var(--text-primary); word-break: break-word;';
-            tdName.textContent = item.name;
+            const isOverridden = stockOverrides[item.name] !== undefined;
+            if (isOverridden) {
+                tdName.innerHTML = `${escapeHtml(item.name)} <span style="font-size: 0.7rem; background: rgba(59, 130, 246, 0.15); color: #3b82f6; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-left: 6px;">Edited</span>`;
+            } else {
+                tdName.textContent = item.name;
+            }
 
+            // Qty Input
             const tdQty = document.createElement('td');
-            tdQty.className = 'font-mono';
-            tdQty.style.cssText = 'padding: 10px 12px; text-align: center; font-weight: 800; color: var(--accent-emerald);';
-            tdQty.textContent = item.qty;
+            tdQty.style.cssText = 'padding: 8px 10px; text-align: center;';
+            const qtyInput = document.createElement('input');
+            qtyInput.type = 'number';
+            qtyInput.min = '0';
+            qtyInput.value = item.qty;
+            qtyInput.style.cssText = 'width: 85px; padding: 6px 8px; font-weight: 800; text-align: center; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--accent-emerald); font-family: monospace; font-size: 0.9rem;';
+            tdQty.appendChild(qtyInput);
 
+            // Total Weight Input
             const tdWeight = document.createElement('td');
-            tdWeight.className = 'font-mono';
-            tdWeight.style.cssText = 'padding: 10px 12px; text-align: right; font-weight: 700; color: var(--accent-amber); white-space: nowrap;';
-            tdWeight.textContent = item.weight.toFixed(3) + ' kg';
+            tdWeight.style.cssText = 'padding: 8px 10px; text-align: right;';
+            const weightInput = document.createElement('input');
+            weightInput.type = 'number';
+            weightInput.step = '0.001';
+            weightInput.min = '0';
+            weightInput.value = item.weight.toFixed(3);
+            weightInput.style.cssText = 'width: 105px; padding: 6px 8px; font-weight: 700; text-align: right; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--accent-amber); font-family: monospace; font-size: 0.9rem;';
+            tdWeight.appendChild(weightInput);
 
+            // Actions
             const tdAction = document.createElement('td');
-            tdAction.style.cssText = 'padding: 10px 12px; text-align: right;';
+            tdAction.style.cssText = 'padding: 8px 10px; text-align: right; white-space: nowrap;';
+
+            // Save button
+            const saveBtn = document.createElement('button');
+            saveBtn.type = 'button';
+            saveBtn.title = 'Save product PC and Weight changes';
+            saveBtn.style.cssText = 'background: #10b981; color: #ffffff; border: none; border-radius: var(--radius-sm); padding: 6px 10px; font-size: 0.78rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; margin-right: 4px;';
+            saveBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 13px; height: 13px; stroke-width: 2.5;"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg><span>Save</span>';
+            saveBtn.addEventListener('click', () => {
+                const newQty = parseInt(qtyInput.value, 10);
+                const newWeight = parseFloat(weightInput.value);
+
+                if (isNaN(newQty) || newQty < 0) {
+                    alert('Please enter a valid Product PC (Total Count >= 0).');
+                    return;
+                }
+                if (isNaN(newWeight) || newWeight < 0) {
+                    alert('Please enter a valid Total Weight (>= 0).');
+                    return;
+                }
+
+                const unitWeight = newQty > 0 ? (newWeight / newQty) : newWeight;
+                saveProductWeight(item.name, unitWeight);
+                saveProductStockOverride(item.name, newQty, newWeight);
+
+                renderInventoryPanel();
+                if (typeof showToast === 'function') {
+                    showToast(`Updated "${item.name}": ${newQty} PC, ${newWeight.toFixed(3)} kg`);
+                } else {
+                    alert(`Product "${item.name}" updated successfully!\nPC: ${newQty}\nTotal Weight: ${newWeight.toFixed(3)} kg`);
+                }
+            });
+            tdAction.appendChild(saveBtn);
+
+            // Reset button if overridden
+            if (isOverridden) {
+                const resetBtn = document.createElement('button');
+                resetBtn.type = 'button';
+                resetBtn.title = 'Reset to auto-calculated stock from logs';
+                resetBtn.style.cssText = 'background: #3b82f6; color: #ffffff; border: none; border-radius: var(--radius-sm); padding: 6px 10px; font-size: 0.78rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; margin-right: 4px;';
+                resetBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 13px; height: 13px; stroke-width: 2.5;"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg><span>Reset</span>';
+                resetBtn.addEventListener('click', () => {
+                    if (confirm(`Reset "${item.name}" stock count to auto-calculated log stock?`)) {
+                        deleteProductStockOverride(item.name);
+                        renderInventoryPanel();
+                        if (typeof showToast === 'function') {
+                            showToast(`Reset "${item.name}" to auto-calculated log stock.`);
+                        }
+                    }
+                });
+                tdAction.appendChild(resetBtn);
+            }
+
+            // Delete button
             const delBtn = document.createElement('button');
             delBtn.type = 'button';
             delBtn.title = 'Delete product';
-            delBtn.style.cssText = 'background: #fff0f3; color: #ef3b6d; border: 1px solid #ef3b6d; border-radius: var(--radius-sm); padding: 6px 12px; font-size: 0.78rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;';
+            delBtn.style.cssText = 'background: #fff0f3; color: #ef3b6d; border: 1px solid #ef3b6d; border-radius: var(--radius-sm); padding: 6px 10px; font-size: 0.78rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;';
             delBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 13px; height: 13px; stroke-width: 2.5;"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg><span>Delete</span>';
             delBtn.addEventListener('click', () => deleteRegisterProduct(item));
             tdAction.appendChild(delBtn);
@@ -6170,6 +6423,32 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        // Apply manual product stock count and weight overrides if saved via "Edit Product Stock Register"
+        const stockOverrides = getProductStockOverrides();
+        Object.keys(stockOverrides).forEach(name => {
+            if (hiddenProducts.has(name)) return;
+            const override = stockOverrides[name];
+            if (override && override.count !== undefined && !isNaN(override.count)) {
+                if (!productStock[name]) {
+                    productStock[name] = {
+                        name: name,
+                        inboundCount: override.count,
+                        serialsCount: override.count,
+                        availableWeight: (override.weight !== undefined && !isNaN(override.weight)) ? override.weight : (override.count * (parseFloat(weights[name]) || 0)),
+                        boxNumbers: new Set()
+                    };
+                } else {
+                    productStock[name].serialsCount = override.count;
+                    if (override.weight !== undefined && !isNaN(override.weight)) {
+                        productStock[name].availableWeight = override.weight;
+                    } else {
+                        const unitWeight = parseFloat(weights[name]) || 0;
+                        productStock[name].availableWeight = override.count * unitWeight;
+                    }
+                }
+            }
+        });
+
         // Set Overview Available Stock Counters
         const uniqueProductNames = Object.keys(productStock).filter(name => productStock[name].serialsCount > 0);
         const totalAvailableCount = Object.values(productStock).reduce((sum, item) => sum + item.serialsCount, 0);
@@ -6227,10 +6506,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const registerRowsHtml = sortedRegisterStock.map(item => {
                 const totalWeight = item.availableWeight;
                 const stockQty = item.serialsCount;
+                const isOverridden = stockOverrides[item.name] !== undefined;
 
                 return `
                     <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
-                        <td style="padding: 10px 12px; font-weight: 700; color: var(--text-primary);" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</td>
+                        <td style="padding: 10px 12px; font-weight: 700; color: var(--text-primary);" title="${escapeHtml(item.name)}">
+                            ${escapeHtml(item.name)}
+                            ${isOverridden ? `<span style="font-size: 0.68rem; background: rgba(59, 130, 246, 0.15); color: #3b82f6; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-left: 6px;">Edited</span>` : ''}
+                        </td>
                         <td class="font-mono" style="padding: 10px 12px; text-align: center; font-weight: 800; color: var(--accent-emerald);">${stockQty}</td>
                         <td class="font-mono" style="padding: 10px 12px; text-align: right; font-weight: 700; color: var(--accent-amber);">${totalWeight.toFixed(3)} kg</td>
                     </tr>
@@ -6370,7 +6653,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveDeletedSerials(data) {
         deletedSerialsFastMap = null;
-        localStorage.setItem('wms_deleted_serials', JSON.stringify(data));
+        safeLocalStorageSet('wms_deleted_serials', JSON.stringify(data));
         firebaseSet('deleted_serials', data);
     }
 
@@ -6676,7 +6959,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function saveOrderQueue(queue) {
-        localStorage.setItem('wms_order_queue', JSON.stringify(queue));
+        safeLocalStorageSet('wms_order_queue', JSON.stringify(queue));
         firebaseSet('order_queue', queue);
     }
 
@@ -7153,6 +7436,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        const stockOverrides = getProductStockOverrides();
+        Object.keys(stockOverrides).forEach(name => {
+            const override = stockOverrides[name];
+            if (override && override.count !== undefined && !isNaN(override.count)) {
+                if (!productStock[name]) {
+                    productStock[name] = { name: name, serialsCount: override.count };
+                } else {
+                    productStock[name].serialsCount = override.count;
+                }
+            }
+        });
+
         cachedProductStockMap = productStock;
         return cachedProductStockMap;
     }    function renderOrderQueueUI() {
@@ -7220,7 +7515,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function saveWosItems(items) {
-        localStorage.setItem('wms_wos_items', JSON.stringify(items));
+        safeLocalStorageSet('wms_wos_items', JSON.stringify(items));
         firebaseSet('wos_items', items);
     }
 
@@ -7804,7 +8099,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let deviceId = localStorage.getItem('wms_device_id');
     if (!deviceId) {
         deviceId = 'DEV-' + Math.floor(1000 + Math.random() * 9000);
-        localStorage.setItem('wms_device_id', deviceId);
+        safeLocalStorageSet('wms_device_id', deviceId);
     }
 
     const accessLockOverlay = document.getElementById('accessLockOverlay');
@@ -8034,7 +8329,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnToggleLocalSpeaker) {
         btnToggleLocalSpeaker.addEventListener('click', () => {
             localSpeakerActive = !localSpeakerActive;
-            localStorage.setItem('wms_speaker_active', localSpeakerActive ? 'true' : 'false');
+            safeLocalStorageSet('wms_speaker_active', localSpeakerActive ? 'true' : 'false');
             updateLocalSpeakerUI();
             if (localSpeakerActive) {
                 startSilenceLoop();
@@ -8059,7 +8354,7 @@ document.addEventListener('DOMContentLoaded', () => {
         inputSpeakerSpeed.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
             baseSpeakerSpeed = val;
-            localStorage.setItem('wms_speaker_speed', val.toString());
+            safeLocalStorageSet('wms_speaker_speed', val.toString());
             lblSpeakerSpeedVal.textContent = val.toFixed(2) + 'x';
         });
     }
@@ -8970,7 +9265,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function saveDamageRecords(records) {
         cachedDamageRecords = records;
         damageSerialsFastSet = null;
-        localStorage.setItem('wms_damage_records', JSON.stringify(records));
+        safeLocalStorageSet('wms_damage_records', JSON.stringify(records));
         cachedProductStockMap = null;
         firebaseSet('damage_records', records);
     }
@@ -9378,13 +9673,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const compressedRecords = records.map(r => [r.pincode, r.courier, r.remark, r.fileId || '', r.fileName || '']);
         
         try {
-            localStorage.setItem('wms_oda_records', JSON.stringify(compressedRecords));
+            safeLocalStorageSet('wms_oda_records', JSON.stringify(compressedRecords));
         } catch (e) {
             console.warn("LocalStorage quota reached for full ODA records array. Maintained in RAM cache & Firebase sync.", e);
         }
 
         try {
-            localStorage.setItem('wms_oda_files_history', JSON.stringify(filesHistory));
+            safeLocalStorageSet('wms_oda_files_history', JSON.stringify(filesHistory));
         } catch (e) {
             console.warn("LocalStorage quota reached for ODA files history.", e);
         }
