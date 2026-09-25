@@ -11,15 +11,15 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"></script>
     <script>
         window.addEventListener('error', function(e) {
-            // Ignore cross-origin browser extension, quota warnings, and masked script errors
-            if (e.message === 'Script error.' || !e.filename || e.lineno === 0 || (e.message && (e.message.includes('QuotaExceededError') || e.message.includes('exceeded the quota')))) {
+            // Ignore cross-origin browser extension and masked script errors
+            if (e.message === 'Script error.' || !e.filename || e.lineno === 0) {
                 return;
             }
             let errDiv = document.getElementById('debugErrorLogger');
             if (!errDiv) {
                 errDiv = document.createElement('div');
                 errDiv.id = 'debugErrorLogger';
-                errDiv.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; background: #f59e0b; color: white; padding: 12px; font-family: monospace; z-index: 999999; font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-height: 150px; overflow-y: auto;';
+                errDiv.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; background: #f43f5e; color: white; padding: 12px; font-family: monospace; z-index: 999999; font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-height: 150px; overflow-y: auto;';
                 document.body.appendChild(errDiv);
             }
             errDiv.innerHTML += '<div><b>Runtime Error:</b> ' + e.message + ' at ' + e.filename + ':' + e.lineno + '</div>';
@@ -27,238 +27,16 @@
     </script>
     <style>
         @keyframes pulseOda {
-            0% { transform: scale(1); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2); }
-            50% { transform: scale(1.05); box-shadow: 0 4px 20px rgba(245, 158, 11, 0.5); }
-            100% { transform: scale(1); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2); }
+            0% { transform: scale(1); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
+            50% { transform: scale(1.05); box-shadow: 0 4px 20px rgba(239, 68, 68, 0.5); }
+            100% { transform: scale(1); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
         }
         @keyframes pulseOdaNormal {
             0% { transform: scale(1); }
             50% { transform: scale(1.03); }
             100% { transform: scale(1); }
         }
-        @keyframes giantBadgePulse {
-            0%   { box-shadow: 0 4px 14px rgba(245,158,11,0.35); }
-            50%  { box-shadow: 0 4px 24px rgba(245,158,11,0.7); }
-            100% { box-shadow: 0 4px 14px rgba(245,158,11,0.35); }
-        }
-        /* Giant Logistics Confirm Popup */
-        #giantLogisticsPopup {
-            display: none;
-            position: fixed; inset: 0; z-index: 9999;
-            align-items: center; justify-content: center;
-            background: rgba(10, 6, 10, 0.75); backdrop-filter: blur(8px);
-        }
-        #giantLogisticsPopup.visible { display: flex; }
-        #giantLogisticsPopupBox {
-            background: var(--bg-card, #1a0f18);
-            border: 2px solid #f59e0b;
-            border-radius: 16px;
-            padding: 36px 40px;
-            max-width: 440px;
-            width: 90%;
-            text-align: center;
-            box-shadow: 0 20px 60px rgba(245,158,11,0.25);
-            animation: popIn 0.25s cubic-bezier(0.34,1.56,0.64,1);
-        }
-        @keyframes popIn {
-            from { transform: scale(0.82); opacity: 0; }
-            to   { transform: scale(1);    opacity: 1; }
-        }
-        #giantLogisticsPopupBox .gl-truck-icon {
-            font-size: 3rem; margin-bottom: 12px;
-        }
-        #giantLogisticsPopupBox h3 {
-            font-size: 1.3rem; font-weight: 800; color: #f59e0b;
-            margin: 0 0 10px;
-        }
-        #giantLogisticsPopupBox p {
-            font-size: 0.95rem; color: var(--text-secondary, #a89ba5);
-            margin: 0 0 26px; line-height: 1.6;
-        }
-        #giantLogisticsPopupBox .gl-weight-chip {
-            display: inline-block;
-            background: rgba(245,158,11,0.18);
-            color: #ffe36b;
-            border: 1px solid #f59e0b;
-            border-radius: 20px;
-            padding: 4px 16px;
-            font-family: var(--font-mono, monospace);
-            font-weight: 800;
-            font-size: 1rem;
-            margin-bottom: 18px;
-            box-shadow: 0 0 12px rgba(244, 196, 0, 0.22);
-        }
-        #giantLogisticsPopupBox .gl-btn-row {
-            display: flex; gap: 14px; justify-content: center;
-        }
-        #giantLogisticsPopupBox #btnGiantLogisticsYes {
-            background: linear-gradient(135deg, #f59e0b 0%, #b88700 100%);
-            color: #fff;
-            border: 1px solid rgba(254, 205, 211, 0.2); border-radius: 10px;
-            padding: 12px 32px; font-weight: 800; font-size: 0.95rem;
-            cursor: pointer; transition: all 0.2s ease;
-            box-shadow: 0 4px 14px rgba(244, 196, 0, 0.28);
-        }
-        #giantLogisticsPopupBox #btnGiantLogisticsYes:hover {
-            background: linear-gradient(135deg, #f59e0b 0%, #f59e0b 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(244, 196, 0, 0.38);
-        }
-        #giantLogisticsPopupBox #btnGiantLogisticsCancel {
-            background: transparent; color: var(--text-muted, #6e5e6b);
-            border: 1px solid rgba(110,94,107,0.4); border-radius: 10px;
-            padding: 12px 28px; font-weight: 700; font-size: 0.95rem;
-            cursor: pointer; transition: background 0.2s;
-        }
-        #giantLogisticsPopupBox #btnGiantLogisticsCancel:hover { background: rgba(245,158,11,0.1); color: #ffffff; }
     </style>
-<style id="premium-white-yellow-theme">
-:root{
- --bg-main:#ffffff!important;--bg-card:#ffffff!important;--bg-sidebar:#fffdf5!important;
- --border-color:#eadf9b!important;--text-primary:#171717!important;--text-secondary:#5b5b4f!important;--text-muted:#7b7b6b!important;
- --accent-blue:#d9a900!important;--accent-emerald:#b88a00!important;--accent-purple:#d4a900!important;--accent-amber:#e2b800!important;
- --premium-yellow:#f4c400;--premium-yellow-dark:#b88700;--premium-soft:#fff9dc;--premium-line:#eee2a8;
-}
-html,body{background:#fff!important;color:#171717!important;font-family:Inter,Manrope,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif!important}
-body{background:linear-gradient(135deg,#fff 0%,#fffdf3 55%,#fff8d8 100%)!important}
-.sidebar,.side-nav,.sidebar-container{background:linear-gradient(180deg,#fff 0%,#fffdf4 100%)!important;border-color:var(--premium-line)!important;box-shadow:8px 0 30px rgba(180,145,0,.08)!important}
-.main-content,.content,.content-area{background:transparent!important}
-.card,.main-card,.side-card,.metric-card,.stat-card,.panel,.table-container,.modal-content,.wizard-container,.section-card{background:rgba(255,255,255,.96)!important;border:1px solid var(--premium-line)!important;box-shadow:0 8px 28px rgba(120,95,0,.08)!important;border-radius:16px!important}
-.card-header,.card-header-accented,.view-header,.list-header{border-color:var(--premium-line)!important}
-h1,h2,h3,h4,h5,h6,.view-header h1{color:#171717!important}
-p,.subtitle,.text-secondary{color:#5b5b4f!important}
-.nav-item,.sidebar a{color:#5b5b4f!important;border-radius:10px!important}
-.nav-item:hover,.sidebar a:hover{background:#fff7c9!important;color:#8b6500!important}
-.nav-item.active,.sidebar a.active{background:linear-gradient(135deg,#fff1a8,#ffd83d)!important;color:#5c4300!important;box-shadow:0 5px 16px rgba(212,169,0,.18)!important}
-button,.btn{font-family:inherit!important;border-radius:10px!important}
-.btn-primary,.btn-accent,.btn-success{background:linear-gradient(135deg,#f6cf25,#dca900)!important;color:#211a00!important;border-color:#d4a200!important;box-shadow:0 5px 14px rgba(212,169,0,.22)!important}
-.btn-primary:hover,.btn-accent:hover,.btn-success:hover{filter:brightness(1.03)!important;transform:translateY(-1px)}
-.btn-secondary,.btn-secondary-link{background:#fff!important;color:#5b4a00!important;border:1px solid #dfca67!important}
-input,select,textarea{background:#fff!important;color:#171717!important;border:1px solid #ddd18c!important;border-radius:10px!important}
-input:focus,select:focus,textarea:focus{border-color:#d6aa00!important;box-shadow:0 0 0 3px rgba(244,196,0,.16)!important;outline:none!important}
-table{background:#fff!important;color:#242424!important;border-color:var(--premium-line)!important}
-th{background:#fff6bd!important;color:#5c4700!important;border-color:var(--premium-line)!important}
-td{border-color:#f0e8bf!important}
-tr:hover td{background:#fffdf0!important}
-.metric-icon,.icon-box{background:linear-gradient(135deg,#fff0a1,#f2c51c)!important;color:#5d4800!important;box-shadow:0 5px 14px rgba(212,169,0,.15)!important}
-.badge,.count-badge,.status-badge{background:#fff3a8!important;color:#654d00!important;border-color:#e4cd65!important}
-.progress-bar-flat{background:linear-gradient(90deg,#f0bd00,#ffe36b)!important}
-hr{border-color:var(--premium-line)!important}
-.modal,.overlay{background:rgba(255,252,232,.78)!important;backdrop-filter:blur(8px)!important}
-#giantLogisticsPopup{background:rgba(73,60,0,.28)!important}
-::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-track{background:#fffdf1}::-webkit-scrollbar-thumb{background:#e1c54e;border-radius:20px}::-webkit-scrollbar-thumb:hover{background:#cda900}
-</style>
-
-<style id="premium-wyb-theme">
-/* Premium White + Yellow + Black theme — visual only */
-:root{
- --premium-white:#ffffff; --premium-soft:#fffdf5; --premium-yellow:#f5c400;
- --premium-yellow2:#ffd83d; --premium-black:#111111; --premium-gray:#f3f4f6;
- --premium-border:#e7e0bf; --premium-text:#111111; --premium-muted:#6b7280;
- --bg-main:#ffffff !important; --bg-card:#ffffff !important; --bg-secondary:#fffdf5 !important;
- --border-color:#e7e0bf !important; --text-primary:#111111 !important;
- --text-secondary:#4b5563 !important; --text-muted:#6b7280 !important;
- --accent-blue:#f5c400 !important; --accent-purple:#111111 !important;
-}
-html,body{background:#fff!important;color:#111!important;font-family:Inter,Manrope,Segoe UI,Arial,sans-serif!important}
-body{background:linear-gradient(135deg,#fff 0%,#fff 68%,#fff9dc 100%)!important}
-.sidebar,.side-nav,.navbar,.topbar{background:#111!important;color:#fff!important;border-color:#242424!important}
-.sidebar *, .side-nav *, .navbar *, .topbar *{color:inherit}
-.logo,.brand,.sidebar-brand{color:#fff!important}
-.sidebar a,.side-nav a,.nav-item{color:#e5e7eb!important}
-.sidebar a:hover,.side-nav a:hover,.nav-item:hover,.nav-item.active{background:#f5c400!important;color:#111!important}
-.main-content,.content,.content-section,.view-panel{background:transparent!important}
-.card,.main-card,.side-card,.metric-card,.wizard-container,.table-card,.panel,.modal-content,.dashboard-card,.activity-card,.stat-card{
- background:#fff!important;color:#111!important;border:1px solid #e7e0bf!important;
- box-shadow:0 8px 28px rgba(17,17,17,.07)!important;border-radius:14px!important
-}
-.card-header,.card-header-accented,.view-header,.list-header{background:#fffdf5!important;color:#111!important;border-color:#f5c400!important}
-h1,h2,h3,h4,h5,h6,.metric-label,.subtitle,.card-title,.section-title{color:#111!important}
-input,select,textarea{background:#fff!important;color:#111!important;border:1px solid #d9d3b7!important}
-input:focus,select:focus,textarea:focus{border-color:#f5c400!important;box-shadow:0 0 0 3px rgba(245,196,0,.16)!important;outline:none!important}
-button,.btn{font-family:inherit!important}
-.btn-primary,.btn-accent,.btn-success,.btn-warning,.btn-main{background:#f5c400!important;color:#111!important;border-color:#f5c400!important;font-weight:800!important}
-.btn-primary:hover,.btn-accent:hover,.btn-success:hover,.btn-warning:hover,.btn-main:hover{background:#111!important;color:#fff!important;border-color:#111!important}
-.btn-secondary,.btn-outline,.btn-secondary-link{background:#fff!important;color:#111!important;border:1px solid #111!important}
-.btn-secondary:hover,.btn-outline:hover,.btn-secondary-link:hover{background:#111!important;color:#fff!important}
-.table-container,table{background:#fff!important;color:#111!important}
-thead,th{background:#111!important;color:#fff!important}
-tbody tr:nth-child(even){background:#fffdf5!important}
-tbody tr:hover{background:#fff4b8!important}
-td{color:#222!important;border-color:#eee7c9!important}
-.badge,.count-badge,.status-badge{background:#f5c400!important;color:#111!important;border-color:#f5c400!important;font-weight:800!important}
-.metric-icon,.icon-box{background:#f5c400!important;color:#111!important}
-.progress-bar,.progress-bar-flat{background:#f5c400!important}
-::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-track{background:#f5f5f5}::-webkit-scrollbar-thumb{background:#111;border-radius:10px}::-webkit-scrollbar-thumb:hover{background:#f5c400}
-/* Dark/black areas intentionally use white text for contrast */
-.bg-black,.bg-dark,.dark,.terminal,.audit-log-terminal,.code-block{background:#111!important;color:#fff!important}
-.bg-black *,.bg-dark *,.dark *,.terminal *,.audit-log-terminal *,.code-block *{color:inherit}
-/* Yellow highlights with black text */
-.highlight,.accent,.warning,.live-counter-box,.boxes-box{background:#fff7c7!important;color:#111!important;border-color:#f5c400!important}
-/* White surfaces with black typography */
-.white-surface,.empty-state,.dropdown-menu,.menu-panel{background:#fff!important;color:#111!important}
-</style>
-
-
-<style id="premium-white-yellow-black-red-cleanup">
-:root { --danger-accent:#f59e0b; --warning-accent:#f59e0b; }
-/* Remove decorative red/rose from normal UI */
-.bg-red, .bg-rose, .text-red:not(.warning), .text-rose, .accent-red, .accent-rose { background-color:#f59e0b !important; color:#111111 !important; border-color:#f59e0b !important; }
-/* Keep red only for genuine warning/error states */
-.warning, .danger, .error, [class*="warning"], [class*="danger"], [class*="error"] { }
-#debugErrorLogger { background:#5c4700 !important; color:#fff !important; }
-</style>
-
-<style id="no-red-palette">
-.text-red,.text-danger,.text-rose,.bg-red,.bg-danger,.bg-rose,.badge-red,.badge-danger,.btn-danger,.btn-red { color:#111 !important; background:#f4c400 !important; border-color:#d4a200 !important; }
-.border-red,.border-danger,.border-rose { border-color:#d4a200 !important; }
-.icon-red,.icon-danger,.icon-rose { color:#f4c400 !important; }
-</style>
-
-<style id="final-white-yellow-black-theme">
-/* FINAL PALETTE: red/pink is removed from normal UI. */
-:root {
-  --accent-rose: #f4c400 !important;
-  --accent-red: #f4c400 !important;
-  --danger-accent: #f4c400 !important;
-}
-/* Any red/rose UI element now uses the approved yellow accent with black text. */
-.text-red,.text-rose,.text-danger,.accent-red,.accent-rose,
-.bg-red,.bg-rose,.bg-danger,.badge-red,.badge-rose,.badge-danger,
-.btn-red,.btn-danger {
-  color:#111111 !important;
-  background:#f4c400 !important;
-  border-color:#d4a200 !important;
-}
-.border-red,.border-rose,.border-danger { border-color:#d4a200 !important; }
-.icon-red,.icon-rose,.icon-danger { color:#f4c400 !important; }
-/* Status labels that were pink/red become yellow status labels. */
-[class*="red"], [class*="rose"] {
-  --accent-rose:#f4c400 !important;
-}
-</style>
-
-<style id="final-light-background-fix">
-/* FINAL LIGHT SURFACE FIX: remove dark/black UI backgrounds; preserve black typography. */
-.bg-black,.bg-dark,.dark,.terminal,.audit-log-terminal,.code-block,
-.sidebar,.side-nav,.navbar,.topbar,
-.portal-table th,.portal-table thead th,
-.portal-table tr.black-row td,
-[style*="background:#111"],[style*="background: #111"],[style*="background:#222"],[style*="background: #222"],
-[style*="background:#0d1321"],[style*="background: #0d1321"] {
-  background:#ffffff !important;
-  color:#111111 !important;
-  border-color:#e8dfb8 !important;
-}
-.bg-black *,.bg-dark *,.dark *,.terminal *,.audit-log-terminal *,.code-block *,
-.sidebar *,.side-nav *,.navbar *,.topbar *,
-.portal-table th *,.portal-table tr.black-row td * { color:#111111 !important; }
-.portal-table tr.black-row:hover td { background:#fff9dc !important; color:#111111 !important; }
-.btn-primary:hover,.btn-accent:hover,.btn-success:hover,.btn-warning:hover,.btn-main:hover,
-.btn-secondary:hover,.btn-outline:hover,.btn-secondary-link:hover {
-  background:#f5c400 !important; color:#111111 !important; border-color:#dca900 !important;
-}
-</style>
 </head>
 <body>
     <div class="app-container">
@@ -326,7 +104,7 @@ td{color:#222!important;border-color:#eee7c9!important}
             </nav>
 
             <div class="sidebar-footer" style="display: flex; flex-direction: column; gap: 10px; width: 100%; padding: 16px; border-top: 1px solid var(--border-color); box-sizing: border-box;">
-                <button type="button" id="btnToggleLocalSpeaker" class="btn-primary" style="background: rgba(244, 196, 0, 0.08); border: 1px solid rgba(244, 196, 0, 0.2); color: var(--accent-emerald); width: 100%; border-style: solid; padding: 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: var(--transition-smooth); margin-bottom: 2px;">
+                <button type="button" id="btnToggleLocalSpeaker" class="btn-primary" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--accent-emerald); width: 100%; border-style: solid; padding: 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: var(--transition-smooth); margin-bottom: 2px;">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;" id="localSpeakerIcon">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
                     </svg>
@@ -339,13 +117,13 @@ td{color:#222!important;border-color:#eee7c9!important}
                     </div>
                     <input type="range" id="inputSpeakerSpeed" min="0.60" max="2.00" step="0.05" value="0.95" style="width: 100%; cursor: pointer; accent-color: var(--accent-blue); background: rgba(255,255,255,0.08); height: 4px; border-radius: 2px; outline: none; border: none; padding: 0; margin: 4px 0; display: block; -webkit-appearance: none;">
                 </div>
-                <button type="button" id="btnOpenDeviceManager" class="btn-primary" style="background: rgba(244, 196, 0, 0.08); border: 1px solid rgba(244, 196, 0, 0.2); color: var(--accent-blue); width: 100%; border-style: solid; padding: 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: var(--transition-smooth); margin-bottom: 2px;">
+                <button type="button" id="btnOpenDeviceManager" class="btn-primary" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--accent-blue); width: 100%; border-style: solid; padding: 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: var(--transition-smooth); margin-bottom: 2px;">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                     </svg>
                     <span>Device Approvals</span>
                 </button>
-                <button type="button" id="btnAdminResetPortal" class="btn-primary" style="display: none; background: rgba(244, 196, 0, 0.08); border: 1px solid rgba(244, 196, 0, 0.2); color: var(--accent-rose); width: 100%; border-style: solid; padding: 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: var(--transition-smooth);">
+                <button type="button" id="btnAdminResetPortal" class="btn-primary" style="display: none; background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2); color: var(--accent-rose); width: 100%; border-style: solid; padding: 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: var(--transition-smooth);">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
@@ -373,7 +151,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                     </div>
                 </div>
 
-                <div class="header-right" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div class="header-right">
                     <div class="header-widget" id="headerClockWidget">
                         00:00:00
                     </div>
@@ -396,7 +174,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                         <div class="dashboard-card" style="width: 100%; padding: 24px; display: flex; flex-direction: column; gap: 20px; justify-content: flex-start; overflow: hidden; height: 680px; flex-shrink: 0;">
                             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; flex-shrink: 0; width: 100%;">
                                 <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin: 0;">Stock Overview</h3>
-                                <button type="button" id="btnDownloadStockReportExcel" class="btn-primary" style="background: rgba(244, 196, 0, 0.1); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-style: solid; height: auto;">
+                                <button type="button" id="btnDownloadStockReportExcel" class="btn-primary" style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-style: solid; height: auto;">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                                     </svg>
@@ -405,50 +183,43 @@ td{color:#222!important;border-color:#eee7c9!important}
                             </div>
                             
                             <!-- Summary Cards Side-by-Side -->
-                            <div style="display: flex; gap: 12px; flex-shrink: 0; width: 100%; flex-wrap: wrap;"><div style="flex: 1; min-width: 110px; background: rgba(244, 196, 0, 0.05); border: 1px solid rgba(244, 196, 0, 0.12); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
-                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">📦 Available Stock</span>
-                                    <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-emerald);" id="inventoryTotalItems">0</span>
+                            <div style="display: flex; gap: 16px; flex-shrink: 0; width: 100%; flex-wrap: wrap;">
+                                <div style="flex: 1; min-width: 120px; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total PCs</span>
+                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-blue);" id="inventoryTotalItems">0</span>
                                 </div>
-                                <div style="flex: 1; min-width: 110px; background: rgba(244, 196, 0, 0.05); border: 1px solid rgba(244, 196, 0, 0.12); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
-                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Unique Items</span>
-                                    <span style="font-size: 1.4rem; font-weight: 800; color: var(--text-primary);" id="inventoryUniqueProducts">0</span>
+                                <div style="flex: 1; min-width: 120px; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Unique Items</span>
+                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-emerald);" id="inventoryUniqueProducts">0</span>
                                 </div>
-                                <div style="flex: 1; min-width: 110px; background: rgba(244, 196, 0, 0.05); border: 1px solid rgba(244, 196, 0, 0.12); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
-                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Boxes</span>
-                                    <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-purple);" id="inventoryTotalBoxes">0</span>
+                                <div style="flex: 1; min-width: 120px; background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Boxes</span>
+                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-purple);" id="inventoryTotalBoxes">0</span>
                                 </div>
-                                <div style="flex: 1; min-width: 110px; background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.12); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
-                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Weight</span>
-                                    <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-amber);" id="inventoryTotalWeight">0.00 kg</span>
+                                <div style="flex: 1; min-width: 120px; background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Weight</span>
+                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-amber);" id="inventoryTotalWeight">0.00 kg</span>
                                 </div>
-                                <div style="flex: 1; min-width: 110px; background: rgba(244, 196, 0, 0.05); border: 1px solid rgba(244, 196, 0, 0.12); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
-                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Out of Stock</span>
-                                    <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-rose);" id="inventoryOutOfStockCount">0</span>
+                                <div style="flex: 1; min-width: 120px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Out of Stock</span>
+                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-rose);" id="inventoryOutOfStockCount">0</span>
                                 </div>
-                                <div style="flex: 1; min-width: 110px; background: rgba(244, 196, 0, 0.05); border: 1px solid rgba(244, 196, 0, 0.25); padding: 10px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
-                                    <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Damaged</span>
-                                    <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-rose);" id="inventoryTotalDamaged">0</span>
+                                <div style="flex: 1; min-width: 120px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.25); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Damaged</span>
+                                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--accent-rose);" id="inventoryTotalDamaged">0</span>
                                 </div>
                             </div>
 
                             <!-- Detailed Stock Register Table -->
                             <div style="flex: 1; display: flex; flex-direction: column; gap: 10px; overflow: hidden; width: 100%;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-shrink: 0; width: 100%;">
-                                    <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-secondary); margin: 0;">Product Stock Register</h4>
-                                    <button type="button" id="btnEditStockRegister" class="btn-secondary" style="padding: 6px 14px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; height: auto;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                        </svg>
-                                        <span>Edit</span>
-                                    </button>
-                                </div>
+                                <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-secondary); margin: 0; flex-shrink: 0;">Product Stock Register</h4>
                                 <div class="table-container" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-y: auto; background: var(--bg-primary); flex: 1; width: 100%;">
                                     <table class="portal-table" style="font-size: 0.85rem; margin: 0; width: 100%;">
                                         <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 10; border-bottom: 1px solid var(--border-color);">
                                             <tr>
-                                                <th style="padding: 10px 12px; font-weight: 700; text-align: left;">Product Name</th>
-                                                <th style="padding: 10px 12px; font-weight: 700; text-align: center; width: 150px; color: var(--accent-emerald);">Product Total PC</th>
-                                                <th style="padding: 10px 12px; font-weight: 700; text-align: right; width: 140px; color: var(--accent-amber);">Total Weight</th>
+                                                <th style="padding: 10px 8px; font-weight: 700; text-align: left;">Item Name</th>
+                                                <th style="padding: 10px 8px; font-weight: 700; text-align: right; width: 80px;">PC Qty</th>
+                                                <th style="padding: 10px 8px; font-weight: 700; text-align: right; width: 100px;">Total Weight</th>
                                             </tr>
                                         </thead>
                                         <tbody id="inventoryStockRegisterBody">
@@ -510,24 +281,25 @@ td{color:#222!important;border-color:#eee7c9!important}
                             </div>
                         </div>
 
-                        <div class="dashboard-card table-card" style="padding: 20px; width: 100%; box-sizing: border-box; overflow: hidden;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
-                                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">Recent Inbound Logs</h3>
-                                <button type="button" id="btnExportAllInboundSerialsExcel" class="btn-primary" style="background: rgba(244, 196, 0, 0.1); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); padding: 6px 14px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-style: solid;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                                    </svg>
-                                    <span>Export All Inbound Serials (Excel)</span>
-                                </button>
-                            </div>
-                            <!-- Table hidden — card layout used for all screen sizes -->
-                            <div style="display:none;">
+                        <div class="dashboard-card table-card" style="padding: 24px;">
+                            <h3 style="margin-bottom: 20px; text-align: left;">Recent Inbound Logs</h3>
+                            <div class="table-container">
                                 <table class="portal-table">
-                                    <tbody id="inboundHistoryBody"></tbody>
+                                    <thead>
+                                        <tr>
+                                            <th>Timestamp</th>
+                                            <th>Vehicle No.</th>
+                                            <th>Item Name</th>
+                                            <th>Total Scanned</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="inboundHistoryBody">
+                                        <!-- History items will be logged here -->
+                                    </tbody>
                                 </table>
                             </div>
-                            <!-- Card layout — shown on all screen sizes -->
-                            <div class="inbound-cards-grid" id="inboundHistoryMobileCards"></div>
+                            <div class="mobile-log-cards" id="inboundHistoryMobileCards"></div>
                         </div>
                     </div>
 
@@ -653,7 +425,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                                         </div>
                                         <div class="card-title-group" style="display: flex; align-items: center; gap: 12px;">
                                             <h2 style="margin: 0;">Scanned Serials</h2>
-                                            <button type="button" id="clearAllInboundSerialsBtn" class="btn-clear-all" title="Clear all scanned serials" style="background: rgba(244, 196, 0, 0.08); border: 1px solid rgba(244, 196, 0, 0.2); color: var(--accent-rose); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth); display: inline-flex; align-items: center; gap: 4px;">
+                                            <button type="button" id="clearAllInboundSerialsBtn" class="btn-clear-all" title="Clear all scanned serials" style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2); color: var(--accent-rose); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth); display: inline-flex; align-items: center; gap: 4px;">
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                 </svg>
@@ -687,7 +459,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                 </section>
 
                 <!-- 3. OUTBOUND SECTION -->
-                <section class="content-section" id="sectionOutbound" style="display: none; padding: 24px; height: 100%; width: 100%; box-sizing: border-box; overflow-y: auto; overflow-x: hidden;">
+                <section class="content-section" id="sectionOutbound" style="display: none; padding: 24px; height: 100%; width: 100%; box-sizing: border-box; overflow-y: auto;">
                     
                     <!-- State A: Outbound Session Inactive -->
                     <div id="outboundInactiveState" style="width: 100%; display: flex; flex-direction: column; gap: 24px;">
@@ -733,7 +505,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                         <!-- Active Order Queue (Outbound Tab View) -->
                         <div class="dashboard-card table-card" id="outboundQueueContainer" style="margin-bottom: 24px; display: none;">
                             <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 16px;">
-                                <div class="card-icon blue" style="background: rgba(244, 196, 0, 0.1); color: var(--accent-blue);">
+                                <div class="card-icon blue" style="background: rgba(59, 130, 246, 0.1); color: var(--accent-blue);">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                     </svg>
@@ -748,33 +520,56 @@ td{color:#222!important;border-color:#eee7c9!important}
                             </div>
                         </div>
 
-                        <div class="dashboard-card table-card" style="padding: 20px; width: 100%; box-sizing: border-box; overflow: hidden;">
-                            <!-- Today Summary Bar -->
-                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; justify-content: space-between;">
-                                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">Recent Outbound Logs</h3>
-                                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                                    <button type="button" id="btnExportAllOutboundSerialsExcel" class="btn-primary" style="background: rgba(244, 196, 0, 0.1); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); padding: 6px 14px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-style: solid;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                                        </svg>
-                                        <span>Export All Outbound Serials (Excel)</span>
-                                    </button>
-                                    <div style="display: flex; align-items: center; gap: 6px; background: rgba(244,196,0,0.08); border: 1px solid rgba(244,196,0,0.2); padding: 5px 12px; border-radius: var(--radius-sm); font-size: 0.82rem; font-weight: 700; color: var(--accent-blue);">
-                                        📦 Today's Boxes: <span id="todayOutboundBoxes" style="margin-left:4px;">0</span>
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 6px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); padding: 5px 12px; border-radius: var(--radius-sm); font-size: 0.82rem; font-weight: 700; color: var(--accent-amber);">
-                                        ⚖️ Today's Weight: <span id="todayOutboundWeight" style="margin-left:4px;">0.000 kg</span>
-                                    </div>
+                        <div class="dashboard-card table-card">
+                            <div class="card-header">
+                                <div class="card-icon emerald">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" />
+                                    </svg>
+                                </div>
+                                <div class="card-title-group">
+                                    <h2>Completed Outbound Logs</h2>
+                                    <p>History of previously closed dispatch sessions</p>
                                 </div>
                             </div>
-                            <!-- Table hidden — card layout used for all screen sizes -->
-                            <div style="display:none;">
+                            
+                            <!-- Today's Dispatch Summary Bar -->
+                            <div style="display: flex; gap: 16px; padding: 12px 24px; border-bottom: 1px solid var(--border-color); background: rgba(16, 185, 129, 0.02); flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted);">Today's Dispatch Summary:</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; color: var(--accent-blue);">
+                                    <span>Total Boxes:</span>
+                                    <span id="todayOutboundBoxes">0</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; color: var(--accent-amber);">
+                                    <span>Total Weight:</span>
+                                    <span id="todayOutboundWeight">0.000 kg</span>
+                                </div>
+                            </div>
+                            
+                            <div class="table-container">
                                 <table class="portal-table" id="outboundHistoryTable">
-                                    <tbody id="outboundHistoryBody"></tbody>
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 50px; text-align: center;">Mark</th>
+                                            <th>Timestamp</th>
+                                            <th>Shop Name</th>
+                                            <th>Invoice No.</th>
+                                            <th>ODA Status</th>
+                                            <th>Total Items</th>
+                                            <th>Total Weight</th>
+                                            <th>Total PCs</th>
+                                            <th>Total Boxes</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="outboundHistoryBody">
+                                        <!-- Completed logs populated dynamically -->
+                                    </tbody>
                                 </table>
                             </div>
-                            <!-- Card layout — shown on all screen sizes -->
-                            <div class="outbound-cards-grid" id="outboundHistoryMobileCards"></div>
+                            <div class="mobile-log-cards" id="outboundHistoryMobileCards"></div>
                         </div>
                     </div>
 
@@ -789,17 +584,17 @@ td{color:#222!important;border-color:#eee7c9!important}
                                         <span class="detail-val" id="activeOutboundShop">Shop Name</span>
                                     </div>
                                     <div class="session-detail-item">
-                                         <span class="detail-label">INVOICE NO.</span>
-                                         <span class="detail-val" id="activeOutboundInvoice">INV-XXXX</span>
-                                     </div>
-                                     <div class="session-detail-item">
-                                         <span class="detail-label">PINCODE</span>
-                                         <span class="detail-val font-mono" id="activeOutboundPincode" style="color: var(--accent-blue);">N/A</span>
-                                     </div>
-                                     <div class="session-detail-item">
-                                         <span class="detail-label">TOTAL DISPATCH WEIGHT</span>
-                                         <span class="detail-val font-mono" id="activeOutboundWeight" style="color: var(--accent-emerald);">0.000 kg</span>
-                                     </div>
+                                        <span class="detail-label">INVOICE NO.</span>
+                                        <span class="detail-val" id="activeOutboundInvoice">INV-XXXX</span>
+                                    </div>
+                                    <div class="session-detail-item">
+                                        <span class="detail-label">PINCODE</span>
+                                        <span class="detail-val font-mono" id="activeOutboundPincode" style="color: var(--accent-blue);">N/A</span>
+                                    </div>
+                                    <div class="session-detail-item">
+                                        <span class="detail-label">TOTAL DISPATCH WEIGHT</span>
+                                        <span class="detail-val font-mono" id="activeOutboundWeight" style="color: var(--accent-emerald);">0.000 kg</span>
+                                    </div>
                                     <div class="session-detail-item">
                                         <span class="detail-label">TOTAL DISPATCH BOXES</span>
                                         <span class="detail-val font-mono" id="activeOutboundBoxesCount" style="color: var(--accent-blue);">0 Boxes</span>
@@ -809,23 +604,19 @@ td{color:#222!important;border-color:#eee7c9!important}
                                     <div id="odaIndicatorBadge" style="display: none; align-items: center; justify-content: center; font-weight: 800; font-size: 0.82rem; padding: 10px 18px; border-radius: var(--radius-sm); border-style: solid; border-width: 2px; text-transform: uppercase;">
                                         <!-- Will be populated dynamically -->
                                     </div>
-                                    <!-- Giant Logistics Badge: shown when total weight < 10 kg -->
-                                    <div id="giantLogisticsBadge" style="display: none; align-items: center; justify-content: center; font-weight: 800; font-size: 0.82rem; padding: 10px 18px; border-radius: var(--radius-sm); background-color: #dca900; color: #ffffff; letter-spacing: 0.05em; text-transform: uppercase; box-shadow: 0 4px 14px rgba(244, 196, 0,0.35); animation: giantBadgePulse 2s infinite; white-space: nowrap;">
-                                        🚚 Giant Logistics
-                                    </div>
-                                    <button type="button" class="btn-primary" id="btnEditOutboundSessionInfo" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(244, 196, 0, 0.2); padding: 10px 18px; display: flex; align-items: center; gap: 8px; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
+                                    <button type="button" class="btn-primary" id="btnEditOutboundSessionInfo" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); padding: 10px 18px; display: flex; align-items: center; gap: 8px; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                         </svg>
                                         <span>Edit Details</span>
                                     </button>
-                                    <button type="button" class="btn-primary" id="endOutboundSessionBtn" style="background-color: var(--accent-emerald); border-color: var(--accent-emerald); box-shadow: 0 4px 12px rgba(244, 196, 0, 0.2); padding: 10px 18px; display: flex; align-items: center; gap: 8px;">
+                                    <button type="button" class="btn-primary" id="endOutboundSessionBtn" style="background-color: var(--accent-emerald); border-color: var(--accent-emerald); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); padding: 10px 18px; display: flex; align-items: center; gap: 8px;">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                                         </svg>
                                         <span>End & Save Session</span>
                                     </button>
-                                    <button type="button" class="btn-secondary-link" id="cancelActiveOutboundSessionBtn" style="color: var(--accent-rose); border: 1px solid rgba(244, 196, 0, 0.2); background: rgba(244, 196, 0, 0.05); padding: 10px 18px; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
+                                    <button type="button" class="btn-secondary-link" id="cancelActiveOutboundSessionBtn" style="color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.2); background: rgba(244, 63, 94, 0.05); padding: 10px 18px; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
                                         Cancel Session
                                     </button>
                                 </div>
@@ -1055,7 +846,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                             </div>
                             
                             <!-- Right Column: Deleted Serials (Trash Bin) -->
-                            <div class="dashboard-card" style="padding: 24px; display: flex; flex-direction: column; gap: 16px; height: 680px; overflow: hidden; border: 1px dashed rgba(244, 196, 0, 0.35); background: rgba(244, 196, 0, 0.01);">
+                            <div class="dashboard-card" style="padding: 24px; display: flex; flex-direction: column; gap: 16px; height: 680px; overflow: hidden; border: 1px dashed rgba(244, 63, 94, 0.35); background: rgba(244, 63, 94, 0.01);">
                                 <div style="display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px;">
                                     <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--accent-rose); margin: 0; display: flex; align-items: center; gap: 8px;">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px;">
@@ -1081,7 +872,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                         <div class="dashboard-card" style="width: 100%; padding: 24px; display: flex; flex-direction: column; gap: 20px; justify-content: flex-start; overflow: hidden; height: auto; flex-shrink: 0;">
                             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; flex-shrink: 0; width: 100%;">
                                 <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin: 0;">Mixed Inventory MIS Report Generator</h3>
-                                <button type="button" id="btnExportMisReportExcel" class="btn-primary" style="background: rgba(244, 196, 0, 0.1); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-style: solid; height: auto;">
+                                <button type="button" id="btnExportMisReportExcel" class="btn-primary" style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-style: solid; height: auto;">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                                     </svg>
@@ -1138,15 +929,15 @@ td{color:#222!important;border-color:#eee7c9!important}
 
                             <!-- Summary totals card -->
                             <div style="display: flex; gap: 16px; flex-wrap: wrap; width: 100%;">
-                                <div style="flex: 1 1 180px; background: rgba(244, 196, 0, 0.05); border: 1px solid rgba(244, 196, 0, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                <div style="flex: 1 1 180px; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
                                     <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Inward Pcs</span>
                                     <span style="font-size: 1.3rem; font-weight: 800; color: var(--accent-blue);" id="misTotalInwardPcs">0</span>
                                 </div>
-                                <div style="flex: 1 1 180px; background: rgba(244, 196, 0, 0.05); border: 1px solid rgba(244, 196, 0, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                <div style="flex: 1 1 180px; background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
                                     <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Outward Pcs</span>
                                     <span style="font-size: 1.3rem; font-weight: 800; color: var(--accent-rose);" id="misTotalOutwardPcs">0</span>
                                 </div>
-                                <div style="flex: 1 1 180px; background: rgba(244, 196, 0, 0.05); border: 1px solid rgba(244, 196, 0, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
+                                <div style="flex: 1 1 180px; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.12); padding: 12px 16px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;">
                                     <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Net Quantity Pcs</span>
                                     <span style="font-size: 1.3rem; font-weight: 800; color: var(--accent-emerald);" id="misNetPcs">0</span>
                                 </div>
@@ -1171,7 +962,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                             </div>
                             
                             <!-- Scanner Input Row -->
-                            <div style="display: flex; gap: 12px; align-items: center; background: rgba(244, 196, 0, 0.02); border: 1px dashed rgba(244, 196, 0, 0.3); padding: 16px; border-radius: var(--radius-md);">
+                            <div style="display: flex; gap: 12px; align-items: center; background: rgba(244, 63, 94, 0.02); border: 1px dashed rgba(244, 63, 94, 0.3); padding: 16px; border-radius: var(--radius-md);">
                                 <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
                                     <label style="font-size: 0.78rem; font-weight: 700; color: var(--text-secondary);">Scan Damaged Product Serial Number</label>
                                     <input type="text" id="damageSerialInput" placeholder="Scan or enter damaged serial number..." style="width: 100%; padding: 10px 14px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.9rem; font-family: var(--font-mono); outline: none;">
@@ -1216,35 +1007,21 @@ td{color:#222!important;border-color:#eee7c9!important}
                         
                         <!-- Top actions / File Upload -->
                         <div class="dashboard-card" style="width: 100%; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; flex-wrap: wrap; gap: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
                                 <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--accent-blue); margin: 0; display: flex; align-items: center; gap: 8px;">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px; stroke-width: 2.5;">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                                     </svg>
                                     <span>ODA Pincode Register</span>
                                 </h3>
-                                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                                    <button type="button" id="btnDownloadSampleOdaTemplate" class="btn-primary" style="background: rgba(244, 196, 0, 0.1); border: 1px solid rgba(244, 196, 0, 0.3); color: var(--accent-blue); padding: 8px 16px; font-size: 0.8rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; gap: 6px;" title="Download sample format Excel file">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                        <span>Download Sample Template (.xlsx)</span>
-                                    </button>
-                                    <button type="button" id="btnExportAllOdaExcel" class="btn-primary" style="background: rgba(244, 196, 0, 0.1); border: 1px solid rgba(244, 196, 0, 0.3); color: var(--accent-emerald); padding: 8px 16px; font-size: 0.8rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                        </svg>
-                                        <span>Export All ODA (Excel)</span>
-                                    </button>
-                                    <button type="button" id="btnClearOdaDatabase" class="btn-primary" style="background: rgba(244, 196, 0, 0.1); border: 1px solid rgba(244, 196, 0, 0.3); color: var(--accent-rose); padding: 8px 16px; font-size: 0.8rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
-                                        Clear Entire Database
-                                    </button>
-                                </div>
+                                <button type="button" id="btnClearOdaDatabase" class="btn-primary" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose); padding: 8px 16px; font-size: 0.8rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer;">
+                                    Clear Database
+                                </button>
                             </div>
                             
                             <!-- File Upload Area -->
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                                <div id="odaDropZone" style="border: 2px dashed rgba(244, 196, 0, 0.3); background: rgba(244, 196, 0, 0.02); padding: 32px 16px; border-radius: var(--radius-md); text-align: center; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; transition: var(--transition-smooth);">
+                                <div id="odaDropZone" style="border: 2px dashed rgba(59, 130, 246, 0.3); background: rgba(59, 130, 246, 0.02); padding: 32px 16px; border-radius: var(--radius-md); text-align: center; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; transition: var(--transition-smooth);">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 40px; height: 40px; color: var(--accent-blue);">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                                     </svg>
@@ -1269,63 +1046,33 @@ td{color:#222!important;border-color:#eee7c9!important}
                                     <div id="odaUploadProgress" style="display: none; flex-direction: column; gap: 6px; margin-top: 10px;">
                                         <span id="odaUploadProgressText" style="font-size: 0.8rem; font-weight: 700; color: var(--accent-emerald);">Processing 0 rows...</span>
                                         <button type="button" id="btnSaveUploadedOda" class="btn-primary" style="background: var(--accent-emerald); border-color: var(--accent-emerald); color: white; width: 100%; font-weight: 700; font-size: 0.85rem; padding: 8px; border-radius: var(--radius-sm); cursor: pointer;">
-                                            + Add & Merge to ODA Database
+                                            Save & Sync ODA Database
                                         </button>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Uploaded ODA Files History Card -->
-                        <div class="dashboard-card" style="width: 100%; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--accent-blue); margin: 0; display: flex; align-items: center; gap: 8px;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <span>Uploaded ODA Files History (<span id="odaFilesHistoryCount">0</span> files)</span>
-                                </h4>
-                            </div>
-                            <div class="table-container" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-x: auto; max-height: 250px;">
-                                <table class="portal-table" style="width: 100%; border-collapse: collapse; text-align: left;">
-                                    <thead>
-                                        <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">
-                                            <th style="padding: 10px 12px;">File Name</th>
-                                            <th style="padding: 10px 12px;">Upload Date & Time</th>
-                                            <th style="padding: 10px 12px;">Pincodes Count</th>
-                                            <th style="padding: 10px 12px; text-align: right;">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="odaFilesHistoryTableBody">
-                                        <tr>
-                                            <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px;">No ODA files uploaded yet.</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <!-- Active ODA Database View Table -->
+                        <!-- ODA Database View Table -->
                         <div class="dashboard-card" style="width: 100%; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
                                 <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-secondary); margin: 0;">
-                                    Active ODA Database (<span id="odaRecordsCount">0</span> total pincodes)
+                                    Active ODA Database (<span id="odaRecordsCount">0</span> records)
                                 </h4>
-                                <input type="text" id="odaSearchInput" placeholder="Search pincode, courier or file name..." style="padding: 8px 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.8rem; outline: none; width: 260px;">
+                                <input type="text" id="odaSearchInput" placeholder="Search pincode or courier name..." style="padding: 8px 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.8rem; outline: none; width: 220px;">
                             </div>
                             <div class="table-container" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-x: auto; max-height: 400px;">
                                 <table class="portal-table" style="width: 100%; border-collapse: collapse; text-align: left;">
                                     <thead>
                                         <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">
-                                            <th style="padding: 10px 12px;">Pincode</th>
-                                            <th style="padding: 10px 12px;">Courier Name</th>
-                                            <th style="padding: 10px 12px;">Remark</th>
-                                            <th style="padding: 10px 12px;">Source File</th>
+                                            <th style="padding: 10px 8px;">Pincode</th>
+                                            <th style="padding: 10px 8px;">Courier Name</th>
+                                            <th style="padding: 10px 8px;">Remark</th>
                                         </tr>
                                     </thead>
                                     <tbody id="odaTableBody">
                                         <tr>
-                                            <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">No ODA pincode records loaded. Please upload a file above.</td>
+                                            <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 24px;">No ODA pincode records loaded. Please upload a file above.</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -1457,7 +1204,7 @@ td{color:#222!important;border-color:#eee7c9!important}
     </div>
     <!-- Custom Reject Modal for Scan Validation Mismatches -->
     <div class="modal-overlay" id="skuWarningModal">
-        <div class="modal-card" style="border-color: var(--accent-rose); box-shadow: 0 20px 50px rgba(244, 196, 0, 0.15);">
+        <div class="modal-card" style="border-color: var(--accent-rose); box-shadow: 0 20px 50px rgba(244, 63, 94, 0.15);">
             <div class="modal-header" style="color: var(--accent-rose);">
                 <h3 style="display: flex; align-items: center; gap: 8px;">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:24px; height:24px; stroke-width: 2.5;">
@@ -1491,13 +1238,13 @@ td{color:#222!important;border-color:#eee7c9!important}
                 <input type="text" id="warningModalConfirmInput" placeholder="Scan barcode again to confirm add..." style="background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 12px 16px; border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.95rem; width: 100%;" autocomplete="off">
             </div>
             <div class="modal-footer" style="margin-top: 16px; display: flex; gap: 12px; width: 100%;">
-                <button type="button" id="allowLengthBtn" style="display: none; border: 1px solid var(--accent-emerald); color: var(--accent-emerald); background: rgba(244,196,0,0.05); flex: 1; border-radius: var(--radius-sm); font-weight: 700; padding: 12px; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); text-align: center;">
+                <button type="button" id="allowLengthBtn" style="display: none; border: 1px solid var(--accent-emerald); color: var(--accent-emerald); background: rgba(16,185,129,0.05); flex: 1; border-radius: var(--radius-sm); font-weight: 700; padding: 12px; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); text-align: center;">
                     Allow & Save Length
                 </button>
-                <button type="button" id="warningAddProductBtn" style="display: none; border: 1px solid var(--accent-blue); color: var(--accent-blue); background: rgba(244,196,0,0.05); flex: 1; border-radius: var(--radius-sm); font-weight: 700; padding: 12px; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); text-align: center;">
+                <button type="button" id="warningAddProductBtn" style="display: none; border: 1px solid var(--accent-blue); color: var(--accent-blue); background: rgba(59,130,246,0.05); flex: 1; border-radius: var(--radius-sm); font-weight: 700; padding: 12px; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); text-align: center;">
                     Add Product
                 </button>
-                <button type="button" class="btn-primary" id="rejectScanBtn" style="background-color: var(--accent-rose); box-shadow: 0 4px 12px rgba(244, 196, 0, 0.2); flex: 1; width: 100%;">
+                <button type="button" class="btn-primary" id="rejectScanBtn" style="background-color: var(--accent-rose); box-shadow: 0 4px 12px rgba(244, 63, 94, 0.2); flex: 1; width: 100%;">
                     Reject & Dismiss Scan
                 </button>
             </div>
@@ -1576,7 +1323,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                 </div>
                 <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end; width: 100%;">
                     <button type="button" class="btn-secondary-link" id="cancelWeightModalBtn" style="border:1px solid var(--border-color); color:var(--text-secondary); background:none; border-radius:var(--radius-sm); font-weight:600; padding:10px 16px; font-size:0.9rem; cursor:pointer; text-align:center;">Cancel</button>
-                    <button type="submit" class="btn-primary" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(244, 196, 0, 0.2); border-radius:var(--radius-sm); font-weight:600; padding:10px 20px; font-size:0.9rem; cursor:pointer; color:white; border-style:solid;">Save Weight</button>
+                    <button type="submit" class="btn-primary" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); border-radius:var(--radius-sm); font-weight:600; padding:10px 20px; font-size:0.9rem; cursor:pointer; color:white; border-style:solid;">Save Weight</button>
                 </div>
             </form>
         </div>
@@ -1595,7 +1342,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                 <button type="button" class="close-modal" id="closeOutboundConfigModalBtn" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
             </div>
             <form id="outboundConfigForm" style="display: flex; flex-direction: column; gap: 20px; margin-top: 16px;">
-                <div class="form-group" style="background: rgba(244, 196, 0, 0.03); border: 1px dashed rgba(244, 196, 0, 0.25); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                <div class="form-group" style="background: rgba(59, 130, 246, 0.03); border: 1px dashed rgba(59, 130, 246, 0.25); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 8px;">
                     <label for="outboundInvoicePasteArea" style="font-weight: 800; color: var(--accent-blue); display: flex; align-items: center; gap: 6px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer;">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
@@ -1625,7 +1372,7 @@ td{color:#222!important;border-color:#eee7c9!important}
 
                 <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end; width: 100%;">
                     <button type="button" class="btn-secondary-link" id="cancelOutboundConfigModalBtn" style="border:1px solid var(--border-color); color:var(--text-secondary); background:none; border-radius:var(--radius-sm); font-weight:600; padding:10px 16px; font-size:0.9rem; cursor:pointer; text-align:center;">Cancel</button>
-                    <button type="submit" class="btn-primary" id="confirmOutboundSessionBtn" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(244, 196, 0, 0.2); border-radius:var(--radius-sm); font-weight:600; padding:10px 20px; font-size:0.9rem; cursor:pointer; color:white; border-style:solid;">Lock Details & Start Scanning</button>
+                    <button type="submit" class="btn-primary" id="confirmOutboundSessionBtn" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); border-radius:var(--radius-sm); font-weight:600; padding:10px 20px; font-size:0.9rem; cursor:pointer; color:white; border-style:solid;">Lock Details & Start Scanning</button>
                 </div>
             </form>
         </div>
@@ -1654,7 +1401,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                 </div>
                 <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end; width: 100%;">
                     <button type="button" class="btn-secondary-link" id="cancelUnrecognizedModalBtn" style="border:1px solid var(--border-color); color:var(--text-secondary); background:none; border-radius:var(--radius-sm); font-weight:600; padding:10px 16px; font-size:0.9rem; cursor:pointer; text-align:center;">Cancel Scan</button>
-                    <button type="button" class="btn-primary" id="confirmUnrecognizedModalBtn" style="background-color: var(--accent-purple); border-color: var(--accent-purple); box-shadow: 0 4px 12px rgba(244, 196, 0, 0.2); border-radius:var(--radius-sm); font-weight:600; padding:10px 20px; font-size:0.9rem; cursor:pointer; color:white; border-style:solid;">Associate & Save</button>
+                    <button type="button" class="btn-primary" id="confirmUnrecognizedModalBtn" style="background-color: var(--accent-purple); border-color: var(--accent-purple); box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2); border-radius:var(--radius-sm); font-weight:600; padding:10px 20px; font-size:0.9rem; cursor:pointer; color:white; border-style:solid;">Associate & Save</button>
                 </div>
             </div>
         </div>
@@ -1677,7 +1424,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                     <strong id="outboundAddProductConfirmName" style="color: var(--accent-blue); display:block; margin: 6px 0; font-size:1rem;">LED Monitor 18.5" (Geonix)</strong>
                     Do you want to add this product to the current outbound dispatch?
                 </p>
-                <div style="font-size: 0.8rem; color: var(--accent-blue); background: rgba(244, 196, 0, 0.05); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(244, 196, 0, 0.1); margin: 0; line-height: 1.4; display: flex; align-items: center; gap: 6px;">
+                <div style="font-size: 0.8rem; color: var(--accent-blue); background: rgba(59, 130, 246, 0.05); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(59, 130, 246, 0.1); margin: 0; line-height: 1.4; display: flex; align-items: center; gap: 6px;">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; flex-shrink: 0; stroke-width: 2.5;">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
@@ -1686,37 +1433,8 @@ td{color:#222!important;border-color:#eee7c9!important}
                 <input type="text" id="outboundAddProductConfirmInput" style="position: absolute; opacity: 0; pointer-events: none;" autocomplete="off">
                 <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end; width: 100%;">
                     <button type="button" class="btn-secondary-link" id="cancelOutboundAddProductBtn" style="border:1px solid var(--border-color); color:var(--text-secondary); background:none; border-radius:var(--radius-sm); font-weight:600; padding:10px 16px; font-size:0.9rem; cursor:pointer; text-align:center;">Reject Scan</button>
-                    <button type="button" class="btn-primary" id="confirmOutboundAddProductBtn" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(244, 196, 0, 0.2); border-radius:var(--radius-sm); font-weight:600; padding:10px 20px; font-size:0.9rem; cursor:pointer; color:white; border-style:solid;">Add Product</button>
+                    <button type="button" class="btn-primary" id="confirmOutboundAddProductBtn" style="background-color: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); border-radius:var(--radius-sm); font-weight:600; padding:10px 20px; font-size:0.9rem; cursor:pointer; color:white; border-style:solid;">Add Product</button>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Edit Product Stock Register Modal -->
-    <div class="modal-overlay" id="editStockRegisterModal">
-        <div class="modal-card" style="max-width: 780px; max-height: 85vh; box-sizing: border-box;">
-            <div class="modal-header">
-                <h3>Edit Product Stock Register</h3>
-                <button class="modal-close" id="closeEditStockRegisterModalBtn" aria-label="Close modal">&times;</button>
-            </div>
-            <div style="overflow-y: auto; flex: 1; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
-                <table class="portal-table" style="width: 100%; margin: 0; font-size: 0.85rem;">
-                    <thead style="position: sticky; top: 0; z-index: 5;">
-                        <tr>
-                            <th style="padding: 10px 12px; font-weight: 700; text-align: left;">Product Name</th>
-                            <th style="padding: 10px 12px; font-weight: 700; text-align: center; width: 110px;">Product Total PC</th>
-                            <th style="padding: 10px 12px; font-weight: 700; text-align: right; width: 135px;">Total Weight (kg)</th>
-                            <th style="padding: 10px 12px; font-weight: 700; text-align: right; width: 180px;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="editStockRegisterBody">
-                        <!-- Populated dynamically by JS -->
-                    </tbody>
-                </table>
-            </div>
-            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 0.78rem; color: var(--text-muted);">💡 Edit Product PC or Weight, then click <strong>Save</strong>. Click <strong>Reset</strong> to restore log stock.</span>
-                <button type="button" class="btn-secondary-link" id="closeEditStockRegisterModalFooterBtn">Close</button>
             </div>
         </div>
     </div>
@@ -1762,7 +1480,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                     First Serial of Boxes
                 </h3>
                 <div style="display: flex; align-items: center; gap: 12px; margin-left: auto; margin-right: 12px;">
-                    <button type="button" id="btnToggleFirstSerialsView" style="background: rgba(244, 196, 0, 0.1); border: 1px solid rgba(244, 196, 0, 0.4); color: var(--accent-blue); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: var(--transition-smooth);">
+                    <button type="button" id="btnToggleFirstSerialsView" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.4); color: var(--accent-blue); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: var(--transition-smooth);">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 5.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 10.125v-4.5zM13.5 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5z" />
                         </svg>
@@ -1811,27 +1529,13 @@ td{color:#222!important;border-color:#eee7c9!important}
             </div>
             
             <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; margin-top: auto;">
-                <button type="button" class="btn-danger" id="btnClearAllDevicesBtn" style="background: rgba(244, 196, 0, 0.1); border: 1px solid rgba(244, 196, 0, 0.3); color: var(--accent-rose); padding: 8px 16px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-style: solid;">
+                <button type="button" class="btn-danger" id="btnClearAllDevicesBtn" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose); padding: 8px 16px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-style: solid;">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                     <span>Clear All Devices</span>
                 </button>
                 <button type="button" class="btn-secondary-link" id="closeDeviceManagerModalFooterBtn" style="border:1px solid var(--border-color); color:var(--text-secondary); background:none; border-radius:var(--radius-sm); font-weight:600; padding:10px 16px; font-size:0.9rem; cursor:pointer;">Close</button>
-            </div>
-        </div>
-    </div>
-    <!-- Giant Logistics Courier Confirm Popup -->
-    <div id="giantLogisticsPopup">
-        <div id="giantLogisticsPopupBox">
-            <div class="gl-truck-icon">🚚</div>
-            <h3>Giant Logistics Courier</h3>
-            <p>Is shipment weight is under 10 kg — this order should be handed over to:</p>
-            <div class="gl-weight-chip" id="glWeightDisplay">— kg</div>
-            <p style="font-size: 1.1rem; font-weight: 800; color: #f6cf25; margin: 0 0 24px;">Giant Logistics</p>
-            <div class="gl-btn-row">
-                <button id="btnGiantLogisticsYes">✅ Yes, Close Session</button>
-                <button id="btnGiantLogisticsCancel">Cancel</button>
             </div>
         </div>
     </div>
@@ -1844,43 +1548,3 @@ td{color:#222!important;border-color:#eee7c9!important}
     <script src="app.js"></script>
 </body>
 </html>
-
-<style id="final-screen-matched-light-theme">
-/* Match the supplied reference: light white surfaces; yellow primary actions; black typography; pink only for Delete/danger. */
-html,body{background:#fff!important;color:#111!important}
-.bg-black,.bg-dark,.dark,.terminal,.audit-log-terminal,.code-block,
-.portal-table tr.black-row td,
-[style*="background:#111"],[style*="background: #111"],[style*="background:#222"],[style*="background: #222"],[style*="background:#0d1321"],[style*="background: #0d1321"]{
- background:#fff!important;color:#111!important;border-color:#e8dfb8!important;
-}
-.bg-black *,.bg-dark *,.dark *,.terminal *,.audit-log-terminal *,.code-block *,.portal-table tr.black-row td *{color:#111!important}
-.dashboard-card,.card,.main-card,.side-card,.metric-card,.stat-card,.panel,.table-container,.modal-content,.wizard-container,.section-card,.activity-card,.box-card,.serial-item-row{background:#fff!important;color:#111!important}
-/* Delete/danger remains the only pink-red accent, as in the reference screenshot. */
-.btn-danger,.btn-delete-row:hover,.btn-delete-box:hover,.btn-delete-serial:hover,.btn-delete-dropdown-item:hover,
-.text-danger,.text-red,.text-rose,.bg-danger,.bg-red,.bg-rose,.badge-danger,.badge-red,.badge-rose{
- background:#fff0f3!important;color:#ef3b6d!important;border-color:#ef3b6d!important;
-}
-.btn-danger:hover{background:#ef3b6d!important;color:#fff!important}
-</style>
-
-<style id="final-generated-card-light-fix">
-.mobile-log-card,
-.mobile-log-card-items,
-.mobile-log-card-item-panel,
-.mobile-log-card-details,
-.mobile-log-card-product-list,
-.mobile-log-card-total,
-.outbound-cards-grid .box-details,
-.outbound-cards-grid .product-details,
-.outbound-cards-grid .items-panel,
-.inbound-cards-grid .box-details,
-.inbound-cards-grid .product-details,
-.inbound-cards-grid .items-panel{background:#fff!important;background-color:#fff!important;color:#111!important}
-.mobile-log-card div[style*="background"],
-.outbound-cards-grid div[style*="background"],
-.inbound-cards-grid div[style*="background"]{background:#fff!important;background-color:#fff!important;color:#111!important;border-color:#e8dfb8!important}
-.mobile-log-card .mobile-log-card-item,.mobile-log-card .mobile-log-card-item span,.outbound-cards-grid .product-name,.inbound-cards-grid .product-name{color:#d49f00!important}
-.mobile-log-card .quantity,.mobile-log-card .total-quantity,.outbound-cards-grid .quantity,.outbound-cards-grid .total-quantity,.inbound-cards-grid .quantity,.inbound-cards-grid .total-quantity{color:#10b981!important}
-.mobile-log-card .btn-mobile-delete,.outbound-cards-grid .btn-delete,.inbound-cards-grid .btn-delete{background:#fff0f3!important;color:#ef3b6d!important;border-color:#ef3b6d!important}
-.mobile-log-card hr,.outbound-cards-grid hr,.inbound-cards-grid hr{border-color:#f4c400!important}
-</style>

@@ -6,33 +6,26 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
-    /* Color Palette - Deep Velvet Obsidian & Premium Red */
-    --bg-primary: #0a060a;
-    --bg-secondary: #120a11;
-    --bg-card: #1a0f18;
-    --border-color: #2e1526;
-    --text-primary: #111111;
-    --text-secondary: #a89ba5;
-    --text-muted: #6e5e6b;
+    /* Color Palette - Deep High-Tech Slate & Dark Blue */
+    --bg-primary: #090d16;
+    --bg-secondary: #0f172a;
+    --bg-card: #152033;
+    --border-color: #1e2d4a;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
 
-    /* Theme Accents - Ruby Crimson & Premium Red Palette */
-    --accent-red: #f4c400;
-    --accent-red-bright: #f6cf25;
-    --accent-red-glow: rgba(244, 196, 0, 0.25);
-    --accent-red-subtle: rgba(244, 196, 0, 0.12);
-    --accent-crimson-gradient: linear-gradient(135deg, #f4c400 0%, #b88700 100%);
-    --accent-ruby-glow: 0 0 20px rgba(244, 196, 0, 0.4);
-
-    --accent-blue: #f4c400;
-    --accent-blue-glow: rgba(244, 196, 0, 0.18);
-    --accent-emerald: #f4c400;
-    --accent-emerald-glow: rgba(244, 196, 0, 0.15);
+    /* Theme Accents */
+    --accent-blue: #3b82f6;
+    --accent-blue-glow: rgba(59, 130, 246, 0.15);
+    --accent-emerald: #10b981;
+    --accent-emerald-glow: rgba(16, 185, 129, 0.15);
     --accent-amber: #f59e0b;
     --accent-amber-glow: rgba(245, 158, 11, 0.15);
-    --accent-rose: #f6cf25;
-    --accent-rose-glow: rgba(244, 196, 0, 0.18);
-    --accent-purple: #f4c400;
-    --accent-purple-glow: rgba(244, 196, 0, 0.15);
+    --accent-rose: #f43f5e;
+    --accent-rose-glow: rgba(244, 63, 94, 0.15);
+    --accent-purple: #8b5cf6;
+    --accent-purple-glow: rgba(139, 92, 246, 0.15);
 
     /* Fonts & Radii */
     --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -48,207 +41,20 @@
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ==========================================================================
-   200X SPEED HIGH-PERFORMANCE GPU ACCELERATION & RENDER ENGINE
-   ========================================================================== */
-* {
-    -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeSpeed;
-}
-
-tr, .mobile-log-card {
-    content-visibility: auto;
-    contain-intrinsic-size: 1000px 50px;
-}
-
-.product-scan-column, .box-card {
-    contain: content;
-}
-
-/* Light Theme Variables (Crimson Light Mode) */
+/* Light Theme Variables (Prepared for switching later) */
 [data-theme="light"] {
-    --bg-primary: #fdf6f8;
+    --bg-primary: #f1f5f9;
     --bg-secondary: #ffffff;
-    --bg-card: #fff0f3;
-    --border-color: #fff7c7;
-    --text-primary: #1e1115;
-    --text-secondary: #644a54;
-    --text-muted: #9e7a87;
+    --bg-card: #f8fafc;
+    --border-color: #e2e8f0;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
     
-    --accent-blue: #f4c400;
-    --accent-blue-glow: rgba(244, 196, 0, 0.1);
-    --accent-emerald-glow: rgba(244, 196, 0, 0.1);
-    --accent-amber-glow: rgba(245, 158, 11, 0.1);
-    --accent-rose-glow: rgba(244, 196, 0, 0.1);
-}
-
-/* ==========================================================================
-   FESTIVAL THEME TOKENS & 3D VISUAL EFFECTS ENGINE
-   ========================================================================== */
-
-/* 🇮🇳 15th August Independence Day Theme */
-[data-festival="independence"] {
-    --bg-primary: #0b0711;
-    --bg-secondary: #140e1e;
-    --bg-card: #1c1429;
-    --border-color: #3f2250;
-    --accent-red: #f59e0b;
-    --accent-red-bright: #f4c400;
-    --accent-red-glow: rgba(249, 115, 22, 0.3);
-    --accent-red-subtle: rgba(249, 115, 22, 0.15);
-    --accent-crimson-gradient: linear-gradient(135deg, #f59e0b 0%, #f4c400 100%);
-    --accent-ruby-glow: 0 0 25px rgba(249, 115, 22, 0.5);
-    --text-primary: #ffffff;
-    --text-secondary: #cbd5e1;
-}
-
-/* 🪔 Diwali Theme (Golden Diya Night) */
-[data-festival="diwali"] {
-    --bg-primary: #0f0901;
-    --bg-secondary: #1a1002;
-    --bg-card: #261804;
-    --border-color: #4a300a;
-    --accent-red: #f59e0b;
-    --accent-red-bright: #f6cf25;
-    --accent-red-glow: rgba(245, 158, 11, 0.35);
-    --accent-red-subtle: rgba(245, 158, 11, 0.15);
-    --accent-crimson-gradient: linear-gradient(135deg, #dca900 0%, #b88700 100%);
-    --accent-ruby-glow: 0 0 25px rgba(245, 158, 11, 0.6);
-    --text-primary: #fffbeb;
-    --text-secondary: #fcd34d;
-}
-
-/* 🪈 Janmashtami Theme (Peacock Sapphire Blue & Gold) */
-[data-festival="janmashtami"] {
-    --bg-primary: #050b18;
-    --bg-secondary: #0a142c;
-    --bg-card: #101d3f;
-    --border-color: #1c336b;
-    --accent-red: #f4c400;
-    --accent-red-bright: #f6cf25;
-    --accent-red-glow: rgba(244, 196, 0, 0.35);
-    --accent-red-subtle: rgba(244, 196, 0, 0.15);
-    --accent-crimson-gradient: linear-gradient(135deg, #dca900 0%, #dca900 100%);
-    --accent-ruby-glow: 0 0 25px rgba(246, 207, 37, 0.5);
-    --text-primary: #ffffff;
-    --text-secondary: #fff3a8;
-}
-
-/* 🐘 Ganesh Chaturthi Theme (Marigold Orange & Gold) */
-[data-festival="ganesh"] {
-    --bg-primary: #120700;
-    --bg-secondary: #1f0c01;
-    --bg-card: #2d1302;
-    --border-color: #572504;
-    --accent-red: #f59e0b;
-    --accent-red-bright: #fb923c;
-    --accent-red-glow: rgba(234, 88, 12, 0.35);
-    --accent-red-subtle: rgba(234, 88, 12, 0.15);
-    --accent-crimson-gradient: linear-gradient(135deg, #dca900 0%, #f4c400 100%);
-    --accent-ruby-glow: 0 0 25px rgba(251, 146, 60, 0.5);
-    --text-primary: #fff7ed;
-    --text-secondary: #fff3a8;
-}
-
-/* 💃 Navratri / Durga Puja Theme (Vermilion Crimson & Gold) */
-[data-festival="navratri"] {
-    --bg-primary: #140406;
-    --bg-secondary: #22070b;
-    --bg-card: #330b11;
-    --border-color: #5c141e;
-    --accent-red: #f4c400;
-    --accent-red-bright: #f6cf25;
-    --accent-red-glow: rgba(220, 38, 38, 0.35);
-    --accent-red-subtle: rgba(220, 38, 38, 0.15);
-    --accent-crimson-gradient: linear-gradient(135deg, #dca900 0%, #f4c400 100%);
-    --accent-ruby-glow: 0 0 25px rgba(248, 113, 113, 0.6);
-    --text-primary: #ffffff;
-    --text-secondary: #fff3a8;
-}
-
-/* 🎨 Holi Theme (Rainbow Gulal) */
-[data-festival="holi"] {
-    --bg-primary: #0d0614;
-    --bg-secondary: #170b24;
-    --bg-card: #231137;
-    --border-color: #482270;
-    --accent-red: #f2c51c;
-    --accent-red-bright: #f472b6;
-    --accent-red-glow: rgba(236, 72, 153, 0.35);
-    --accent-red-subtle: rgba(236, 72, 153, 0.15);
-    --accent-crimson-gradient: linear-gradient(135deg, #e2b800 0%, #f4c400 50%, #f4c400 100%);
-    --accent-ruby-glow: 0 0 25px rgba(244, 114, 182, 0.6);
-    --text-primary: #ffffff;
-    --text-secondary: #fff3a8;
-}
-
-/* 🪁 Makar Sankranti Theme (Sky Blue & Sun Orange) */
-[data-festival="sankranti"] {
-    --bg-primary: #050e17;
-    --bg-secondary: #0a192a;
-    --bg-card: #10263f;
-    --border-color: #1e4570;
-    --accent-red: #f4c400;
-    --accent-red-bright: #f6cf25;
-    --accent-red-glow: rgba(56, 189, 248, 0.35);
-    --accent-red-subtle: rgba(56, 189, 248, 0.15);
-    --accent-crimson-gradient: linear-gradient(135deg, #f4c400 0%, #f59e0b 100%);
-    --accent-ruby-glow: 0 0 25px rgba(56, 189, 248, 0.5);
-    --text-primary: #ffffff;
-    --text-secondary: #fff3a8;
-}
-
-/* 🪢 Raksha Bandhan Theme (Silk Crimson & Gold) */
-[data-festival="raksha"] {
-    --bg-primary: #120509;
-    --bg-secondary: #1f0a10;
-    --bg-card: #2e0f19;
-    --border-color: #541c2e;
-    --accent-red: #f4c400;
-    --accent-red-bright: #f6cf25;
-    --accent-red-glow: rgba(244, 196, 0, 0.35);
-    --accent-red-subtle: rgba(244, 196, 0, 0.15);
-    --accent-crimson-gradient: linear-gradient(135deg, #d4a200 0%, #f4c400 100%);
-    --accent-ruby-glow: 0 0 25px rgba(251, 113, 133, 0.6);
-    --text-primary: #ffffff;
-    --text-secondary: #fff7c7;
-}
-
-/* 3D Canvas Background Element */
-#festivalCanvas3D {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    pointer-events: none;
-    z-index: 1;
-    opacity: 0.8;
-}
-
-/* 3D Card Tilt & Parallax */
-.tilt-3d-card {
-    transform-style: preserve-3d;
-    transition: transform 0.15s cubic-bezier(0.2, 0, 0.2, 1), box-shadow 0.3s ease;
-    will-change: transform;
-}
-
-.tilt-3d-card:hover {
-    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.35), var(--accent-ruby-glow);
-}
-
-/* Rotating Ashoka Chakra Animation */
-@keyframes chakraRotate {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-.ashoka-chakra-icon {
-    width: 24px;
-    height: 24px;
-    display: inline-block;
-    animation: chakraRotate 12s linear infinite;
-    transform-origin: center;
+    --accent-blue-glow: rgba(59, 130, 246, 0.08);
+    --accent-emerald-glow: rgba(16, 185, 129, 0.08);
+    --accent-amber-glow: rgba(245, 158, 11, 0.08);
+    --accent-rose-glow: rgba(244, 63, 94, 0.08);
 }
 
 /* ==========================================================================
@@ -262,9 +68,6 @@ tr, .mobile-log-card {
 
 body {
     background-color: var(--bg-primary);
-    background-image: 
-        radial-gradient(circle at 12% 12%, rgba(244, 196, 0, 0.08) 0%, transparent 40%),
-        radial-gradient(circle at 88% 88%, rgba(159, 18, 57, 0.06) 0%, transparent 45%);
     color: var(--text-primary);
     font-family: var(--font-sans);
     line-height: 1.5;
@@ -300,7 +103,7 @@ a {
     border-radius: var(--radius-sm);
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--accent-red);
+    background: var(--text-muted);
 }
 
 /* ==========================================================================
@@ -333,7 +136,6 @@ a {
     align-items: center;
     padding: 0 24px;
     border-bottom: 1px solid var(--border-color);
-    background: rgba(244, 196, 0, 0.03);
 }
 
 .logo-wrapper {
@@ -343,29 +145,28 @@ a {
 }
 
 .logo-icon {
-    width: 34px;
-    height: 34px;
-    background: linear-gradient(135deg, #f6cf25 0%, #d4a200 100%);
-    border-radius: var(--radius-md);
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--accent-blue), var(--accent-emerald));
+    border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 14px rgba(244, 196, 0, 0.4);
-    border: 1px solid rgba(254, 205, 211, 0.2);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
 .logo-icon svg {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     stroke: #ffffff;
     stroke-width: 2.5;
 }
 
 .logo-text {
     font-weight: 800;
-    font-size: 1.18rem;
+    font-size: 1.15rem;
     letter-spacing: 0.5px;
-    background: linear-gradient(135deg, #ffffff 0%, #fda4af 100%);
+    background: linear-gradient(135deg, #ffffff, #94a3b8);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -386,10 +187,9 @@ a {
     padding: 12px 16px;
     color: var(--text-secondary);
     border-radius: var(--radius-md);
-    font-weight: 600;
+    font-weight: 500;
     cursor: pointer;
     transition: var(--transition-smooth);
-    border-left: 3px solid transparent;
 }
 
 .nav-link svg {
@@ -399,21 +199,15 @@ a {
     transition: var(--transition-smooth);
 }
 
-.nav-link:hover {
+.nav-link:hover, .nav-link.active {
     color: var(--text-primary);
     background-color: var(--bg-card);
-    border-left-color: rgba(244, 196, 0, 0.4);
 }
 
 .nav-link.active {
-    background-color: var(--accent-red-subtle);
-    color: #ffffff;
-    border-left: 3px solid var(--accent-red);
-    box-shadow: inset 3px 0 12px rgba(244, 196, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.nav-link.active svg {
-    stroke: var(--accent-red-bright);
+    background-color: var(--accent-blue-glow);
+    color: var(--accent-blue);
+    border-left: 3px solid var(--accent-blue);
 }
 
 .sidebar-footer {
@@ -504,13 +298,11 @@ a {
 .header-widget {
     font-size: 0.9rem;
     font-family: var(--font-mono);
-    color: var(--accent-red-bright);
-    background: rgba(244, 196, 0, 0.08);
-    padding: 6px 14px;
+    color: var(--text-secondary);
+    background: var(--bg-primary);
+    padding: 6px 12px;
     border-radius: var(--radius-sm);
-    border: 1px solid rgba(244, 196, 0, 0.3);
-    font-weight: 700;
-    box-shadow: 0 0 10px rgba(244, 196, 0, 0.15);
+    border: 1px solid var(--border-color);
 }
 
 .theme-btn {
@@ -524,12 +316,10 @@ a {
     justify-content: center;
     cursor: pointer;
     transition: var(--transition-smooth);
-    color: var(--text-primary);
 }
 
 .theme-btn:hover {
-    border-color: var(--accent-red);
-    box-shadow: 0 0 12px rgba(244, 196, 0, 0.3);
+    border-color: var(--accent-blue);
     transform: rotate(15deg);
 }
 
@@ -574,7 +364,7 @@ a {
     border: 2px dashed var(--border-color);
     border-radius: var(--radius-xl);
     padding: 48px;
-    background: linear-gradient(180deg, rgba(26, 15, 24, 0.5) 0%, rgba(18, 10, 17, 0.2) 100%);
+    background: linear-gradient(180deg, rgba(21, 32, 51, 0.3) 0%, rgba(15, 23, 42, 0.1) 100%);
     position: relative;
     overflow: hidden;
 }
@@ -583,20 +373,20 @@ a {
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    background-color: var(--accent-red-subtle);
+    background-color: var(--accent-blue-glow);
     display: flex;
     align-items: center;
     justify-content: center;
     margin-bottom: 24px;
-    border: 1px solid rgba(244, 196, 0, 0.4);
-    box-shadow: 0 8px 24px rgba(244, 196, 0, 0.25);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.1);
     animation: float 4s ease-in-out infinite;
 }
 
 .welcome-icon svg {
     width: 36px;
     height: 36px;
-    stroke: var(--accent-red-bright);
+    stroke: var(--accent-blue);
     stroke-width: 2;
 }
 
@@ -604,7 +394,7 @@ a {
     font-size: 2rem;
     font-weight: 800;
     margin-bottom: 12px;
-    background: linear-gradient(135deg, #ffffff 0%, #fda4af 100%);
+    background: linear-gradient(135deg, #ffffff, #94a3b8);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -644,15 +434,15 @@ a {
     left: 0;
     width: 100%;
     height: 3px;
-    background: linear-gradient(90deg, transparent, var(--accent-red), transparent);
+    background: linear-gradient(90deg, transparent, var(--accent-blue), transparent);
     transform: scaleX(0);
     transition: var(--transition-smooth);
 }
 
 .guide-card:hover {
     transform: translateY(-4px);
-    border-color: var(--accent-red);
-    box-shadow: 0 12px 24px rgba(244, 196, 0, 0.15);
+    border-color: var(--accent-blue);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
 }
 
 .guide-card:hover::before {
@@ -663,12 +453,12 @@ a {
     width: 42px;
     height: 42px;
     border-radius: var(--radius-md);
-    background-color: rgba(244, 196, 0, 0.1);
+    background-color: rgba(59, 130, 246, 0.1);
     display: flex;
     align-items: center;
     justify-content: center;
     margin-bottom: 16px;
-    border: 1px solid rgba(244, 196, 0, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.2);
 }
 
 .guide-card-icon svg {
@@ -696,15 +486,15 @@ a {
 @keyframes pulse {
     0% {
         transform: scale(0.95);
-        box-shadow: 0 0 0 0 rgba(244, 196, 0, 0.7);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
     }
     70% {
         transform: scale(1);
-        box-shadow: 0 0 0 8px rgba(244, 196, 0, 0);
+        box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
     }
     100% {
         transform: scale(0.95);
-        box-shadow: 0 0 0 0 rgba(244, 196, 0, 0);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
     }
 }
 
@@ -802,18 +592,18 @@ a {
 }
 
 .card-icon.blue {
-    background-color: var(--accent-red-subtle);
-    border: 1px solid rgba(244, 196, 0, 0.3);
+    background-color: var(--accent-blue-glow);
+    border: 1px solid rgba(59, 130, 246, 0.2);
 }
 .card-icon.blue svg {
-    stroke: var(--accent-red-bright);
+    stroke: var(--accent-blue);
     width: 22px;
     height: 22px;
 }
 
 .card-icon.emerald {
     background-color: var(--accent-emerald-glow);
-    border: 1px solid rgba(244, 196, 0, 0.2);
+    border: 1px solid rgba(16, 185, 129, 0.2);
 }
 .card-icon.emerald svg {
     stroke: var(--accent-emerald);
@@ -871,13 +661,13 @@ a {
 
 .form-group input:focus, 
 .form-group select:focus {
-    border-color: var(--accent-red);
-    box-shadow: 0 0 0 3px rgba(244, 196, 0, 0.25);
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px var(--accent-blue-glow);
 }
 
 .form-group select {
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23f43f5e'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 16px center;
     background-size: 16px;
@@ -895,26 +685,24 @@ a {
 
 /* Buttons */
 .btn-primary {
-    background: linear-gradient(135deg, #f4c400 0%, #d4a200 100%);
+    background-color: var(--accent-blue);
     color: #ffffff;
     padding: 12px 20px;
     border-radius: var(--radius-md);
-    font-weight: 700;
+    font-weight: 600;
     font-size: 0.95rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     cursor: pointer;
-    border: 1px solid rgba(254, 205, 211, 0.2);
-    box-shadow: 0 4px 16px rgba(244, 196, 0, 0.35);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
     transition: var(--transition-smooth);
 }
 
 .btn-primary:hover {
-    background: linear-gradient(135deg, #f6cf25 0%, #f4c400 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(244, 196, 0, 0.5);
+    background-color: #2563eb;
+    transform: translateY(-1px);
 }
 
 .btn-primary svg {
@@ -1088,7 +876,7 @@ a {
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    box-shadow: 0 4px 20px rgba(244, 196, 0, 0.05);
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.05);
     border-left: 4px solid var(--accent-blue);
 }
 
@@ -1119,7 +907,7 @@ a {
 
 .btn-danger {
     background-color: var(--accent-rose-glow);
-    border: 1px solid rgba(244, 196, 0, 0.2);
+    border: 1px solid rgba(244, 63, 94, 0.2);
     color: var(--accent-rose);
     padding: 10px 20px;
     border-radius: var(--radius-md);
@@ -1136,7 +924,7 @@ a {
 .btn-danger:hover {
     background-color: var(--accent-rose);
     color: #ffffff;
-    box-shadow: 0 4px 12px rgba(244, 196, 0, 0.2);
+    box-shadow: 0 4px 12px rgba(244, 63, 94, 0.2);
 }
 
 .btn-danger svg {
@@ -1292,7 +1080,7 @@ a {
 }
 
 .box-card:hover {
-    border-color: rgba(244, 196, 0, 0.3);
+    border-color: rgba(16, 185, 129, 0.3);
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
 }
 
@@ -1319,7 +1107,7 @@ a {
 .box-badge {
     background-color: var(--accent-emerald-glow);
     color: var(--accent-emerald);
-    border: 1px solid rgba(244, 196, 0, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.15);
     font-size: 0.75rem;
     font-weight: 700;
     padding: 2px 8px;
@@ -1578,7 +1366,7 @@ a {
     height: 14px;
 }.btn-item-weight-trigger:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(244, 196, 0, 0.15);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
     filter: brightness(1.15);
 }
 
@@ -1671,7 +1459,7 @@ a {
 }
 .portal-table tr.black-row td {
     background-color: #0d1321 !important;
-    color: #111111 !important;
+    color: #f8fafc !important;
     border-bottom: 1px solid #1e293b !important;
 }
 .portal-table tr.black-row:hover td {
@@ -1695,8 +1483,6 @@ a {
     padding: 16px;
     display: flex;
     flex-direction: column;
-    height: 100%;
-    box-sizing: border-box;
     gap: 12px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     transition: var(--transition-smooth);
@@ -1705,7 +1491,7 @@ a {
 .mobile-log-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
-    border-color: rgba(244, 196, 0, 0.3);
+    border-color: rgba(59, 130, 246, 0.3);
 }
 
 /* Header Row of the Card */
@@ -1728,11 +1514,11 @@ a {
 .mobile-log-card-badge {
     font-size: 0.72rem;
     font-weight: 700;
-    background: rgba(244, 196, 0, 0.1);
+    background: rgba(16, 185, 129, 0.1);
     color: var(--accent-emerald);
     padding: 4px 8px;
     border-radius: var(--radius-sm);
-    border: 1px solid rgba(244, 196, 0, 0.2);
+    border: 1px solid rgba(16, 185, 129, 0.2);
     text-transform: uppercase;
     white-space: nowrap;
 }
@@ -1799,200 +1585,38 @@ a {
 }
 
 .btn-mobile-excel {
-    background: rgba(244, 196, 0, 0.08);
-    border-color: rgba(244, 196, 0, 0.25);
+    background: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.25);
     color: var(--accent-emerald);
 }
 .btn-mobile-excel:hover {
-    background: rgba(244, 196, 0, 0.15);
+    background: rgba(16, 185, 129, 0.15);
 }
 
 .btn-mobile-delete {
-    background: rgba(244, 196, 0, 0.08);
-    border-color: rgba(244, 196, 0, 0.25);
+    background: rgba(244, 63, 94, 0.08);
+    border-color: rgba(244, 63, 94, 0.25);
     color: var(--accent-rose);
 }
 .btn-mobile-delete:hover {
-    background: rgba(244, 196, 0, 0.15);
+    background: rgba(244, 63, 94, 0.15);
 }
 
-/* ==========================================================================
-   Outbound History Cards Layout - Responsive Web vs Mobile Separation
-   ========================================================================== */
-
-/* ==========================================================================
-   Outbound History Cards Layout - Minimal Sales Orders Style
-   ========================================================================== */
-
-/* Outbound & Inbound History Cards Layout - Exactly 3 Cards Per Row on Desktop */
-.outbound-cards-grid,
-.inbound-cards-grid {
-    display: grid !important;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-    gap: 14px !important;
-    width: 100% !important;
-    box-sizing: border-box !important;
-    margin-top: 12px;
-}
-
-@media (max-width: 1100px) {
-    .outbound-cards-grid,
-    .inbound-cards-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+/* Toggle visibility on mobile */
+@media (max-width: 768px) {
+    .table-card .table-container {
+        display: none !important;
     }
-}
-
-@media (max-width: 700px) {
-    .outbound-cards-grid,
-    .inbound-cards-grid {
-        grid-template-columns: 1fr !important;
+    .mobile-log-cards {
+        display: flex !important;
+    }
+    /* Style stock register for mobile density */
+    #inventoryStockRegisterBody td {
+        padding: 8px 6px !important;
+        font-size: 0.78rem !important;
     }
 }
 
 
 
 
-
-
-/* FINAL WMS PALETTE: WHITE + YELLOW + BLACK */
-:root,[data-theme="dark"],[data-theme="light"]{
- --bg-primary:#ffffff;--bg-secondary:#fffdf5;--bg-card:#ffffff;--border-color:#e8dfb8;
- --text-primary:#111111;--text-secondary:#4b4b43;--text-muted:#77776d;
- --accent-red:#f4c400;--accent-red-bright:#dca900;--accent-red-glow:rgba(244,196,0,.25);
- --accent-red-subtle:rgba(244,196,0,.12);--accent-crimson-gradient:linear-gradient(135deg,#ffd83d,#dca900);
- --accent-ruby-glow:0 0 20px rgba(244,196,0,.25);
- --accent-blue:#dca900;--accent-blue-glow:rgba(244,196,0,.15);
- --accent-emerald:#f4c400;--accent-emerald-glow:rgba(244,196,0,.12);
- --accent-amber:#f4c400;--accent-amber-glow:rgba(244,196,0,.15);
- --accent-rose:#dca900;--accent-rose-glow:rgba(244,196,0,.12);
- --accent-purple:#f4c400;--accent-purple-glow:rgba(244,196,0,.12);
-}
-body{background:#fff!important;color:#111!important;background-image:radial-gradient(circle at 12% 12%,rgba(244,196,0,.08),transparent 40%),radial-gradient(circle at 88% 88%,rgba(244,196,0,.05),transparent 45%)!important}
-.app-sidebar,.app-header{background:#fffdf5!important;color:#111!important}
-.nav-link{color:#4b4b43!important}.nav-link:hover{color:#111!important;background:#fff9dc!important;border-left-color:#f4c400!important}
-.nav-link.active{background:#fff3a8!important;color:#111!important;border-left-color:#f4c400!important;box-shadow:0 4px 14px rgba(244,196,0,.18)!important}
-.nav-link.active svg{stroke:#dca900!important}
-.logo-icon{background:linear-gradient(135deg,#ffd83d,#dca900)!important;box-shadow:0 4px 14px rgba(244,196,0,.3)!important;border-color:#f4c400!important}
-.logo-icon svg{stroke:#111!important}.logo-text{background:linear-gradient(135deg,#111,#dca900)!important;-webkit-background-clip:text!important;-webkit-text-fill-color:transparent!important}
-.btn-primary{background:linear-gradient(135deg,#ffd83d,#dca900)!important;color:#111!important;border-color:#f4c400!important;box-shadow:0 4px 16px rgba(244,196,0,.28)!important}
-.btn-primary:hover{background:linear-gradient(135deg,#ffe36b,#f4c400)!important}
-.btn-danger,.btn-delete-row:hover,.btn-delete-box:hover,.btn-delete-serial:hover,.btn-delete-dropdown-item:hover{background:rgba(244,196,0,.12)!important;color:#111!important;border-color:rgba(244,196,0,.35)!important}
-.card-icon.blue,.guide-card-icon,.welcome-icon{background:rgba(244,196,0,.1)!important;border-color:rgba(244,196,0,.3)!important}
-.card-icon.blue svg,.guide-card-icon svg,.welcome-icon svg{stroke:#dca900!important}
-.header-widget{color:#111!important;background:rgba(244,196,0,.1)!important;border-color:rgba(244,196,0,.3)!important;box-shadow:0 0 10px rgba(244,196,0,.12)!important}
-.portal-table th{background:#111!important;color:#fff!important}.portal-table tbody tr:hover{background:#fff9dc!important}
-::-webkit-scrollbar-thumb:hover{background:#f4c400!important}
-.dashboard-card,.modal-card,.guide-card,.box-card,.session-bar-card,.serial-item-row,.live-counter-box,.custom-dropdown-menu{background:#fff!important;border-color:#e8dfb8!important}
-.form-group input:focus,.form-group select:focus,input:focus,select:focus,textarea:focus{border-color:#f4c400!important;box-shadow:0 0 0 3px rgba(244,196,0,.18)!important}
-.switch-toggle input:checked+.slider-round{background:#f4c400!important}
-.portal-table tr.white-row td{background:#fff!important;color:#111!important}.portal-table tr.black-row td{background:#111!important;color:#fff!important}.portal-table tr.black-row:hover td{background:#222!important}
-
-
-/* FINAL LIGHT BACKGROUND FIX — White + Yellow + Black */
-.bg-black,.bg-dark,.dark,.terminal,.audit-log-terminal,.code-block,
-.sidebar,.side-nav,.navbar,.topbar,
-.portal-table th,.portal-table thead th,
-.portal-table tr.black-row td {
-  background:#ffffff !important;
-  color:#111111 !important;
-  border-color:#e8dfb8 !important;
-}
-.bg-black *,.bg-dark *,.dark *,.terminal *,.audit-log-terminal *,.code-block *,
-.sidebar *,.side-nav *,.navbar *,.topbar *,
-.portal-table th *,.portal-table tr.black-row td * { color:#111111 !important; }
-.portal-table tr.black-row:hover td { background:#fff9dc !important; color:#111111 !important; }
-
-/* FINAL SCREEN-MATCHED LIGHT THEME */
-:root,[data-theme="dark"],[data-theme="light"]{
-  --bg-primary:#ffffff;
-  --bg-secondary:#fffdf5;
-  --bg-card:#ffffff;
-  --border-color:#e8dfb8;
-  --text-primary:#111111;
-  --text-secondary:#6b7280;
-  --text-muted:#8a8f98;
-  --accent-blue:#f4c400;
-  --accent-purple:#111111;
-  --accent-red:#f4c400;
-  --accent-red-bright:#dca900;
-  --accent-rose:#ef3b6d;
-  --accent-rose-glow:rgba(239,59,109,.12);
-}
-html,body{background:#fff!important;color:#111!important}
-.bg-black,.bg-dark,.dark,.terminal,.audit-log-terminal,.code-block,
-.portal-table tr.black-row td,
-[style*="background:#111"],[style*="background: #111"],[style*="background:#222"],[style*="background: #222"],[style*="background:#0d1321"],[style*="background: #0d1321"]{
-  background:#fff!important;color:#111!important;border-color:#e8dfb8!important;
-}
-.bg-black *,.bg-dark *,.dark *,.terminal *,.audit-log-terminal *,.code-block *,
-.portal-table tr.black-row td *{color:#111!important}
-.dashboard-card,.card,.main-card,.side-card,.metric-card,.stat-card,.panel,.table-container,.modal-content,.wizard-container,.section-card,.activity-card,.box-card,.serial-item-row{background:#fff!important;color:#111!important}
-.portal-table th,.portal-table thead th{background:#111!important;color:#fff!important}
-/* Match reference: only destructive/delete actions retain pink-red */
-.btn-danger,.btn-delete-row:hover,.btn-delete-box:hover,.btn-delete-serial:hover,.btn-delete-dropdown-item:hover,
-.text-danger,.text-red,.text-rose,.bg-danger,.bg-red,.bg-rose,.badge-danger,.badge-red,.badge-rose{
-  background:#fff0f3!important;color:#ef3b6d!important;border-color:#ef3b6d!important;
-}
-.btn-danger:hover{background:#ef3b6d!important;color:#fff!important}
-
-/* FINAL FIX — outbound/inbound generated log cards: remove legacy grey/dark item panels */
-.mobile-log-card,
-.mobile-log-card-items,
-.mobile-log-card-item-panel,
-.mobile-log-card-details,
-.mobile-log-card-product-list,
-.mobile-log-card-total,
-.outbound-cards-grid .box-details,
-.outbound-cards-grid .product-details,
-.outbound-cards-grid .items-panel,
-.inbound-cards-grid .box-details,
-.inbound-cards-grid .product-details,
-.inbound-cards-grid .items-panel {
-    background: #ffffff !important;
-    background-color: #ffffff !important;
-    color: #111111 !important;
-}
-
-/* Catch legacy inline grey backgrounds used by generated log-card detail blocks. */
-.mobile-log-card div[style*="background"],
-.outbound-cards-grid div[style*="background"],
-.inbound-cards-grid div[style*="background"] {
-    background: #ffffff !important;
-    background-color: #ffffff !important;
-    color: #111111 !important;
-    border-color: #e8dfb8 !important;
-}
-
-/* Product/item highlight inside generated cards */
-.mobile-log-card .mobile-log-card-item,
-.mobile-log-card .mobile-log-card-item span,
-.outbound-cards-grid .product-name,
-.inbound-cards-grid .product-name {
-    color: #d49f00 !important;
-}
-
-/* Keep quantity/success values green */
-.mobile-log-card .quantity,
-.mobile-log-card .total-quantity,
-.outbound-cards-grid .quantity,
-.outbound-cards-grid .total-quantity,
-.inbound-cards-grid .quantity,
-.inbound-cards-grid .total-quantity {
-    color: #10b981 !important;
-}
-
-/* The only red/pink styling is reserved for destructive actions. */
-.mobile-log-card .btn-mobile-delete,
-.outbound-cards-grid .btn-delete,
-.inbound-cards-grid .btn-delete {
-    background: #fff0f3 !important;
-    color: #ef3b6d !important;
-    border-color: #ef3b6d !important;
-}
-
-/* Product/detail separators stay subtle yellow instead of grey. */
-.mobile-log-card hr,
-.outbound-cards-grid hr,
-.inbound-cards-grid hr {
-    border-color: #f4c400 !important;
-}
