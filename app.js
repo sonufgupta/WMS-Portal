@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Safe LocalStorage Wrapper to Prevent QuotaExceededError Crashes ---
     function safeLocalStorageSet(key, valueString) {
         try {
-            safeLocalStorageSet(key, valueString);
+            localStorage.setItem(key, valueString);
             return true;
         } catch (e) {
             if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014 || (e.message && e.message.includes('exceeded the quota'))) {
@@ -162,7 +162,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const raw = localStorage.getItem(hKey);
                 if (raw) {
                     try {
-                        const parsed = JSON.parse(raw);
+                        let parsed = null;
+                        try { parsed = JSON.parse(raw); } catch(e) { console.error("[WMS] Parse error for parsed:", e.message); parsed = null; }
                         if (Array.isArray(parsed) && parsed.length > 20) {
                             const trimmed = parsed.slice(-20);
                             safeLocalStorageSet(hKey, JSON.stringify(trimmed));
@@ -179,7 +180,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e2) {
                 // Step 2: If targetKey itself is a huge history array, trim targetKey for local storage only
                 try {
-                    const parsedTarget = JSON.parse(targetValueString);
+                    let parsedTarget = null;
+                    try { parsedTarget = JSON.parse(targetValueString); } catch(e) { console.error("[WMS] Parse error for parsedTarget:", e.message); parsedTarget = null; }
                     if (Array.isArray(parsedTarget) && parsedTarget.length > 20) {
                         const trimmedTarget = parsedTarget.slice(-20);
                         safeLocalStorageSet(targetKey, JSON.stringify(trimmedTarget));
@@ -1085,7 +1087,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return cachedProductWeights;
         }
         try {
-            const parsed = JSON.parse(saved);
+            let parsed = null;
+            try { parsed = JSON.parse(saved); } catch(e) { console.error("[WMS] Parse error for parsed:", e.message); parsed = null; }
             if (Array.isArray(parsed)) {
                 const dict = {};
                 parsed.forEach(w => {
@@ -1134,7 +1137,8 @@ document.addEventListener('DOMContentLoaded', () => {
         let list = [];
         try {
             const saved = localStorage.getItem('wms_hidden_products');
-            const parsed = saved ? JSON.parse(saved) : [];
+            let parsed = [];
+            try { parsed = JSON.parse(saved); } catch(e) { console.error("[WMS] Parse error for parsed:", e.message); }
             if (Array.isArray(parsed)) list = parsed.filter(n => typeof n === 'string');
         } catch (e) {
             list = [];
@@ -1159,7 +1163,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const saved = localStorage.getItem('wms_product_stock_overrides');
         if (saved) {
             try {
-                const parsed = JSON.parse(saved);
+                let parsed = null;
+                try { parsed = JSON.parse(saved); } catch(e) { console.error("[WMS] Parse error for parsed:", e.message); parsed = null; }
                 if (Array.isArray(parsed)) {
                     parsed.forEach(o => {
                         if (o && o.name) dict[o.name] = o;
@@ -1778,7 +1783,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const saved = localStorage.getItem('wms_inbound_history');
         if (saved) {
             try {
-                const parsed = JSON.parse(saved);
+                let parsed = null;
+                try { parsed = JSON.parse(saved); } catch(e) { console.error("[WMS] Parse error for parsed:", e.message); parsed = null; }
                 if (Array.isArray(parsed)) {
                     cachedInboundHistory = parsed;
                     return cachedInboundHistory;
@@ -2224,12 +2230,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     `;
 
-                    // Serials List
+                    // Serials List (Limited to 100 per box to prevent DOM overload/hang)
                     const listContainer = document.createElement('div');
                     listContainer.className = 'box-serials-list';
                     const serialsFrag = document.createDocumentFragment();
 
-                    boxItems.forEach(s => {
+                    const MAX_VISIBLE_SERIALS = 100;
+                    const visibleSerials = boxItems.slice(0, MAX_VISIBLE_SERIALS);
+
+                    visibleSerials.forEach(s => {
                         const row = document.createElement('div');
                         row.className = 'serial-item-row';
                         row.style.cssText = 'padding: 6px 8px; font-size: 0.85rem;';
@@ -2239,6 +2248,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         `;
                         serialsFrag.appendChild(row);
                     });
+
+                    if (boxItems.length > MAX_VISIBLE_SERIALS) {
+                        const extraRow = document.createElement('div');
+                        extraRow.style.cssText = 'padding: 8px; font-size: 0.8rem; color: var(--text-muted); text-align: center; background: rgba(0,0,0,0.03); border-radius: 6px; margin-top: 4px;';
+                        extraRow.textContent = `+ ${boxItems.length - MAX_VISIBLE_SERIALS} more serials (${boxItems.length} total in this box)`;
+                        serialsFrag.appendChild(extraRow);
+                    }
 
                     listContainer.appendChild(serialsFrag);
                     boxCard.appendChild(listContainer);
@@ -2312,7 +2328,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function restoreSessionState() {
         const savedSession = localStorage.getItem('wms_active_inbound_session');
         if (savedSession) {
-            activeSession = JSON.parse(savedSession);
+            try {
+                activeSession = JSON.parse(savedSession);
+            } catch (e) {
+                console.error('[WMS] Corrupted inbound session data, resetting:', e);
+                localStorage.removeItem('wms_active_inbound_session');
+                activeSession = null;
+                return;
+            }
             if (activeSession && !activeSession.items) {
                 activeSession.items = [];
             }
@@ -2479,7 +2502,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadInboundItems() {
         const saved = localStorage.getItem('wms_inbound_items');
         if (saved) {
-            inboundItems = JSON.parse(saved);
+            try { inboundItems = JSON.parse(saved); } catch(e) { console.error("[WMS] Parse error for inboundItems:", e.message); inboundItems = []; }
         } else {
             inboundItems = [];
         }
@@ -4179,7 +4202,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function restoreOutboundSessionState() {
         const saved = localStorage.getItem('wms_active_outbound_session');
         if (saved) {
-            activeOutboundSession = JSON.parse(saved);
+            try {
+                activeOutboundSession = JSON.parse(saved);
+            } catch (e) {
+                console.error('[WMS] Corrupted outbound session data, resetting:', e);
+                localStorage.removeItem('wms_active_outbound_session');
+                activeOutboundSession = null;
+                return;
+            }
 
             if (!activeOutboundSession) return;
 
@@ -5145,7 +5175,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const saved = localStorage.getItem('wms_outbound_history');
         if (saved) {
             try {
-                const parsed = JSON.parse(saved);
+                let parsed = null;
+                try { parsed = JSON.parse(saved); } catch(e) { console.error("[WMS] Parse error for parsed:", e.message); parsed = null; }
                 if (Array.isArray(parsed)) {
                     cachedOutboundHistory = parsed;
                     return cachedOutboundHistory;
@@ -6681,7 +6712,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const saved = localStorage.getItem('wms_deleted_serials');
         if (saved) {
             try {
-                const parsed = JSON.parse(saved);
+                let parsed = null;
+                try { parsed = JSON.parse(saved); } catch(e) { console.error("[WMS] Parse error for parsed:", e.message); parsed = null; }
                 if (Array.isArray(parsed)) return parsed;
             } catch (e) {
                 console.error("Error parsing wms_deleted_serials:", e);
@@ -6770,9 +6802,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     // If multi-item format exists, update matching item's scannedCount
                     if (log.items) {
-                        log.items.forEach(item => {
-                            item.scannedCount = log.serials.filter(s => s.itemName === item.name).length;
-                        });
+                        if (log.items && Array.isArray(log.items)) {
+                            log.items.forEach(item => {
+                                item.scannedCount = log.serials.filter(s => s.itemName === item.name).length;
+                            });
+                        }
                     }
                 }
             }
@@ -6799,9 +6833,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     // Update items scannedCount
                     if (log.items) {
-                        log.items.forEach(item => {
-                            item.scannedCount = log.serials.filter(s => s.itemName === item.name).length;
-                        });
+                        if (log.items && Array.isArray(log.items)) {
+                            log.items.forEach(item => {
+                                item.scannedCount = log.serials.filter(s => s.itemName === item.name).length;
+                            });
+                        }
                     }
                 }
             }
@@ -6860,9 +6896,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                     log.count = log.serials.length;
                     if (log.items) {
-                        log.items.forEach(item => {
-                            item.scannedCount = log.serials.filter(s => s.itemName === item.name).length;
-                        });
+                        if (log.items && Array.isArray(log.items)) {
+                            log.items.forEach(item => {
+                                item.scannedCount = log.serials.filter(s => s.itemName === item.name).length;
+                            });
+                        }
                     }
                     inboundRestored = true;
                 }
@@ -6989,7 +7027,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const saved = localStorage.getItem('wms_order_queue');
         if (saved) {
             try {
-                return JSON.parse(saved);
+                try { return JSON.parse(saved); } catch(e) { console.error("[WMS] Parse error:", e.message); return []; }
             } catch (e) {
                 return [];
             }
@@ -7549,7 +7587,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Helper to get/save dedicated WOS items
     function getWosItems() {
         const saved = localStorage.getItem('wms_wos_items');
-        if (saved) return JSON.parse(saved);
+        try { return JSON.parse(saved); } catch(e) { console.error("[WMS] Parse error:", e.message); return []; }
         return [];
     }
 
@@ -9293,7 +9331,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const data = localStorage.getItem('wms_damage_records');
         try {
-            cachedDamageRecords = data ? JSON.parse(data) : [];
+            cachedDamageRecords = [];
+            try { cachedDamageRecords = JSON.parse(data); } catch(e) { console.error("[WMS] Parse error for cachedDamageRecords:", e.message); }
             return cachedDamageRecords;
         } catch (e) {
             cachedDamageRecords = [];
@@ -9623,6 +9662,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data && data.from && data.to) {
                     const [lat1, lon1] = data.from;
                     const [lat2, lon2] = data.to;
+                    if (pinToPinApiCache.size > 1000) pinToPinApiCache.clear();
+                    if (pinToPinApiCache.size > 1000) pinToPinApiCache.clear();
                     pinToPinApiCache.set(pinStr, [lat2, lon2]);
 
                     const R = 6371;
@@ -10102,7 +10143,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     fileName: fileName,
                     uploadTime: uploadTime,
                     recordsCount: newTaggedRecords.length,
-                    records: pendingUploadedOdaRecords
+                    // records removed to prevent localStorage bloat
+                    recordsCount: pendingUploadedOdaRecords.length
                 };
 
                 const updatedHistory = [newFileHistory, ...memoryOdaFilesHistory];
@@ -10488,7 +10530,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let parsedSavedOda = [];
     let parsedSavedOdaHistory = [];
     try {
-        parsedSavedOda = savedOda ? JSON.parse(savedOda) : [];
+        parsedSavedOda = [];
+        try { parsedSavedOda = JSON.parse(savedOda); } catch(e) { console.error("[WMS] Parse error for parsedSavedOda:", e.message); }
     } catch(e) {}
     try {
         parsedSavedOdaHistory = savedOdaHistory ? JSON.parse(savedOdaHistory) : [];

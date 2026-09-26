@@ -286,38 +286,38 @@ td{color:#222!important;border-color:#eee7c9!important}
                     </svg>
                     <span>Stock Overview</span>
                 </a>
-                <a href="#" class="nav-link" id="navInbound">
+                <a href="javascript:void(0);" class="nav-link" id="navInbound">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <span>Inbound Logs</span>
                 </a>
-                <a href="#" class="nav-link" id="navOutbound">
+                <a href="javascript:void(0);" class="nav-link" id="navOutbound">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <span>Outbound Logs</span>
                 </a>
 
-                <a href="#" class="nav-link" id="navInventory">
+                <a href="javascript:void(0);" class="nav-link" id="navInventory">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                     </svg>
                     <span>Inventory</span>
                 </a>
-                <a href="#" class="nav-link" id="navMisReport">
+                <a href="javascript:void(0);" class="nav-link" id="navMisReport">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     <span>MIS Report</span>
                 </a>
-                <a href="#" class="nav-link" id="navDamage">
+                <a href="javascript:void(0);" class="nav-link" id="navDamage">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                     <span>Damage Register</span>
                 </a>
-                <a href="#" class="nav-link" id="navOda">
+                <a href="javascript:void(0);" class="nav-link" id="navOda">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                     </svg>
@@ -865,7 +865,7 @@ td{color:#222!important;border-color:#eee7c9!important}
                                     </div>
                                 </div>
                                 
-                                <form id="outboundUnifiedScanForm" class="entry-form" style="display: flex; flex-direction: column; gap: 20px; margin-top: 16px;">
+                                <form id="outboundUnifiedScanForm" class="entry-form" style="display: flex; flex-direction: column; gap: 20px; margin-top: 16px;" onsubmit="event.preventDefault();">
                                     <!-- Toggle switch group -->
                                     <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-primary); padding: 12px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
                                         <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -955,7 +955,7 @@ td{color:#222!important;border-color:#eee7c9!important}
 
                         <!-- Config Form Card -->
                         <div class="dashboard-card" style="padding: 32px; display: flex; flex-direction: column; gap: 24px;">
-                            <form id="withoutSerialInwardForm" class="entry-form" style="display: flex; flex-direction: column; gap: 20px; width: 100%;">
+                            <form id="withoutSerialInwardForm" class="entry-form" style="display: flex; flex-direction: column; gap: 20px; width: 100%;" onsubmit="event.preventDefault();">
                                 <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
                                     <label for="wosVehicleNo" style="font-weight: 700; font-size: 0.9rem; color: var(--text-secondary);">Vehicle Number <span class="optional-tag" style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">(Optional)</span></label>
                                     <input type="text" id="wosVehicleNo" placeholder="e.g. MH-04-GP-1234" autocomplete="off" style="width: 100%; padding: 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.95rem;">
