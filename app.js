@@ -2386,20 +2386,14 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Render restored cards
             renderBoxCards();
-            // Check join authorization
-            const isJoined = localStorage.getItem('wms_inbound_joined') === 'true';
-            if (isJoined) {
-                inboundInactiveState.style.display = 'none';
-                inboundActiveState.style.display = 'flex';
-            } else {
-                inboundActiveState.style.display = 'none';
-                inboundInactiveState.style.display = 'block';
-                // Show warning banner and hide start button/welcome
-                const banner = document.getElementById('inboundAlreadyWorkingBanner');
-                const welcome = document.getElementById('inboundWelcomeContainer');
-                if (banner) banner.style.display = 'flex';
-                if (welcome) welcome.style.display = 'none';
-            }
+            // Auto-join active Inbound session without lock friction
+            safeLocalStorageSet('wms_inbound_joined', 'true');
+            if (inboundInactiveState) inboundInactiveState.style.display = 'none';
+            if (inboundActiveState) inboundActiveState.style.display = 'flex';
+            const banner = document.getElementById('inboundAlreadyWorkingBanner');
+            const welcome = document.getElementById('inboundWelcomeContainer');
+            if (banner) banner.style.display = 'none';
+            if (welcome) welcome.style.display = 'none';
         } else {
             localStorage.removeItem('wms_inbound_joined');
             inboundActiveState.style.display = 'none';
@@ -2420,14 +2414,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (startInboundSessionBtn && inboundConfigModal) {
         startInboundSessionBtn.addEventListener('click', () => {
             if (activeSession) {
-                // If there's an active session on another device, click acts as Join Session prompt
-                const pwd = prompt('Enter passcode (2026) to join the active Inbound session:');
-                if (pwd === '2026') {
-                    safeLocalStorageSet('wms_inbound_joined', 'true');
-                    restoreSessionState();
-                } else {
-                    alert('Incorrect passcode.');
-                }
+                safeLocalStorageSet('wms_inbound_joined', 'true');
+                restoreSessionState();
             } else {
                 inboundConfigModal.classList.add('active');
             }
@@ -2438,13 +2426,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnJoinInboundSession = document.getElementById('btnJoinInboundSession');
     if (btnJoinInboundSession) {
         btnJoinInboundSession.addEventListener('click', () => {
-            const pwd = prompt('Enter passcode (2026) to join the active Inbound session:');
-            if (pwd === '2026') {
-                safeLocalStorageSet('wms_inbound_joined', 'true');
-                restoreSessionState();
-            } else {
-                alert('Incorrect passcode.');
-            }
+            safeLocalStorageSet('wms_inbound_joined', 'true');
+            restoreSessionState();
         });
     }
     // --- Custom Dropdown Item List Logic ---
@@ -4263,18 +4246,14 @@ document.addEventListener('DOMContentLoaded', () => {
             compactOutboundBoxNumbers();
             updateOutboundSessionProgress();
             renderOutboundBoxCards();
-            const isJoined = localStorage.getItem('wms_outbound_joined') === 'true';
-            if (isJoined) {
-                if (outboundInactiveState) outboundInactiveState.style.display = 'none';
-                if (outboundActiveState) outboundActiveState.style.display = 'flex';
-            } else {
-                if (outboundActiveState) outboundActiveState.style.display = 'none';
-                if (outboundInactiveState) outboundInactiveState.style.display = 'block';
-                const banner = document.getElementById('outboundAlreadyWorkingBanner');
-                const welcome = document.getElementById('outboundWelcomeContainer');
-                if (banner) banner.style.display = 'flex';
-                if (welcome) welcome.style.display = 'none';
-            }
+            // Auto-join active Outbound session without lock friction
+            safeLocalStorageSet('wms_outbound_joined', 'true');
+            if (outboundInactiveState) outboundInactiveState.style.display = 'none';
+            if (outboundActiveState) outboundActiveState.style.display = 'flex';
+            const bannerOut = document.getElementById('outboundAlreadyWorkingBanner');
+            const welcomeOut = document.getElementById('outboundWelcomeContainer');
+            if (bannerOut) bannerOut.style.display = 'none';
+            if (welcomeOut) welcomeOut.style.display = 'none';
         } else {
             localStorage.removeItem('wms_outbound_joined');
             if (outboundActiveState) outboundActiveState.style.display = 'none';
@@ -4294,14 +4273,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (startOutboundSessionBtn && outboundConfigModal) {
         startOutboundSessionBtn.addEventListener('click', () => {
             if (activeOutboundSession) {
-                // Click acts as Join Session prompt
-                const pwd = prompt('Enter passcode (2026) to join the active Outbound session:');
-                if (pwd === '2026') {
-                    safeLocalStorageSet('wms_outbound_joined', 'true');
-                    restoreOutboundSessionState();
-                } else {
-                    alert('Incorrect passcode.');
-                }
+                safeLocalStorageSet('wms_outbound_joined', 'true');
+                restoreOutboundSessionState();
             } else {
                 isEditingOutboundSession = false;
                 const modalTitle = document.getElementById('outboundConfigModalTitle');
@@ -4348,13 +4321,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnJoinOutboundSession = document.getElementById('btnJoinOutboundSession');
     if (btnJoinOutboundSession) {
         btnJoinOutboundSession.addEventListener('click', () => {
-            const pwd = prompt('Enter passcode (2026) to join the active Outbound session:');
-            if (pwd === '2026') {
-                safeLocalStorageSet('wms_outbound_joined', 'true');
-                restoreOutboundSessionState();
-            } else {
-                alert('Incorrect passcode.');
-            }
+            safeLocalStorageSet('wms_outbound_joined', 'true');
+            restoreOutboundSessionState();
         });
     }
     function closeOutboundConfigModal() {
