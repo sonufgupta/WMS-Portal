@@ -2973,6 +2973,121 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- High-Performance Batch Serial Add Helper (Processes 4,600+ Serials Instantly) ---
+    function addBatchSerialsToSession(serialsList) {
+        if (!activeSession || !serialsList || serialsList.length === 0) return false;
+
+        const items = activeSession.items || [];
+        if (items.length === 0) return false;
+
+        let matchedItem = null;
+        if (items.length === 1) {
+            matchedItem = items[0];
+        } else {
+            const workstationProductSelect = document.getElementById('workstationProductSelect');
+            if (workstationProductSelect && workstationProductSelect.value) {
+                const selectedVal = workstationProductSelect.value;
+                matchedItem = items.find(i => i.name === selectedVal);
+            }
+        }
+
+        if (!matchedItem) {
+            alert('No target product identified for batch scan validation.');
+            return false;
+        }
+
+        if (!matchedItem.allowedPatterns) {
+            matchedItem.allowedPatterns = matchedItem.skuAlphabetPattern ? [{
+                pattern: matchedItem.skuAlphabetPattern,
+                length: matchedItem.lockedLength || 15
+            }] : [];
+        }
+
+        // Pre-build O(1) set of existing serials in active session
+        const existingSerialsSet = new Set(activeSession.serials.map(s => s.serial));
+        const batchSerialsSet = new Set();
+        const validBatchItems = [];
+
+        const currentScans = activeSession.serials.filter(s => s.itemName === matchedItem.name).length;
+        if (matchedItem.expectedQty > 0 && (currentScans + serialsList.length) > matchedItem.expectedQty) {
+            const remaining = matchedItem.expectedQty - currentScans;
+            alert(`Cannot process batch! Adding ${serialsList.length} serials would exceed expected quantity limit of ${matchedItem.expectedQty} for "${matchedItem.name}". You can only add ${remaining} more item(s).`);
+            return false;
+        }
+
+        // Lock pattern on first serial if not locked yet
+        if (matchedItem.allowedPatterns.length === 0 && serialsList.length > 0) {
+            const firstClean = serialsList[0].trim();
+            if (firstClean) {
+                const pattern = extractAlphabetPattern(firstClean);
+                matchedItem.allowedPatterns = [{ pattern: pattern, length: firstClean.length }];
+                matchedItem.skuAlphabetPattern = pattern;
+                matchedItem.lockedLength = firstClean.length;
+            }
+        }
+
+        const activeAllowedPatterns = matchedItem.allowedPatterns;
+        const itemSerials = activeSession.serials.filter(s => s.itemName === matchedItem.name);
+        let currentMaxBoxNo = itemSerials.reduce((max, item) => item.boxNo > max ? item.boxNo : max, 0);
+        let nextBoxNo = currentMaxBoxNo + 1;
+
+        for (let i = 0; i < serialsList.length; i++) {
+            const cleanSerial = serialsList[i].trim();
+            if (!cleanSerial) continue;
+
+            if (cleanSerial.length > 50) {
+                alert(`Batch scan stopped at item #${i + 1}! Serial "${cleanSerial}" is too long (${cleanSerial.length} chars).`);
+                return false;
+            }
+
+            const isStrictMatch = activeAllowedPatterns.some(cfg => {
+                return cleanSerial.length === cfg.length && matchesAlphabetPattern(cleanSerial, cfg.pattern);
+            });
+
+            if (!isStrictMatch) {
+                alert(`Batch scan stopped at item #${i + 1}! Serial "${cleanSerial}" does not match locked pattern/length for "${matchedItem.name}".`);
+                return false;
+            }
+
+            if (existingSerialsSet.has(cleanSerial) || batchSerialsSet.has(cleanSerial)) {
+                alert(`Batch scan stopped at item #${i + 1}! Duplicate serial "${cleanSerial}" detected.`);
+                return false;
+            }
+
+            const cleanSerialUpper = cleanSerial.toUpperCase();
+            const alreadyInboundLog = getInboundSerialLogMap().get(cleanSerialUpper);
+            if (alreadyInboundLog) {
+                alert(`Batch scan stopped at item #${i + 1}! Serial "${cleanSerial}" already exists in past inbound vehicle history.`);
+                return false;
+            }
+
+            batchSerialsSet.add(cleanSerial);
+            validBatchItems.push({
+                serial: cleanSerial,
+                boxNo: nextBoxNo,
+                itemName: matchedItem.name
+            });
+        }
+
+        if (validBatchItems.length > 0) {
+            validBatchItems.forEach(item => {
+                activeSession.serials.push(item);
+            });
+
+            const lastSerial = validBatchItems[validBatchItems.length - 1].serial;
+            const last3 = lastSerial.slice(-3);
+            triggerSpeak(last3.split('').join(', '));
+
+            // Call UI updates & save ONLY ONCE at the end of the batch!
+            renderBoxCards();
+            updateSessionProgress();
+            saveActiveSession();
+            return true;
+        }
+
+        return false;
+    }
+
     // --- Add Scanned Serial Helper (with Length Locking & SKU Verification) ---
     function addSerialToSession(serial, targetBoxNo) {
         if (!activeSession) return false;
@@ -3266,15 +3381,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // --- Single Scan Mode ---
                 if (inputVal.includes(',')) {
                     const serials = inputVal.split(',').map(s => s.trim()).filter(s => s.length > 0);
-                    let allSuccess = true;
-                    for (const s of serials) {
-                        const success = addSerialToSession(s);
-                        if (!success) {
-                            allSuccess = false;
-                            break; // Stop loop if a warning/alert is triggered
-                        }
-                    }
-                    if (allSuccess) {
+                    const success = addBatchSerialsToSession(serials);
+                    if (success) {
                         unifiedSerialInput.value = '';
                     }
                 } else {
@@ -3402,19 +3510,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             batchSerialsSet.add(checkSerial);
 
-            // Check duplicate across past history database (case-insensitive)
-            const inboundHistory = getHistory();
-            let alreadyInboundLog = null;
+            // Check duplicate across past history database (case-insensitive) O(1) Fast Index
             const cleanSerialUpper = checkSerial.toUpperCase();
-            for (const log of inboundHistory) {
-                if (log.serials) {
-                    const found = log.serials.find(s => s && s.serial && s.serial.trim().toUpperCase() === cleanSerialUpper);
-                    if (found) {
-                        alreadyInboundLog = log;
-                        break;
-                    }
-                }
-            }
+            const alreadyInboundLog = getInboundSerialLogMap().get(cleanSerialUpper);
 
             if (alreadyInboundLog) {
                 showSkuWarningModal(
