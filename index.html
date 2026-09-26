@@ -7,6 +7,7 @@
     <meta name="description" content="A premium customizable landing page and dashboard for warehouse operations tracking and activity logs.">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"></script>
     <script>
@@ -350,6 +351,12 @@ td{color:#222!important;border-color:#eee7c9!important}
                         <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                     <span>Factory Reset</span>
+                </button>
+                <button type="button" id="btnOpenEmailConfig" class="btn-primary" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); color: #10b981; width: 100%; border-style: solid; padding: 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: var(--transition-smooth); margin-top: 4px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <span>Email Configuration</span>
                 </button>
                 <div class="status-badge" style="width: 100%; justify-content: center;">
                     <div class="status-dot" id="systemStatusDot"></div>
@@ -1842,6 +1849,42 @@ td{color:#222!important;border-color:#eee7c9!important}
     <!-- PDF.js CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="app.js"></script>
+
+    <!-- Email Configuration Modal -->
+    <div class="modal-overlay" id="emailConfigModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>Email Configuration (EmailJS)</h3>
+                <button type="button" class="modal-close-btn" id="btnCloseEmailConfig">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
+                    Configure EmailJS to auto-send dispatch details when Outbound session closes.
+                    <br><a href="https://www.emailjs.com/" target="_blank" style="color: var(--accent-blue);">Create free EmailJS account here</a>
+                </p>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label style="font-weight: 600; font-size: 0.85rem;">Recipient Email (jahan email jayega)</label>
+                    <input type="email" id="emailRecipient" class="form-input" placeholder="vendor@example.com" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; margin-top: 4px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label style="font-weight: 600; font-size: 0.85rem;">EmailJS Service ID</label>
+                    <input type="text" id="emailServiceId" class="form-input" placeholder="service_xxxxxxx" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; margin-top: 4px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label style="font-weight: 600; font-size: 0.85rem;">EmailJS Template ID</label>
+                    <input type="text" id="emailTemplateId" class="form-input" placeholder="template_xxxxxxx" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; margin-top: 4px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label style="font-weight: 600; font-size: 0.85rem;">EmailJS Public Key</label>
+                    <input type="text" id="emailPublicKey" class="form-input" placeholder="your_public_key" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; margin-top: 4px;">
+                </div>
+                <button type="button" id="btnSaveEmailConfig" class="btn-primary" style="width: 100%; padding: 12px; background: var(--accent-blue); color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.95rem;">
+                    Save Email Configuration
+                </button>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
 

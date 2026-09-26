@@ -262,7 +262,41 @@ document.addEventListener('DOMContentLoaded', () => {
             if (val === null) {
                 localStorage.removeItem('wms_active_inbound_session');
                 activeSession = null;
-                restoreSessionState();
+            
+    // ===== PHASE 4: 20-Day Auto-Cleanup of Outbound History =====
+    function autoCleanupOutboundHistory() {
+        const history = getOutboundHistory();
+        if (!history || history.length === 0) return;
+        
+        const TWENTY_DAYS_MS = 20 * 24 * 60 * 60 * 1000; // 20 days in milliseconds
+        const now = Date.now();
+        let removedCount = 0;
+        
+        const filtered = history.filter(log => {
+            // Only auto-delete entries where email was successfully sent
+            if (log.emailSentAt) {
+                const age = now - log.emailSentAt;
+                if (age >= TWENTY_DAYS_MS) {
+                    removedCount++;
+                    return false; // Remove this entry
+                }
+            }
+            return true; // Keep this entry
+        });
+        
+        if (removedCount > 0) {
+            saveOutboundHistory(filtered);
+            // Invalidate cache
+            outboundSerialLogMap = null;
+            console.log(`[WMS Auto-Cleanup] Removed ${removedCount} outbound history entries older than 20 days.`);
+        }
+    }
+    
+    // Run auto-cleanup on every app load
+    autoCleanupOutboundHistory();
+    // ===== END PHASE 4 =====
+
+    restoreSessionState();
             } else {
                 if (syncCloudDataToLocal('wms_active_inbound_session', val)) {
                     restoreSessionState();
@@ -3209,17 +3243,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const alreadyInboundLog = getInboundSerialLogMap().get(cleanSerialUpper);
 
         if (alreadyInboundLog) {
-            showSkuWarningModal(
-                'Already Inbound Alert!',
-                'This serial barcode already exists in a previously saved inbound history session.',
-                'RECEIVED ON VEHICLE:',
-                alreadyInboundLog.vehicle || 'N/A',
-                'EXISTING BARCODE:',
-                cleanSerial,
-                false,
-                false
-            );
-            return false;
+            // PHASE 2: Allow re-scan if serial was already dispatched via outbound
+            const wasDispatched = getOutboundSerialLogMap().get(cleanSerialUpper);
+            if (wasDispatched) {
+                // Serial was dispatched, so it can be re-received in inbound
+                console.log('[WMS] Serial ' + cleanSerial + ' was dispatched to ' + (wasDispatched.shopName || 'N/A') + ', allowing re-inbound.');
+            } else {
+                // Serial still in stock (not dispatched), block duplicate
+                showSkuWarningModal(
+                    'Already Inbound Alert!',
+                    'This serial barcode already exists in a previously saved inbound history session.',
+                    'RECEIVED ON VEHICLE:',
+                    alreadyInboundLog.vehicle || 'N/A',
+                    'EXISTING BARCODE:',
+                    cleanSerial,
+                    false,
+                    false
+                );
+                return false;
+            }
         }
 
         // Determine Box Number (Product-Specific)
@@ -4787,6 +4829,22 @@ document.addEventListener('DOMContentLoaded', () => {
             return false;
         }
 
+        // PHASE 1: BLOCK if serial was NEVER received in Inbound
+        const inboundRecord = getInboundSerialLogMap().get(cleanSerialUpper);
+        if (!inboundRecord) {
+            showSkuWarningModal(
+                'Not Found in Inbound!',
+                'This serial barcode was NEVER received in any Inbound session. Only serials that came through Inbound can be dispatched.',
+                'STATUS:',
+                'NOT IN INBOUND',
+                'SCANNED BARCODE:',
+                cleanSerial,
+                false,
+                false
+            );
+            return false;
+        }
+
         // Identify product
         let productName = lookupProductBySerial(serial);
         if (!productName) {
@@ -5941,6 +5999,113 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // ── Helper: actually commit & close the outbound session ──────────────────
+
+    // ===== PHASE 3: EmailJS Auto-Email on Outbound Session Close =====
+    
+    // Email Configuration (stored in localStorage, configurable by user)
+    function getEmailConfig() {
+        const saved = localStorage.getItem('wms_email_config');
+        if (saved) {
+            try { return JSON.parse(saved); } catch(e) { return null; }
+        }
+        return null;
+    }
+    
+    function saveEmailConfig(config) {
+        safeLocalStorageSet('wms_email_config', JSON.stringify(config));
+    }
+    
+    // Send dispatch email via EmailJS
+    async function sendDispatchEmail(logObj) {
+        const config = getEmailConfig();
+        if (!config || !config.recipientEmail || !config.serviceId || !config.templateId || !config.publicKey) {
+            console.warn('[WMS Email] Email config not set. Skipping email. Configure in Settings.');
+            return { success: false, reason: 'config_missing' };
+        }
+        
+        try {
+            // Build serial list text for email body
+            const serialListText = (logObj.serials || []).map((s, i) => 
+                `${i+1}. ${s.serial} (${s.itemName || 'N/A'})`
+            ).join('\n');
+            
+            // Build items summary
+            const itemsSummary = (logObj.items || []).map(item => 
+                `${item.name}: ${item.scannedCount || 0} pcs`
+            ).join(', ');
+            
+            const templateParams = {
+                to_email: config.recipientEmail,
+                shop_name: logObj.shopName || 'N/A',
+                invoice_no: logObj.invoiceNo || 'N/A',
+                pincode: logObj.pincode || 'N/A',
+                address: logObj.address || 'N/A',
+                dispatch_date: new Date().toLocaleDateString('en-IN'),
+                dispatch_time: logObj.timestamp || 'N/A',
+                total_items: (logObj.serials || []).length,
+                items_summary: itemsSummary,
+                serial_list: serialListText,
+                oda_status: logObj.odaStatus || 'Normal',
+                courier: logObj.courierRecommendation || 'N/A'
+            };
+            
+            const response = await emailjs.send(config.serviceId, config.templateId, templateParams, config.publicKey);
+            console.log('[WMS Email] Dispatch email sent successfully:', response.status);
+            return { success: true };
+        } catch (error) {
+            console.error('[WMS Email] Failed to send dispatch email:', error);
+            return { success: false, reason: error.text || error.message || 'unknown' };
+        }
+    }
+    
+    // Email Config Modal Handler
+    function initEmailConfigUI() {
+        const btnOpenEmailConfig = document.getElementById('btnOpenEmailConfig');
+        const emailConfigModal = document.getElementById('emailConfigModal');
+        const btnSaveEmailConfig = document.getElementById('btnSaveEmailConfig');
+        const btnCloseEmailConfig = document.getElementById('btnCloseEmailConfig');
+        
+        if (btnOpenEmailConfig && emailConfigModal) {
+            btnOpenEmailConfig.addEventListener('click', () => {
+                const config = getEmailConfig() || {};
+                const recipientEl = document.getElementById('emailRecipient');
+                const serviceIdEl = document.getElementById('emailServiceId');
+                const templateIdEl = document.getElementById('emailTemplateId');
+                const publicKeyEl = document.getElementById('emailPublicKey');
+                
+                if (recipientEl) recipientEl.value = config.recipientEmail || '';
+                if (serviceIdEl) serviceIdEl.value = config.serviceId || '';
+                if (templateIdEl) templateIdEl.value = config.templateId || '';
+                if (publicKeyEl) publicKeyEl.value = config.publicKey || '';
+                
+                emailConfigModal.classList.add('active');
+            });
+        }
+        
+        if (btnSaveEmailConfig) {
+            btnSaveEmailConfig.addEventListener('click', () => {
+                const config = {
+                    recipientEmail: (document.getElementById('emailRecipient') || {}).value || '',
+                    serviceId: (document.getElementById('emailServiceId') || {}).value || '',
+                    templateId: (document.getElementById('emailTemplateId') || {}).value || '',
+                    publicKey: (document.getElementById('emailPublicKey') || {}).value || ''
+                };
+                saveEmailConfig(config);
+                if (emailConfigModal) emailConfigModal.classList.remove('active');
+                alert('Email configuration saved successfully!');
+            });
+        }
+        
+        if (btnCloseEmailConfig) {
+            btnCloseEmailConfig.addEventListener('click', () => {
+                if (emailConfigModal) emailConfigModal.classList.remove('active');
+            });
+        }
+    }
+    
+    initEmailConfigUI();
+    // ===== END PHASE 3 =====
+
     function commitAndCloseOutboundSession(courierRecommendation) {
         const now = new Date();
         const timeStr = now.toLocaleTimeString('en-US', {
@@ -5973,6 +6138,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Auto download Excel immediately
         downloadOutboundLogExcel(logObj);
+
+        // PHASE 3: Send dispatch email automatically
+        sendDispatchEmail(logObj).then(result => {
+            if (result.success) {
+                // PHASE 4: Mark email sent timestamp for auto-cleanup
+                logObj.emailSentAt = Date.now();
+                const updatedHistory = getOutboundHistory();
+                const idx = updatedHistory.findIndex(h => h.id === logObj.id);
+                if (idx !== -1) {
+                    updatedHistory[idx].emailSentAt = logObj.emailSentAt;
+                    saveOutboundHistory(updatedHistory);
+                }
+                console.log('[WMS] Email sent, cleanup timer set for 20 days');
+            } else {
+                console.warn('[WMS] Email not sent:', result.reason);
+            }
+        }).catch(err => {
+            console.error('[WMS] Email send error:', err);
+        });
+
+        // Invalidate outbound serial cache so newly dispatched serials are recognized
+        outboundSerialLogMap = null;
 
         activeOutboundSession = null;
         saveActiveOutboundSession();
