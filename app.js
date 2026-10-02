@@ -110,6 +110,50 @@ async function saveInboundLogToGoogleSheets(log) {
     }
 }
 
+
+async function saveOutboundLogToGoogleSheets(log) {
+    if (!log) return;
+
+    const rows = [];
+    const serials = Array.isArray(log.serials) ? log.serials : [];
+
+    serials.forEach(serialObj => {
+        const rawSerial = serialObj && serialObj.serial ? serialObj.serial : '';
+        const isWos = rawSerial.includes('WOS-OUT-');
+        const displaySerial = isWos ? 'Without Serial Number' : rawSerial;
+
+        const weight = serialObj && serialObj.resolvedWeight !== undefined
+            ? serialObj.resolvedWeight
+            : '';
+
+        rows.push([
+            log.id || '',
+            log.timestamp || '',
+            log.shopName || '',
+            log.invoiceNo || '',
+            log.pincode || '',
+            log.odaStatus || 'Normal',
+            log.distanceKm || '',
+            serialObj.itemName || '',
+            displaySerial,
+            serialObj.boxNo || '',
+            weight,
+            isWos ? 'WOS' : '',
+            log.isChecked ? 'MARKED' : ''
+        ]);
+    });
+
+    if (rows.length === 0) return;
+
+    try {
+        const result = await googleSheetsAppend('OUTBOUND', rows);
+        console.log('Google Sheets OUTBOUND saved:', result);
+    } catch (error) {
+        console.error('Google Sheets OUTBOUND save failed:', error);
+    }
+}
+
+
 /**
  * Warehouse Activity Portal - Application JavaScript (app.js)
  * Basic structure controls (clock, sidebar, navigation, theme toggle)
@@ -5309,6 +5353,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const historyData = getOutboundHistory();
                 historyData.unshift(logObj);
                 saveOutboundHistory(historyData);
+                saveOutboundLogToGoogleSheets(logObj);
 
                 // Auto download Excel immediately
                 downloadOutboundLogExcel(logObj);
