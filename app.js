@@ -110,44 +110,29 @@ async function saveInboundLogToGoogleSheets(log) {
     }
 }
 
-async function saveOutboundLogToGoogleSheets(log) {
-    if (!log) return;
 
-    const rows = [];
+async function saveDamageRecordToGoogleSheets(record, statusOverride) {
+    if (!record) return;
 
-    if (Array.isArray(log.serials) && log.serials.length > 0) {
-        log.serials.forEach(serialObj => {
-            const itemName = serialObj.itemName || '';
-            const weight = serialObj.resolvedWeight !== undefined ? serialObj.resolvedWeight : '';
-            const wosDetails = serialObj.wosDetails || serialObj.wos || '';
+    const status = statusOverride || 'DAMAGED';
 
-            rows.push([
-                log.id || '',
-                log.timestamp || '',
-                log.shopName || '',
-                log.invoiceNo || '',
-                log.pincode || '',
-                log.odaStatus || 'Normal',
-                log.distanceKm || '',
-                itemName,
-                serialObj.serial || '',
-                serialObj.boxNo || '',
-                weight,
-                wosDetails,
-                serialObj.statusMark || serialObj.status || log.statusMark || log.status || ''
-            ]);
-        });
-    }
-
-    if (rows.length === 0) return;
+    const row = [[
+        record.id || record.timestamp || Date.now().toString(),
+        record.timestamp || '',
+        record.serial || '',
+        record.itemName || '',
+        record.inboundLogId || '',
+        status
+    ]];
 
     try {
-        const result = await googleSheetsAppend('OUTBOUND', rows);
-        console.log('Google Sheets OUTBOUND saved:', result);
+        const result = await googleSheetsAppend('DAMAGE', row);
+        console.log('Google Sheets DAMAGE saved:', result);
     } catch (error) {
-        console.error('Google Sheets OUTBOUND save failed:', error);
+        console.error('Google Sheets DAMAGE save failed:', error);
     }
 }
+
 
 /**
  * Warehouse Activity Portal - Application JavaScript (app.js)
@@ -5348,7 +5333,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const historyData = getOutboundHistory();
                 historyData.unshift(logObj);
                 saveOutboundHistory(historyData);
-                saveOutboundLogToGoogleSheets(logObj);
 
                 // Auto download Excel immediately
                 downloadOutboundLogExcel(logObj);
@@ -8437,14 +8421,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Add to damage records
-        records.push({
+        const damageRecord = {
+            id: Date.now().toString(),
             serial: cleanSerial,
             itemName: foundInbound.itemName,
             inboundLogId: foundInbound.inboundLogId,
-            timestamp: new Date().toLocaleString()
-        });
+            timestamp: new Date().toLocaleString(),
+            damageStatus: 'DAMAGED'
+        };
+
+        records.push(damageRecord);
 
         saveDamageRecords(records);
+        saveDamageRecordToGoogleSheets(damageRecord, 'DAMAGED');
         renderDamageUI();
         renderInventoryPanel();
         renderOrderQueueUI();
@@ -8456,8 +8445,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!confirm(`Are you sure you want to restore serial number "${serial}" back to available stock?`)) return;
         
         let records = getDamageRecords();
+        const restoredRecord = records.find(r => r.serial.trim().toUpperCase() === serial.trim().toUpperCase());
         records = records.filter(r => r.serial.trim().toUpperCase() !== serial.trim().toUpperCase());
         saveDamageRecords(records);
+
+        if (restoredRecord) {
+            saveDamageRecordToGoogleSheets({
+                ...restoredRecord,
+                id: Date.now().toString(),
+                timestamp: new Date().toLocaleString()
+            }, 'RESTORED');
+        }
 
         renderDamageUI();
         renderInventoryPanel();
