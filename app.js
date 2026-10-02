@@ -110,38 +110,34 @@ async function saveInboundLogToGoogleSheets(log) {
     }
 }
 
-
 async function saveOutboundLogToGoogleSheets(log) {
     if (!log) return;
 
     const rows = [];
-    const serials = Array.isArray(log.serials) ? log.serials : [];
 
-    serials.forEach(serialObj => {
-        const rawSerial = serialObj && serialObj.serial ? serialObj.serial : '';
-        const isWos = rawSerial.includes('WOS-OUT-');
-        const displaySerial = isWos ? 'Without Serial Number' : rawSerial;
+    if (Array.isArray(log.serials) && log.serials.length > 0) {
+        log.serials.forEach(serialObj => {
+            const itemName = serialObj.itemName || '';
+            const weight = serialObj.resolvedWeight !== undefined ? serialObj.resolvedWeight : '';
+            const wosDetails = serialObj.wosDetails || serialObj.wos || '';
 
-        const weight = serialObj && serialObj.resolvedWeight !== undefined
-            ? serialObj.resolvedWeight
-            : '';
-
-        rows.push([
-            log.id || '',
-            log.timestamp || '',
-            log.shopName || '',
-            log.invoiceNo || '',
-            log.pincode || '',
-            log.odaStatus || 'Normal',
-            log.distanceKm || '',
-            serialObj.itemName || '',
-            displaySerial,
-            serialObj.boxNo || '',
-            weight,
-            isWos ? 'WOS' : '',
-            log.isChecked ? 'MARKED' : ''
-        ]);
-    });
+            rows.push([
+                log.id || '',
+                log.timestamp || '',
+                log.shopName || '',
+                log.invoiceNo || '',
+                log.pincode || '',
+                log.odaStatus || 'Normal',
+                log.distanceKm || '',
+                itemName,
+                serialObj.serial || '',
+                serialObj.boxNo || '',
+                weight,
+                wosDetails,
+                serialObj.statusMark || serialObj.status || log.statusMark || log.status || ''
+            ]);
+        });
+    }
 
     if (rows.length === 0) return;
 
@@ -152,7 +148,6 @@ async function saveOutboundLogToGoogleSheets(log) {
         console.error('Google Sheets OUTBOUND save failed:', error);
     }
 }
-
 
 /**
  * Warehouse Activity Portal - Application JavaScript (app.js)
