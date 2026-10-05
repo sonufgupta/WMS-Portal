@@ -1,4 +1,21 @@
 ﻿/**
+
+});
+        // 0. Sync Reset Timestamp - Safe Realtime in-memory check (no infinite reload)
+        let lastKnownResetTime = null;
+        db.ref('wms_data/reset_timestamp').on('value', (snapshot) => {
+            const cloudResetTime = snapshot.val();
+            if (cloudResetTime) {
+                if (lastKnownResetTime === null) {
+                    lastKnownResetTime = cloudResetTime;
+                } else if (cloudResetTime > lastKnownResetTime) {
+                    lastKnownResetTime = cloudResetTime;
+                    console.log('Factory reset signal received from cloud.');
+                    scheduleSyncUIRender();
+                }
+            }
+        });
+/**
  * Warehouse Activity Portal - Application JavaScript (app.js)
  * Basic structure controls (clock, sidebar, navigation, theme toggle)
  */
@@ -189,18 +206,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (isFirebaseConnected && db) {
         // 0. Sync Reset Timestamp to clear local storage on Factory Reset
-        db.ref('wms_data/reset_timestamp').on('value', (snapshot) => {
-            const cloudResetTime = snapshot.val();
-            if (cloudResetTime) {
-                const localResetTime = parseInt(localStorage.getItem('wms_reset_timestamp')) || 0;
-                if (cloudResetTime > localResetTime) {
-                    localStorage.clear();
-                    localStorage.setItem('wms_reset_timestamp', cloudResetTime.toString());
-                    console.log("Factory reset signal received from cloud. Clearing cache...");
-                    window.location.reload();
-                }
-            }
-        });
 
         // 1. Sync Active Inbound Session (High Frequency, Small Size)
         db.ref('wms_data/active_inbound_session').on('value', (snapshot) => {
@@ -9788,4 +9793,3 @@ document.addEventListener('DOMContentLoaded', () => {
     renderOrderQueueUI();
     checkDeviceApprovalStatus();
 });
-
