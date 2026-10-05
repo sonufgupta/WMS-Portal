@@ -1,145 +1,26 @@
-// GOOGLE SHEETS BACKEND
-
-const GOOGLE_SHEETS_API_URL =
-    'https://script.google.com/macros/s/AKfycbxTyudCQ67CWT-GoXc43MUnG18PBkDiYiGA2fGgXRUEUkCUhfCYNaRJXDsRiPPTnZy8/exec';
-
-async function googleSheetsGet(sheetName) {
-    const url =
-        `${GOOGLE_SHEETS_API_URL}?action=read&sheet=${encodeURIComponent(sheetName)}`;
-
-    const response = await fetch(url);
-    const data = await response.json();
-
-    if (!data.success) {
-        throw new Error(data.error || 'Google Sheets read failed');
-    }
-
-    return data;
-}
-
-async function googleSheetsAppend(sheetName, rows) {
-    if (!Array.isArray(rows) || rows.length === 0) {
-        return { success: false, message: 'No rows supplied' };
-    }
-
-    const payload = {
-        action: 'append',
-        sheet: sheetName,
-        rows: rows
-    };
-
-    const response = await fetch(GOOGLE_SHEETS_API_URL, {
-        method: 'POST',
-        body: new URLSearchParams({
-            payload: JSON.stringify(payload)
-        })
-    });
-
-    const data = await response.json();
-
-    if (!data.success) {
-        throw new Error(data.error || 'Google Sheets write failed');
-    }
-
-    return data;
-}
-
-async function saveInboundLogToGoogleSheets(log) {
-    if (!log) return;
-
-    const rows = [];
-
-    if (Array.isArray(log.serials) && log.serials.length > 0) {
-        log.serials.forEach(serialObj => {
-            const itemName = serialObj.itemName || log.item || '';
-            let weight = '';
-
-            if (log.weights) {
-                if (Array.isArray(log.weights)) {
-                    const found = log.weights.find(w => w.name === itemName);
-                    if (found) weight = found.weight;
-                } else if (log.weights[itemName] !== undefined) {
-                    weight = log.weights[itemName];
-                }
-            }
-
-            rows.push([
-                log.id || '',
-                log.timestamp || '',
-                log.vehicle || '',
-                itemName,
-                serialObj.serial || '',
-                serialObj.boxNo || '',
-                weight,
-                'COMPLETED'
-            ]);
-        });
-    } else if (Number(log.count) > 0) {
-        const itemName = log.item || '';
-        const boxCount = Math.max(Number(log.boxCount) || 1, 1);
-        const qtyPerBox = Math.ceil(Number(log.count) / boxCount);
-
-        let weight = '';
-        if (log.weights && log.weights[itemName] !== undefined) {
-            weight = log.weights[itemName];
-        }
-
-        for (let i = 0; i < Number(log.count); i++) {
-            const boxNo = Math.floor(i / qtyPerBox) + 1;
-
-            rows.push([
-                log.id || '',
-                log.timestamp || '',
-                log.vehicle || '',
-                itemName,
-                'Without Serial Number',
-                boxNo,
-                weight,
-                'COMPLETED'
-            ]);
-        }
-    }
-
-    if (rows.length === 0) return;
-
-    try {
-        const result = await googleSheetsAppend('INBOUND', rows);
-        console.log('Google Sheets INBOUND saved:', result);
-    } catch (error) {
-        console.error('Google Sheets INBOUND save failed:', error);
-    }
-}
-
-
-async function saveDamageRecordToGoogleSheets(record, statusOverride) {
-    if (!record) return;
-
-    const status = statusOverride || 'DAMAGED';
-
-    const row = [[
-        record.id || record.timestamp || Date.now().toString(),
-        record.timestamp || '',
-        record.serial || '',
-        record.itemName || '',
-        record.inboundLogId || '',
-        status
-    ]];
-
-    try {
-        const result = await googleSheetsAppend('DAMAGE', row);
-        console.log('Google Sheets DAMAGE saved:', result);
-    } catch (error) {
-        console.error('Google Sheets DAMAGE save failed:', error);
-    }
-}
-
-
-/**
+﻿/**
  * Warehouse Activity Portal - Application JavaScript (app.js)
  * Basic structure controls (clock, sidebar, navigation, theme toggle)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+    // --- Cloud-Only Storage Virtual Adapter (Zero Device/Browser LocalStorage) ---
+    // All data is kept strictly in-memory during session and backed 100% by Firebase Realtime Cloud.
+    const _cloudMemoryStore = {};
+    const localStorage = {
+        getItem: function(key) {
+            return _cloudMemoryStore.hasOwnProperty(key) ? _cloudMemoryStore[key] : null;
+        },
+        setItem: function(key, val) {
+            _cloudMemoryStore[key] = String(val);
+        },
+        removeItem: function(key) {
+            delete _cloudMemoryStore[key];
+        },
+        clear: function() {
+            Object.keys(_cloudMemoryStore).forEach(k => delete _cloudMemoryStore[k]);
+        }
+    };
     // Cache upgrade check for mock data
     const existingHist = localStorage.getItem('wms_inbound_history');
     if (existingHist && !existingHist.includes("inbound_mock_1")) {
@@ -170,6 +51,69 @@ document.addEventListener('DOMContentLoaded', () => {
     let cachedProductWeights = null;
     let weightResolutionCache = null;
     let cachedProductStockMap = null;
+    let cachedDamageRecords = null;
+
+    // O(1) Fast Index Lookup Maps for Instant Barcode Scanning
+    let inboundSerialLogMap = null;    // cleanSerialUpper -> log
+    let outboundSerialLogMap = null;   // cleanSerialUpper -> log
+    let damageSerialsFastSet = null;   // Set of cleanSerialUpper
+    let deletedSerialsFastMap = null;  // cleanSerialUpper -> deletedObj
+
+    function getInboundSerialLogMap() {
+        if (inboundSerialLogMap !== null) return inboundSerialLogMap;
+        const history = getHistory();
+        inboundSerialLogMap = new Map();
+        for (const log of history) {
+            if (log && log.serials) {
+                for (const s of log.serials) {
+                    if (s && s.serial) {
+                        inboundSerialLogMap.set(s.serial.trim().toUpperCase(), log);
+                    }
+                }
+            }
+        }
+        return inboundSerialLogMap;
+    }
+
+    function getOutboundSerialLogMap() {
+        if (outboundSerialLogMap !== null) return outboundSerialLogMap;
+        const history = getOutboundHistory();
+        outboundSerialLogMap = new Map();
+        for (const log of history) {
+            if (log && log.serials) {
+                for (const s of log.serials) {
+                    if (s && s.serial) {
+                        outboundSerialLogMap.set(s.serial.trim().toUpperCase(), log);
+                    }
+                }
+            }
+        }
+        return outboundSerialLogMap;
+    }
+
+    function getDamageSerialsFastSet() {
+        if (damageSerialsFastSet !== null) return damageSerialsFastSet;
+        const records = getDamageRecords();
+        damageSerialsFastSet = new Set();
+        for (const r of records) {
+            if (r && r.serial) {
+                damageSerialsFastSet.add(r.serial.trim().toUpperCase());
+            }
+        }
+        return damageSerialsFastSet;
+    }
+
+    function getDeletedSerialsFastMap() {
+        if (deletedSerialsFastMap !== null) return deletedSerialsFastMap;
+        const records = getDeletedSerials();
+        deletedSerialsFastMap = new Map();
+        for (const r of records) {
+            if (r && r.serial) {
+                deletedSerialsFastMap.set(r.serial.trim().toUpperCase(), r);
+            }
+        }
+        return deletedSerialsFastMap;
+    }
 
     if (window.firebase) {
         try {
@@ -196,6 +140,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let syncRenderRafId = null;
+    function scheduleSyncUIRender() {
+        if (syncRenderRafId) return;
+        syncRenderRafId = requestAnimationFrame(() => {
+            syncRenderRafId = null;
+            renderHistoryTable();
+            renderOutboundHistoryTable();
+            renderInventoryPanel();
+        });
+    }
+
     function syncCloudDataToLocal(key, value) {
         if (value === null || value === undefined) {
             return false;
@@ -206,11 +161,13 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem(key, newStr);
             if (key === 'wms_inbound_history') {
                 cachedInboundHistory = null;
+                inboundSerialLogMap = null;
                 weightResolutionCache = null;
                 cachedProductStockMap = null;
             }
             if (key === 'wms_outbound_history') {
                 cachedOutboundHistory = null;
+                outboundSerialLogMap = null;
                 cachedProductStockMap = null;
             }
             if (key === 'wms_product_weights') {
@@ -218,7 +175,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 weightResolutionCache = null;
             }
             if (key === 'wms_damage_records') {
+                cachedDamageRecords = null;
+                damageSerialsFastSet = null;
                 cachedProductStockMap = null;
+            }
+            if (key === 'wms_deleted_serials') {
+                deletedSerialsFastMap = null;
             }
             return true;
         }
@@ -275,14 +237,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const val = snapshot.val();
             if (val === null) {
                 localStorage.setItem('wms_product_weights', '{}');
-                renderHistoryTable();
-                renderInventoryPanel();
-                renderOutboundHistoryTable();
+                scheduleSyncUIRender();
             } else {
                 if (syncCloudDataToLocal('wms_product_weights', val)) {
-                    renderHistoryTable();
-                    renderInventoryPanel();
-                    renderOutboundHistoryTable();
+                    scheduleSyncUIRender();
                     console.log("Product Weights synchronized.");
                 }
             }
@@ -323,12 +281,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const val = snapshot.val();
             if (val === null) {
                 localStorage.setItem('wms_inbound_history', '[]');
-                renderHistoryTable();
-                renderInventoryPanel();
+                scheduleSyncUIRender();
             } else {
                 if (syncCloudDataToLocal('wms_inbound_history', val)) {
-                    renderHistoryTable();
-                    renderInventoryPanel();
+                    scheduleSyncUIRender();
                     loadInboundItems();
                     renderDropdownItems();
                     renderActiveDropdownItems();
@@ -342,12 +298,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const val = snapshot.val();
             if (val === null) {
                 localStorage.setItem('wms_outbound_history', '[]');
-                renderOutboundHistoryTable();
-                renderInventoryPanel();
+                scheduleSyncUIRender();
             } else {
                 if (syncCloudDataToLocal('wms_outbound_history', val)) {
-                    renderOutboundHistoryTable();
-                    renderInventoryPanel();
+                    scheduleSyncUIRender();
                     loadInboundItems();
                     renderDropdownItems();
                     renderActiveDropdownItems();
@@ -492,14 +446,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             
-            // Activate and show target section
+            // Activate and show target section instantly
             const targetSection = document.getElementById(targetSectionId);
             if (targetSection) {
                 targetSection.style.display = 'flex';
-                // Small delay to allow CSS transitions to trigger
-                setTimeout(() => {
-                    targetSection.classList.add('active');
-                }, 20);
+                targetSection.classList.add('active');
             }
 
             if (targetSectionId === 'sectionInventory' || targetSectionId === 'sectionOverview') {
@@ -1096,6 +1047,13 @@ document.addEventListener('DOMContentLoaded', () => {
             // Check if it is a letter (A-Z, a-z)
             if (/[a-zA-Z]/.test(char)) {
                 pattern[i] = char.toUpperCase();
+            } else if (/[0-9]/.test(char)) {
+                // Include model digit if surrounded by letters (e.g., L7B in PL7BV vs PL1BV)
+                const prevChar = i > 0 ? serial[i - 1] : '';
+                const nextChar = i < serial.length - 1 ? serial[i + 1] : '';
+                if (/[a-zA-Z]/.test(prevChar) && /[a-zA-Z]/.test(nextChar)) {
+                    pattern[i] = char;
+                }
             }
         }
         return pattern;
@@ -1126,8 +1084,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const char = serial[idx];
                 const expectedChar = pattern[index];
                 if (expectedChar !== null && expectedChar !== undefined && expectedChar !== '') {
-                    // Only verify if the scanned serial also has a letter at this position
-                    if (/[a-zA-Z]/.test(char)) {
+                    // Verify if position has letter or digit
+                    if (/[a-zA-Z0-9]/.test(char)) {
                         checkedCount++;
                         if (char.toUpperCase() !== expectedChar) {
                             return false;
@@ -1136,7 +1094,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         }
-        return checkedCount >= 3; // Ensure at least 3 letters match
+        return checkedCount >= 3; // Ensure at least 3 characters match
     }
 
     function formatAlphabetPattern(pattern, length) {
@@ -1150,6 +1108,100 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         return str;
+    }
+
+    function deriveProductNameFromPattern(serial, itemsList) {
+        if (!serial || !itemsList || itemsList.length === 0) return null;
+        const cleanSerial = serial.trim().toUpperCase();
+        const newPattern = extractAlphabetPattern(cleanSerial);
+
+        for (const item of itemsList) {
+            if (!item || !item.name) continue;
+            let patterns = item.allowedPatterns;
+            if (!patterns || patterns.length === 0) {
+                if (item.skuAlphabetPattern) {
+                    patterns = [{ pattern: item.skuAlphabetPattern, length: item.lockedLength || cleanSerial.length }];
+                }
+            }
+            if (!patterns) continue;
+
+            for (const cfg of patterns) {
+                if (!cfg || !cfg.pattern || cfg.length !== cleanSerial.length) continue;
+                const refPattern = cfg.pattern;
+                
+                let diffIndex = -1;
+                let diffCount = 0;
+                
+                const allKeys = new Set([...Object.keys(refPattern), ...Object.keys(newPattern)]);
+                for (const k of allKeys) {
+                    if (refPattern[k] !== newPattern[k]) {
+                        diffCount++;
+                        diffIndex = k;
+                    }
+                }
+
+                if (diffCount === 1 && diffIndex !== -1) {
+                    const oldChar = refPattern[diffIndex];
+                    const newChar = newPattern[diffIndex];
+                    if (oldChar && newChar && item.name.includes(oldChar)) {
+                        const derivedName = item.name.replace(oldChar, newChar);
+                        return derivedName;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    function sanitizeSessionItems(session) {
+        if (!session || !session.items || session.items.length === 0 || !session.serials) return;
+        
+        session.items.forEach(item => {
+            if (!item.allowedPatterns || item.allowedPatterns.length <= 1) return;
+            const itemSerials = session.serials.filter(s => s.itemName === item.name);
+            if (itemSerials.length > 0) {
+                const firstSerial = itemSerials[0].serial;
+                const primaryPattern = extractAlphabetPattern(firstSerial);
+                item.allowedPatterns = [{ pattern: primaryPattern, length: firstSerial.length }];
+                item.skuAlphabetPattern = primaryPattern;
+                item.lockedLength = firstSerial.length;
+            }
+        });
+
+        const serialsToReassign = [];
+        session.items.forEach(item => {
+            if (!item.allowedPatterns || item.allowedPatterns.length === 0) return;
+            const primaryCfg = item.allowedPatterns[0];
+            
+            const mismatched = session.serials.filter(s => {
+                return s.itemName === item.name && !matchesAlphabetPattern(s.serial, primaryCfg.pattern);
+            });
+
+            mismatched.forEach(s => {
+                const derivedName = deriveProductNameFromPattern(s.serial, session.items) || 'New Product';
+                serialsToReassign.push({ serialObj: s, derivedName: derivedName });
+            });
+        });
+
+        serialsToReassign.forEach(({ serialObj, derivedName }) => {
+            let target = session.items.find(i => i.name === derivedName);
+            if (!target) {
+                const pat = extractAlphabetPattern(serialObj.serial);
+                target = {
+                    name: derivedName,
+                    expectedQty: 0,
+                    skuAlphabetPattern: pat,
+                    lockedLength: serialObj.serial.length,
+                    allowedPatterns: [{ pattern: pat, length: serialObj.serial.length }],
+                    scannedCount: 0
+                };
+                session.items.push(target);
+            }
+            serialObj.itemName = derivedName;
+        });
+
+        compactOutboundBoxNumbers();
+        compactBoxNumbers();
     }
 
     // --- State Persistence & LocalStorage Helpers ---
@@ -1531,6 +1583,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveHistory(historyData) {
         cachedInboundHistory = historyData;
+        inboundSerialLogMap = null;
         weightResolutionCache = null;
         cachedProductStockMap = null;
         localStorage.setItem('wms_inbound_history', JSON.stringify(historyData));
@@ -1543,8 +1596,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const saved = localStorage.getItem('wms_inbound_history');
         if (saved) {
-            cachedInboundHistory = JSON.parse(saved);
-            return cachedInboundHistory;
+            try {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed)) {
+                    cachedInboundHistory = parsed;
+                    return cachedInboundHistory;
+                }
+            } catch (e) {
+                console.error("Error parsing wms_inbound_history:", e);
+            }
         }
         cachedInboundHistory = [];
         return cachedInboundHistory;
@@ -1561,7 +1621,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const historyData = getHistory();
         let needsUpdate = false;
         
-        historyData.forEach((row, idx) => {
+        const trFrag = document.createDocumentFragment();
+        const mobileFrag = document.createDocumentFragment();
+
+        // High Performance Optimization: Limit initial rendering to top 100 recent entries to prevent main thread blocking
+        const renderLimit = 100;
+        const displayData = historyData.slice(0, renderLimit);
+
+        displayData.forEach((row, idx) => {
             const tr = document.createElement('tr');
             const vehicleDisplay = row.vehicle === 'Not Specified' ? '<span class="text-muted">Not Specified</span>' : row.vehicle;
             
@@ -1633,12 +1700,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     </button>
                 </td>
             `;
-            inboundHistoryBody.appendChild(tr);
+            trFrag.appendChild(tr);
 
-            // Generate Mobile Card HTML
+            // Generate Inbound Card HTML (Matching Outbound Card Style)
             if (mobileContainer) {
                 const card = document.createElement('div');
                 card.className = 'mobile-log-card';
+                card.style.cssText = `
+                    background: var(--bg-secondary);
+                    border: 1px solid var(--border-color);
+                    border-radius: 12px;
+                    padding: 14px;
+                    display: flex;
+                    flex-direction: column;
+                    height: 100%;
+                    box-sizing: border-box;
+                    width: 100%;
+                    min-width: 0;
+                    overflow: hidden;
+                `;
                 
                 const mobileItemsHtml = itemsList.map(item => {
                     const weight = resolveLogWeight(row, item.name);
@@ -1648,48 +1728,85 @@ document.addEventListener('DOMContentLoaded', () => {
                         : 'background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--accent-blue);';
                     
                     return `
-                        <div class="mobile-log-card-item">
-                            <span class="mobile-log-card-item-bullet">●</span>
-                            <button type="button" class="btn-item-weight-trigger" data-log-id="${row.id}" data-item-name="${escapeHtmlAttr(item.name)}" style="${badgeStyle} padding: 3px 6px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; border-style: solid; text-align: left; white-space: normal; word-break: break-word;">
+                        <div style="display: flex; align-items: flex-start; gap: 6px; font-size: 0.82rem; color: var(--text-primary); font-weight: 600; line-height: 1.35; word-break: break-word;">
+                            <span style="color: #f43f5e; font-size: 0.7rem; margin-top: 3px; flex-shrink: 0;">●</span>
+                            <button type="button" class="btn-item-weight-trigger" data-log-id="${row.id}" data-item-name="${escapeHtmlAttr(item.name)}" style="${badgeStyle} padding: 3px 7px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; border-style: solid; text-align: left; white-space: normal; word-break: break-word;">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 10px; height: 10px; stroke-width: 2.5; flex-shrink: 0;">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1M12 20v1M4 12H3m18 0h-1M6.343 6.343l.707.707M16.95 16.95l.707.707M6.343 17.657l-.707-.707m11.314-11.314l-.707.707M12 7a5 5 0 100 10 5 5 0 000-10z" />
                                 </svg>
-                                <span style="display: inline-block;">${item.name}${weightLabel}</span>
+                                <span>${item.name}${weightLabel}</span>
                             </button>
                         </div>
                     `;
                 }).join('');
 
+                // Format Full Date + Time Display
+                let timestampDisplay = row.timestamp || 'N/A';
+                let fullDateStr = '';
+                if (row.date) {
+                    fullDateStr = row.date;
+                } else if (row.id && !isNaN(parseInt(String(row.id).replace('log_', '')))) {
+                    const d = new Date(parseInt(String(row.id).replace('log_', '')));
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const month = months[d.getMonth()];
+                    const year = d.getFullYear();
+                    fullDateStr = `${day} ${month} ${year}`;
+                }
+                const fullDateTimeDisplay = fullDateStr ? `${fullDateStr} • ${timestampDisplay}` : timestampDisplay;
+                const vehicleText = row.vehicle && row.vehicle !== 'Not Specified' ? row.vehicle : 'Not Specified';
+
                 card.innerHTML = `
-                    <div class="mobile-log-card-header">
-                        <h4 class="mobile-log-card-title">Vehicle: ${row.vehicle || 'Not Specified'}</h4>
-                        <span class="mobile-log-card-badge">${countDisplay}</span>
+                    <!-- 1. Top Header: Vehicle No. + Distinct PCs Badge -->
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; width: 100%;">
+                        <h4 style="font-size: 1.05rem; font-weight: 800; color: #ffffff; margin: 0; line-height: 1.3; flex: 1; word-break: break-word; letter-spacing: 0.01em;">Vehicle: ${vehicleText}</h4>
+                        <span style="font-size: 0.82rem; font-weight: 800; color: #10b981; font-family: var(--font-mono); white-space: nowrap; flex-shrink: 0; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); padding: 4px 10px; border-radius: 6px; text-transform: uppercase;">${row.count} PCs</span>
                     </div>
-                    <div class="mobile-log-card-subtitle">
-                        <span>${row.timestamp}</span>
-                        <span style="color: var(--accent-emerald); font-weight: 700;">INBOUND</span>
+
+                    <!-- 2. Sub-header Row: Full Date + Time • INBOUND Badge -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 4px; font-size: 0.82rem;">
+                        <span style="color: #8a8f9e; font-weight: 500;">${fullDateTimeDisplay}</span>
+                        <span style="background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.35); padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase;">INBOUND</span>
                     </div>
-                    <div class="mobile-log-card-items">
-                        ${mobileItemsHtml}
+
+                    <!-- 3. Full Inner Product Box -->
+                    <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; width: 100%; box-sizing: border-box; margin-top: 4px;">
+                        <div style="display: flex; flex-direction: column; gap: 6px; width: 100%;">
+                            ${mobileItemsHtml}
+                        </div>
+
+                        <div style="border-top: 1px dashed var(--border-color); margin: 2px 0;"></div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+                            <span style="color: #8a8f9e; font-weight: 500;">Total Boxes:</span>
+                            <span style="color: #10b981; font-weight: 800; font-family: var(--font-mono); font-size: 0.95rem;">${finalBoxCount} Boxes</span>
+                        </div>
                     </div>
-                    <div class="mobile-log-card-actions">
-                        <button type="button" class="btn-download-excel btn-mobile-action btn-mobile-excel" data-id="${row.id}">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
+
+                    <!-- 4. Action Buttons Row (Excel, Delete - Always Positioned at Very Bottom) -->
+                    <div style="display: flex; gap: 8px; width: 100%; margin-top: auto; padding-top: 12px;">
+                        <button type="button" class="btn-download-excel" data-id="${row.id}" style="flex: 1; background: rgba(16, 185, 129, 0.08); border: 1px solid #10b981; color: #10b981; padding: 8px 6px; border-radius: 6px; font-weight: 800; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s;">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                             </svg>
                             <span>Excel</span>
                         </button>
-                        <button type="button" class="btn-delete-inbound-log btn-mobile-action btn-mobile-delete" data-id="${row.id}">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
+                        <button type="button" class="btn-delete-inbound-log" data-id="${row.id}" style="flex: 1; background: rgba(244, 63, 94, 0.08); border: 1px solid #f43f5e; color: #f43f5e; padding: 8px 6px; border-radius: 6px; font-weight: 800; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s;">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                             <span>Delete</span>
                         </button>
                     </div>
                 `;
-                mobileContainer.appendChild(card);
+                mobileFrag.appendChild(card);
             }
         });
+
+        inboundHistoryBody.appendChild(trFrag);
+        if (mobileContainer) {
+            mobileContainer.appendChild(mobileFrag);
+        }
 
         // Save updated mock logs back to storage only if we modified them
         if (needsUpdate) {
@@ -1831,10 +1948,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const itemsList = activeSession.items || [];
+        const mainFrag = document.createDocumentFragment();
+
+        // Pre-group serials by itemName for O(1) lookup
+        const serialsByItemNameMap = new Map();
+        (activeSession.serials || []).forEach(s => {
+            if (s && s.itemName) {
+                let list = serialsByItemNameMap.get(s.itemName);
+                if (!list) {
+                    list = [];
+                    serialsByItemNameMap.set(s.itemName, list);
+                }
+                list.push(s);
+            }
+        });
 
         itemsList.forEach(activeItem => {
             // Find all scanned serials belonging to this item
-            const itemSerials = activeSession.serials.filter(s => s.itemName === activeItem.name);
+            const itemSerials = serialsByItemNameMap.get(activeItem.name) || [];
             
             // Calculate item-specific pieces and unique boxes count
             const itemPieces = itemSerials.length;
@@ -1886,8 +2017,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Sort box numbers from highest to lowest (newest box on top)
                 const boxNumbers = Object.keys(groups).map(Number).sort((a, b) => b - a);
+                const MAX_VISIBLE_BOXES = activeItem.showAllBoxes ? boxNumbers.length : 40;
+                const visibleBoxNumbers = boxNumbers.slice(0, MAX_VISIBLE_BOXES);
+                const boxesFrag = document.createDocumentFragment();
 
-                boxNumbers.forEach(boxNo => {
+                visibleBoxNumbers.forEach(boxNo => {
                     const boxItems = groups[boxNo];
                     const boxCard = document.createElement('div');
                     boxCard.className = 'box-card';
@@ -1912,6 +2046,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Serials List
                     const listContainer = document.createElement('div');
                     listContainer.className = 'box-serials-list';
+                    const serialsFrag = document.createDocumentFragment();
 
                     boxItems.forEach(s => {
                         const row = document.createElement('div');
@@ -1921,17 +2056,36 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span class="serial-item-text font-mono">${s.serial}</span>
                             <button type="button" class="btn-delete-serial" data-serial="${s.serial}" title="Remove serial">&times;</button>
                         `;
-                        listContainer.appendChild(row);
+                        serialsFrag.appendChild(row);
                     });
 
+                    listContainer.appendChild(serialsFrag);
                     boxCard.appendChild(listContainer);
-                    boxListWrapper.appendChild(boxCard);
+                    boxesFrag.appendChild(boxCard);
                 });
+
+                boxListWrapper.appendChild(boxesFrag);
+
+                if (boxNumbers.length > MAX_VISIBLE_BOXES) {
+                    const loadMoreBtn = document.createElement('button');
+                    loadMoreBtn.type = 'button';
+                    loadMoreBtn.className = 'btn-load-more-boxes';
+                    loadMoreBtn.style.cssText = 'background: rgba(59, 130, 246, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 8px 12px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; cursor: pointer; margin-top: 8px; width: 100%; text-align: center; font-family: var(--font-mono);';
+                    loadMoreBtn.textContent = `📦 Showing top 40 of ${boxNumbers.length} boxes (Click to show all ${boxNumbers.length} boxes)`;
+                    loadMoreBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        activeItem.showAllBoxes = true;
+                        renderBoxCards();
+                    });
+                    boxListWrapper.appendChild(loadMoreBtn);
+                }
             }
 
             col.appendChild(boxListWrapper);
-            sessionBoxesContainer.appendChild(col);
+            mainFrag.appendChild(col);
         });
+
+        sessionBoxesContainer.appendChild(mainFrag);
     }
 
     function updateWorkstationProductSelector() {
@@ -2041,9 +2195,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (activeSession.serials) {
-                activeSession.serials = activeSession.serials.filter(s => s && s.serial && s.serial.length <= 50);
+                activeSession.serials = activeSession.serials.filter(s => s && s.serial && (s.serial.length <= 150 || s.serial.includes('WOS')));
             }
 
+            sanitizeSessionItems(activeSession);
             compactBoxNumbers();
             updateSessionProgress();
             updateWorkstationProductSelector();
@@ -2394,13 +2549,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const items = activeSession.items || [];
         
+        // Pre-group serials by itemName for O(1) lookup
+        const serialsByItemMap = new Map();
+        (activeSession.serials || []).forEach(s => {
+            if (s && s.itemName) {
+                let list = serialsByItemMap.get(s.itemName);
+                if (!list) {
+                    list = [];
+                    serialsByItemMap.set(s.itemName, list);
+                }
+                list.push(s);
+            }
+        });
+
         let totalExpected = 0;
         let totalScanned = 0;
         
         items.forEach(item => {
             totalExpected += parseInt(item.expectedQty) || 0;
-            // Count scanned serials for this product
-            const itemScans = activeSession.serials.filter(s => s.itemName === item.name).length;
+            const itemSerials = serialsByItemMap.get(item.name) || [];
+            const itemScans = itemSerials.length;
             item.scannedCount = itemScans;
             totalScanned += itemScans;
         });
@@ -2423,7 +2591,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sessionScannedBoxesCount) {
             let totalBoxesCount = 0;
             items.forEach(activeItem => {
-                const itemSerials = activeSession.serials.filter(s => s.itemName === activeItem.name);
+                const itemSerials = serialsByItemMap.get(activeItem.name) || [];
                 const uniqueBoxes = new Set(itemSerials.map(s => s.boxNo));
                 totalBoxesCount += uniqueBoxes.size;
             });
@@ -2700,7 +2868,22 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 const firstConfig = matchedItem.allowedPatterns[0];
                 const expectedPatternStr = firstConfig ? formatAlphabetPattern(firstConfig.pattern, firstConfig.length) : 'Any Pattern';
-                showScanWarning('sku', expectedPatternStr, cleanSerial);
+                
+                lastRejectedSerial = cleanSerial;
+                lastRejectedItemName = lookupProductBySerial(cleanSerial) || lookupProductBySkuPattern(cleanSerial) || 'Another Product';
+                lastRejectedIsSequence = false;
+
+                showSkuWarningModal(
+                    'Another Product Detected!',
+                    `Scanned serial barcode "${cleanSerial}" belongs to product: "${lastRejectedItemName}". Do you want to add or switch to this product in the active session?`,
+                    'EXPECTED SKU:',
+                    expectedPatternStr,
+                    'SCANNED BARCODE:',
+                    `${lastRejectedItemName} (${cleanSerial})`,
+                    false, // showAllowLengthBtn
+                    true,  // showAddBtn (enables + Add Product button and double scan confirmation!)
+                    cleanSerial
+                );
             }
             return false;
         }
@@ -2714,18 +2897,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Check for duplicates across past inbound history logs (case-insensitive)
-        const inboundHistory = getHistory();
-        let alreadyInboundLog = null;
         const cleanSerialUpper = cleanSerial.toUpperCase();
-        for (const log of inboundHistory) {
-            if (log.serials) {
-                const found = log.serials.find(s => s && s.serial && s.serial.trim().toUpperCase() === cleanSerialUpper);
-                if (found) {
-                    alreadyInboundLog = log;
-                    break;
-                }
-            }
-        }
+        const alreadyInboundLog = getInboundSerialLogMap().get(cleanSerialUpper);
 
         if (alreadyInboundLog) {
             showSkuWarningModal(
@@ -3185,7 +3358,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     weights: {}
                 });
                 saveHistory(historyData);
-                saveInboundLogToGoogleSheets(historyData[0]);
                 currentEndingSessionLogId = newLogId;
  
                 // Define callback to complete the session closure after weight configuration
@@ -3231,17 +3403,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Active Product Addition Modal Handlers ---
-
-    // Close Active Product Modal
-    function closeActiveProductModal() {
-        if (addProductToActiveSessionModal) {
-            addProductToActiveSessionModal.classList.remove('active');
-            addProductToActiveSessionForm.reset();
-            if (activeConfigItemSelect) activeConfigItemSelect.value = '';
-            if (activeConfigItemDropdownSelectedText) activeConfigItemDropdownSelectedText.textContent = 'Choose an item...';
-            closeActiveDropdownMenu();
-        }
-    }
 
     // Open active modal
     if (openAddProductToActiveSessionModalBtn) {
@@ -3490,6 +3651,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (warningAddProductBtn && skuWarningModal) {
         warningAddProductBtn.addEventListener('click', () => {
             skuWarningModal.classList.remove('active');
+            
+            // Outbound recovery & add product
             if (lastRejectedSerial && lastRejectedItemName && activeOutboundSession) {
                 let targetItem = activeOutboundSession.items.find(i => i.name === lastRejectedItemName);
                 if (!targetItem) {
@@ -3518,6 +3681,47 @@ document.addEventListener('DOMContentLoaded', () => {
                     generateOutboundSequenceSerials(lastRejectedSeqBase, lastRejectedSeqCount);
                 } else {
                     saveOutboundSerial(lastRejectedSerial, lastRejectedItemName);
+                }
+                return;
+            }
+
+            // Inbound recovery & add product
+            if (lastRejectedSerial && activeSession) {
+                const detectedProduct = lastRejectedItemName || lookupProductBySerial(lastRejectedSerial) || lookupProductBySkuPattern(lastRejectedSerial);
+                if (detectedProduct && detectedProduct !== 'Another Product' && detectedProduct !== 'Unknown Product') {
+                    let targetItem = activeSession.items.find(i => i.name === detectedProduct);
+                    if (!targetItem) {
+                        targetItem = {
+                            name: detectedProduct,
+                            expectedQty: 0,
+                            skuAlphabetPattern: null,
+                            lockedLength: null,
+                            allowedPatterns: [],
+                            scannedCount: 0
+                        };
+                        activeSession.items.push(targetItem);
+                    }
+                    const newPattern = extractAlphabetPattern(lastRejectedSerial);
+                    targetItem.skuAlphabetPattern = newPattern;
+                    targetItem.lockedLength = lastRejectedSerial.length;
+                    if (!targetItem.allowedPatterns) targetItem.allowedPatterns = [];
+                    const patternExists = targetItem.allowedPatterns.some(cfg => {
+                        return cfg.length === lastRejectedSerial.length && matchesAlphabetPattern(lastRejectedSerial, cfg.pattern);
+                    });
+                    if (!patternExists) {
+                        targetItem.allowedPatterns.push({ pattern: newPattern, length: lastRejectedSerial.length });
+                    }
+
+                    // Update workstation product selector if needed
+                    const workstationProductSelect = document.getElementById('workstationProductSelect');
+                    if (workstationProductSelect) {
+                        workstationProductSelect.value = detectedProduct;
+                    }
+
+                    addSerialToSession(lastRejectedSerial);
+                } else if (addProductToActiveSessionModal) {
+                    // Open add product modal if item name unknown
+                    addProductToActiveSessionModal.classList.add('active');
                 }
             }
         });
@@ -3738,8 +3942,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (activeOutboundSession.serials) {
-                activeOutboundSession.serials = activeOutboundSession.serials.filter(s => s && s.serial && s.serial.length <= 50);
+                activeOutboundSession.serials = activeOutboundSession.serials.filter(s => s && s.serial && (s.serial.length <= 150 || s.serial.includes('WOS')));
             }
+
+            sanitizeSessionItems(activeOutboundSession);
 
             document.getElementById('activeOutboundShop').textContent = activeOutboundSession.shopName;
             document.getElementById('activeOutboundInvoice').textContent = activeOutboundSession.invoiceNo;
@@ -3750,32 +3956,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (odaBadge) {
                 if (activeOutboundSession.pincode) {
                     const pincode = activeOutboundSession.pincode;
-                    const records = getOdaRecords();
-                    const matched = records.filter(r => String(r.pincode) === String(pincode));
-                    
-                    let statusText = '';
-                    let isOda = false;
-                    
-                    if (matched.length > 0) {
-                        isOda = matched.some(r => isOdaRemark(r.remark));
-                        const courierDetails = matched.map(r => `${r.courier}: ${r.remark}`).join(', ');
-                        statusText = isOda ? `⚠️ ODA (${courierDetails})` : `✅ NORMAL (${courierDetails})`;
-                    } else {
-                        statusText = `✅ NORMAL (Delivery: Normal)`;
-                    }
+                    const odaInfo = getMultiCourierOdaStatus(pincode);
                     
                     odaBadge.style.display = 'flex';
-                    odaBadge.textContent = statusText;
+                    odaBadge.innerHTML = `<span style="font-weight: 800; font-family: var(--font-mono); margin-right: 4px;">PIN ${pincode}:</span> ${odaInfo.badgeHtml}`;
                     
-                    if (isOda) {
-                        odaBadge.style.backgroundColor = 'rgba(244, 63, 94, 0.15)';
+                    if (odaInfo.isAnyOda) {
+                        odaBadge.style.backgroundColor = 'rgba(244, 63, 94, 0.1)';
                         odaBadge.style.borderColor = 'var(--accent-rose)';
-                        odaBadge.style.color = 'var(--accent-rose)';
                         odaBadge.style.animation = 'pulseOda 1.5s infinite';
                     } else {
-                        odaBadge.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
+                        odaBadge.style.backgroundColor = 'rgba(16, 185, 129, 0.08)';
                         odaBadge.style.borderColor = 'var(--accent-emerald)';
-                        odaBadge.style.color = 'var(--accent-emerald)';
                         odaBadge.style.animation = 'pulseOdaNormal 2s infinite';
                     }
                 } else {
@@ -3834,6 +4026,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 document.getElementById('configShopName').value = '';
                 document.getElementById('configInvoiceNo').value = '';
+                const pinElReset = document.getElementById('configPincode');
+                if (pinElReset) pinElReset.value = '';
+                const addrElReset = document.getElementById('configAddress');
+                if (addrElReset) addrElReset.value = '';
                 
                 outboundConfigModal.classList.add('active');
             }
@@ -3856,6 +4052,8 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('configInvoiceNo').value = activeOutboundSession.invoiceNo || '';
             const pinEl = document.getElementById('configPincode');
             if (pinEl) pinEl.value = activeOutboundSession.pincode || '';
+            const addrEl = document.getElementById('configAddress');
+            if (addrEl) addrEl.value = activeOutboundSession.address || '';
             
             outboundConfigModal.classList.add('active');
         });
@@ -3891,6 +4089,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const invoiceVal = document.getElementById('configInvoiceNo').value.trim();
             const pinEl = document.getElementById('configPincode');
             const pinVal = pinEl ? pinEl.value.trim().replace(/\D/g, '') : '';
+            const addrEl = document.getElementById('configAddress');
+            const addrVal = addrEl ? addrEl.value.trim() : '';
 
             if (!shopVal || !invoiceVal) {
                 alert('Please enter both Shop Name and Invoice Number.');
@@ -3918,12 +4118,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeOutboundSession.shopName = shopVal;
                 activeOutboundSession.invoiceNo = invoiceVal;
                 activeOutboundSession.pincode = pinVal || '';
+                activeOutboundSession.address = addrVal || activeOutboundSession.address || '';
                 activeOutboundSession.odaStatus = odaStatus;
             } else {
                 activeOutboundSession = {
                     shopName: shopVal,
                     invoiceNo: invoiceVal,
                     pincode: pinVal || '',
+                    address: addrVal || '',
                     odaStatus: odaStatus,
                     items: [],
                     serials: []
@@ -4018,6 +4220,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 pincode = pincodes[pincodes.length - 1];
             }
             
+            // 4. Extract Drop Address (text after customer GSTIN / last GSTIN)
+            let extractedAddress = '';
+            const gstinRegex = /(?:GSTIN|GST)\s*[:\-]?\s*([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Zz][0-9A-Z]{1})|\b([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Zz][0-9A-Z]{1})\b/gi;
+            const gstinMatches = [...val.matchAll(gstinRegex)];
+
+            if (gstinMatches.length >= 2) {
+                const lastMatch = gstinMatches[gstinMatches.length - 1];
+                const gstinEndIndex = lastMatch.index + lastMatch[0].length;
+                extractedAddress = val.substring(gstinEndIndex).trim();
+            } else if (gstinMatches.length === 1) {
+                const shipToIdx = val.search(/Ship\s*To|Bill\s*To/i);
+                if (shipToIdx !== -1 && gstinMatches[0].index > shipToIdx) {
+                    const gstinEndIndex = gstinMatches[0].index + gstinMatches[0][0].length;
+                    extractedAddress = val.substring(gstinEndIndex).trim();
+                } else {
+                    const sub = val.substring(shipToIdx !== -1 ? shipToIdx : 0);
+                    const subLines = sub.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+                    if (subLines.length > 2) {
+                        extractedAddress = subLines.slice(2).join('\n').trim();
+                    }
+                }
+            } else {
+                const shipToMatch = val.match(/(?:Ship\s*To|Bill\s*To)[\s\S]*?\n([^\n]+)\n([\s\S]+)/i);
+                if (shipToMatch && shipToMatch[2]) {
+                    extractedAddress = shipToMatch[2].trim();
+                }
+            }
+
+            if (extractedAddress) {
+                extractedAddress = extractedAddress.replace(/^[\s\t\:\-]+/, '').trim();
+            }
+
             // Populate form fields if extracted successfully
             let filled = false;
             if (shopName) {
@@ -4031,6 +4265,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (pincode) {
                 const pinEl = document.getElementById('configPincode');
                 if (pinEl) pinEl.value = pincode;
+                filled = true;
+            }
+            if (extractedAddress) {
+                const addrEl = document.getElementById('configAddress');
+                if (addrEl) addrEl.value = extractedAddress;
                 filled = true;
             }
             
@@ -4105,32 +4344,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // lookup helpers
     function lookupProductBySerial(serial) {
-        const history = getHistory();
-        for (const log of history) {
-            if (log.serials && log.serials.length > 0) {
-                const found = log.serials.find(s => s && s.serial === serial);
-                if (found) return found.itemName;
-            }
-            
-            // Fallback for mock logs and legacy records (always evaluated if no exact serial match found)
-            if (serial.startsWith("GXTFT")) {
-                const hasMonitor = (log.item && log.item.includes("LED Monitor")) || 
-                                   (log.items && log.items.some(i => {
-                                       const name = typeof i === 'string' ? i : (i.name || '');
-                                       return name.includes("LED Monitor");
-                                   }));
-                if (hasMonitor) return "LED Monitor 19.5\" (Geonix)";
-            }
-            if (serial.startsWith("BWR")) {
-                const hasWrap = (log.item && log.item.includes("Bubble Wrap")) || 
-                                 (log.items && log.items.some(i => {
-                                     const name = typeof i === 'string' ? i : (i.name || '');
-                                     return name.includes("Bubble Wrap");
-                                 }));
-                if (hasWrap) return "Bubble Wrap Roll";
-            }
+        if (!serial) return null;
+        const cleanUpper = serial.trim().toUpperCase();
+        const found = getInboundSerialLogMap().get(cleanUpper);
+        if (found && found.itemName) {
+            return found.itemName;
         }
-        return null;
+        if (cleanUpper.startsWith("GXTFT")) return 'LED Monitor 19.5" (Geonix)';
+        if (cleanUpper.startsWith("BWR")) return 'Bubble Wrap Roll';
+        return lookupProductBySkuPattern(serial);
     }
 
     function lookupProductBySkuPattern(serial) {
@@ -4194,8 +4416,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!activeOutboundSession) return false;
 
         const cleanSerial = serial.trim();
-        const deletedSerialsList = getDeletedSerials();
-        const foundDeleted = deletedSerialsList.find(x => x.serial === cleanSerial);
+        const cleanSerialUpper = cleanSerial.toUpperCase();
+        const foundDeleted = getDeletedSerialsFastMap().get(cleanSerialUpper);
         if (foundDeleted) {
             if (deletedSerialDismissTimer) {
                 clearTimeout(deletedSerialDismissTimer);
@@ -4234,9 +4456,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return false;
         }
 
-        // Damaged check
-        const damageRecords = getDamageRecords();
-        const isDamaged = damageRecords.some(r => r.serial.trim().toUpperCase() === cleanSerial);
+        // Damaged check (O(1) Set lookup)
+        const isDamaged = getDamageSerialsFastSet().has(cleanSerialUpper);
         if (isDamaged) {
             showSkuWarningModal(
                 'Damaged Product Alert!',
@@ -4250,15 +4471,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return false;
         }
 
-        // Already Dispatched check (Outbound History validation)
-        const outboundHistory = getOutboundHistory();
-        let alreadyDispatchedLog = null;
-        for (const log of outboundHistory) {
-            if (log.serials && log.serials.some(s => s.serial === cleanSerial)) {
-                alreadyDispatchedLog = log;
-                break;
-            }
-        }
+        // Already Dispatched check (O(1) Map lookup)
+        const alreadyDispatchedLog = getOutboundSerialLogMap().get(cleanSerialUpper);
 
         if (alreadyDispatchedLog) {
             showSkuWarningModal(
@@ -4294,6 +4508,9 @@ document.addEventListener('DOMContentLoaded', () => {
         let productName = lookupProductBySerial(serial);
         if (!productName) {
             productName = lookupProductBySkuPattern(serial);
+        }
+        if (!productName && activeOutboundSession && activeOutboundSession.items) {
+            productName = deriveProductNameFromPattern(serial, activeOutboundSession.items);
         }
 
         // Unrecognized barcode popup - directly reject scan
@@ -4395,13 +4612,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 );
             } else {
                 showSkuWarningModal(
-                    'SKU Mismatch Error!',
-                    `The scanned barcode does not match the alphabet structure of "${productName}".`,
+                    'Another Product Detected!',
+                    `Scanned serial barcode "${serial}" belongs to product: "${productName || 'Another Product'}". Do you want to add this product to the current outbound dispatch?`,
                     'EXPECTED SKU:',
-                    targetItem.skuAlphabetPattern ? Object.keys(targetItem.skuAlphabetPattern).sort((a,b)=>a-b).map(k=>targetItem.skuAlphabetPattern[k]).join('') : 'X',
+                    targetItem.skuAlphabetPattern ? formatAlphabetPattern(targetItem.skuAlphabetPattern, targetItem.lockedLength || serial.length) : 'Session SKU',
                     'SCANNED BARCODE:',
-                    serial,
-                    false
+                    `${productName || 'Detected'} (${serial})`,
+                    false, // showAllowLengthBtn
+                    true,  // showAddBtn (enables + Add Product button & double scan confirmation!)
+                    serial
                 );
             }
             return false;
@@ -4672,8 +4891,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const saved = localStorage.getItem('wms_outbound_history');
         if (saved) {
-            cachedOutboundHistory = JSON.parse(saved);
-            return cachedOutboundHistory;
+            try {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed)) {
+                    cachedOutboundHistory = parsed;
+                    return cachedOutboundHistory;
+                }
+            } catch (e) {
+                console.error("Error parsing wms_outbound_history:", e);
+            }
         }
         cachedOutboundHistory = [];
         return cachedOutboundHistory;
@@ -4681,6 +4907,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveOutboundHistory(historyData) {
         cachedOutboundHistory = historyData;
+        outboundSerialLogMap = null;
         cachedProductStockMap = null;
         localStorage.setItem('wms_outbound_history', JSON.stringify(historyData));
         firebaseSet('outbound_history', historyData);
@@ -4700,24 +4927,51 @@ document.addEventListener('DOMContentLoaded', () => {
         let todayWeightSum = 0;
         
         const historyData = getOutboundHistory();
-        historyData.forEach((row, index) => {
+
+        const trFrag = document.createDocumentFragment();
+        const mobileFrag = document.createDocumentFragment();
+
+        // High Performance Optimization: Limit initial rendering to top 100 recent entries to prevent main thread blocking
+        const renderLimit = 100;
+        const displayData = historyData.slice(0, renderLimit);
+
+        displayData.forEach((row, index) => {
             const tr = document.createElement('tr');
             tr.className = (index % 2 === 0) ? 'white-row' : 'black-row';
             let totalWeight = 0;
+            const serialsByItemMap = new Map();
             (row.serials || []).forEach(s => {
                 totalWeight += s.resolvedWeight !== undefined ? s.resolvedWeight : resolveItemWeight(s.serial, s.itemName);
+                if (s && s.itemName) {
+                    let list = serialsByItemMap.get(s.itemName);
+                    if (!list) {
+                        list = [];
+                        serialsByItemMap.set(s.itemName, list);
+                    }
+                    list.push(s);
+                }
             });
-            const itemNames = (row.items || []).map(i => {
-                const count = (row.serials || []).filter(s => s.itemName === i.name).length;
-                return `${i.name} (${count})`;
-            }).join(', ') || 'N/A';
+
+            const itemNamesHtml = (() => {
+                const lines = (row.items || []).map(i => {
+                    const count = (serialsByItemMap.get(i.name) || []).length;
+                    return `<div style="display:flex; align-items:center; gap:6px; padding: 2px 0; white-space:nowrap;">
+                        <span style="color:var(--accent-blue); font-size:0.65rem;">●</span>
+                        <span style="font-size:0.82rem;">${i.name}</span>
+                        <span style="background:rgba(16,185,129,0.12); color:var(--accent-emerald); border:1px solid rgba(16,185,129,0.25); font-size:0.68rem; font-weight:800; padding:1px 6px; border-radius:10px; white-space:nowrap;">${count} pcs</span>
+                    </div>`;
+                });
+                return lines.length > 0
+                    ? `<div style="display:flex; flex-direction:column; gap:2px; min-width:180px;">${lines.join('')}</div>`
+                    : '<span style="color:var(--text-muted);">N/A</span>';
+            })();
 
             // Calculate total PCs and Boxes count
             const totalPcs = (row.serials || []).length;
             let totalBoxes = 0;
             const rowItems = row.items || [];
             rowItems.forEach(i => {
-                const itemSerials = (row.serials || []).filter(s => s.itemName === i.name);
+                const itemSerials = serialsByItemMap.get(i.name) || [];
                 const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
                 totalBoxes += itemBoxes;
             });
@@ -4760,27 +5014,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td style="text-align: center; cursor: pointer; padding: 10px 8px;" class="btn-toggle-outbound-mark" data-id="${row.id}" title="Toggle Marked Summary Inclusion">
                     ${checkedIcon}
                 </td>
-                <td class="font-mono">${timestampHtml}</td>
-                <td>${row.shopName}</td>
-                <td class="font-mono">${row.invoiceNo}</td>
+                <td class="font-mono" style="font-size:1.15rem; font-weight:900; color:#fff;">${timestampHtml}</td>
+                <td style="font-size:1.15rem; font-weight:900; color:#fff;">${row.shopName}</td>
+                <td class="font-mono" style="font-size:1.05rem; font-weight:900; color:#fff;">${row.invoiceNo}</td>
                 <td>
                     ${(() => {
-                        const isOda = row.odaStatus === 'ODA';
-                        const badge = isOda 
-                            ? `<span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">⚠️ ODA</span>`
-                            : `<span style="background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">Normal</span>`;
-                        const pinText = row.pincode ? `<span style="font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">${row.pincode}</span>` : '';
-                        return `<div style="display: flex; flex-direction: column; gap: 2px;">
-                                    ${badge}
-                                    ${pinText}
+                        if (!row.pincode) return `<span style="color: var(--text-muted); font-size: 0.8rem;">—</span>`;
+                        const odaInfo = getMultiCourierOdaStatus(row.pincode);
+                        return `<div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono); font-weight: 700;">PIN: ${row.pincode}</span>
+                                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                        ${odaInfo.badgeHtml}
+                                    </div>
                                 </div>`;
                     })()}
                 </td>
-                <td>${itemNames}</td>
-                <td class="font-mono">${totalWeight.toFixed(3)} kg</td>
-                <td class="font-mono" style="font-weight: 700;">${totalPcs}</td>
-                <td class="font-mono">
-                    <button type="button" class="btn-show-outbound-box-details" data-id="${row.id}" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.4); color: var(--accent-blue); padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth);">
+                <td>
+                    ${row.courierRecommendation 
+                        ? `<span style="display:inline-flex; align-items:center; gap:5px; background:#1d4ed8; color:#fff; padding:3px 10px; border-radius:6px; font-size:0.75rem; font-weight:800; white-space:nowrap;">🚚 ${row.courierRecommendation}</span>`
+                        : `<span style="color:var(--text-muted); font-size:0.8rem;">—</span>`}
+                </td>
+                <td style="padding: 10px 16px;">${itemNamesHtml}</td>
+                <td class="font-mono" style="font-size:1.15rem; font-weight:900; color:#fff;">${totalWeight.toFixed(3)} kg</td>
+                <td class="font-mono" style="font-size:1.5rem; font-weight:900; color:#e11d48;">${totalPcs}</td>
+                <td class="font-mono" style="text-align:center;">
+                    <button type="button" class="btn-show-outbound-box-details" data-id="${row.id}"
+                        style="background: #e11d48; border: none; color: #ffffff; padding: 12px 20px; border-radius: var(--radius-md); font-size: 2.2rem; font-weight: 900; cursor: pointer; transition: var(--transition-smooth); min-width: 64px; line-height: 1; box-shadow: 0 4px 14px rgba(225,29,72,0.4);">
                         ${totalBoxes}
                     </button>
                 </td>
@@ -4799,27 +5058,38 @@ document.addEventListener('DOMContentLoaded', () => {
                     </button>
                 </td>
             `;
-            body.appendChild(tr);
+            trFrag.appendChild(tr);
 
             // Generate Mobile Card HTML
             if (mobileContainer) {
                 const card = document.createElement('div');
                 card.className = 'mobile-log-card';
-                if (rowIsToday) {
-                    card.style.borderLeft = "4px solid var(--accent-emerald)";
-                }
+                card.style.cssText = `
+                    background: var(--bg-secondary);
+                    border: 1px solid var(--border-color);
+                    ${rowIsToday ? 'border-left: 4px solid var(--accent-emerald);' : ''}
+                    border-radius: 12px;
+                    padding: 14px;
+                    display: flex;
+                    flex-direction: column;
+                    height: 100%;
+                    box-sizing: border-box;
+                    width: 100%;
+                    min-width: 0;
+                    overflow: hidden;
+                `;
 
                 // Checkbox mark status indicator
                 const mobileCheckIcon = isChecked
                     ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width: 18px; height: 18px; color: var(--accent-emerald); cursor: pointer;"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd" /></svg>` 
                     : `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; color: var(--text-muted); cursor: pointer;"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
 
-                // Item pills list
+                // Item pills list with pink bullet point
                 const mobileItemsHtml = (row.items || []).map(i => {
-                    const count = (row.serials || []).filter(s => s.itemName === i.name).length;
+                    const count = (serialsByItemMap.get(i.name) || []).length;
                     return `
-                        <div class="mobile-log-card-item">
-                            <span class="mobile-log-card-item-bullet">●</span>
+                        <div style="display: flex; align-items: flex-start; gap: 6px; font-size: 0.82rem; color: var(--text-primary); font-weight: 600; line-height: 1.35; word-break: break-word;">
+                            <span style="color: #f43f5e; font-size: 0.7rem; margin-top: 3px; flex-shrink: 0;">●</span>
                             <span>${i.name} (${count} pcs)</span>
                         </div>
                     `;
@@ -4827,67 +5097,99 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 let mobileOdaBadge = '';
                 if (row.pincode) {
-                    const isOda = row.odaStatus === 'ODA';
-                    const odaLabel = isOda ? 'ODA' : 'Normal';
-                    const odaColor = isOda ? 'var(--accent-rose)' : 'var(--accent-emerald)';
-                    const odaBg = isOda ? 'rgba(244, 63, 94, 0.15)' : 'rgba(16, 185, 129, 0.1)';
-                    mobileOdaBadge = `<span style="background: ${odaBg}; color: ${odaColor}; border: 1px solid ${odaColor}; padding: 1px 4px; border-radius: 3px; font-size: 0.65rem; font-weight: 800; margin-left: 6px; text-transform: uppercase;">${odaLabel}</span>`;
+                    const odaInfo = getMultiCourierOdaStatus(row.pincode);
+                    mobileOdaBadge = `<div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;">${odaInfo.badgeHtml}</div>`;
                 }
 
+                // Format Full Date + Time Display
+                let timestampDisplay = row.timestamp || 'N/A';
+                let fullDateStr = '';
+                if (row.date) {
+                    fullDateStr = row.date;
+                } else if (!isNaN(parseInt(row.id))) {
+                    const d = new Date(parseInt(row.id));
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const month = months[d.getMonth()];
+                    const year = d.getFullYear();
+                    fullDateStr = `${day} ${month} ${year}`;
+                }
+                const fullDateTimeDisplay = fullDateStr ? `${fullDateStr} • ${timestampDisplay}` : timestampDisplay;
+
                 card.innerHTML = `
-                    <div class="mobile-log-card-header">
-                        <h4 class="mobile-log-card-title">${row.shopName}</h4>
-                        <span class="mobile-log-card-badge">${totalPcs} PCs (${totalBoxes} Bx)</span>
+                    <!-- 1. Top Header: Full Shop Name (No Truncation) + Distinct 24 PCs Badge -->
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; width: 100%;">
+                        <h4 style="font-size: 1.05rem; font-weight: 800; color: #ffffff; margin: 0; line-height: 1.3; flex: 1; word-break: break-word; letter-spacing: 0.01em;">${row.shopName}</h4>
+                        <span style="font-size: 0.82rem; font-weight: 800; color: #10b981; font-family: var(--font-mono); white-space: nowrap; flex-shrink: 0; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); padding: 4px 10px; border-radius: 6px; text-transform: uppercase;">${totalPcs} PCs</span>
                     </div>
-                    <div class="mobile-log-card-subtitle" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+
+                    <!-- 2. Sub-header Row: Full Date + Time • Red Invoice No • Pincode/ODA • MARK Checkmark -->
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%; margin-top: 4px; font-size: 0.82rem;">
                         <div style="display: flex; flex-direction: column; gap: 2px;">
-                            <span>${row.timestamp}</span>
-                            <div style="display: flex; align-items: center; gap: 4px;">
-                                <span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--accent-blue);">${row.invoiceNo}</span>
-                                ${(() => {
-                                    if (!row.pincode) return '';
-                                    const dist = row.distanceKm || calculateDistanceKm(row.pincode);
-                                    const distStr = dist ? ` • ${dist.toLocaleString('en-IN')} km` : '';
-                                    return `<span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted);">(${row.pincode}${distStr})</span>`;
-                                })()}
+                            <span style="color: #8a8f9e; font-weight: 500;">${fullDateTimeDisplay}</span>
+                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                <span style="font-family: var(--font-mono); font-size: 0.9rem; font-weight: 800; color: #f43f5e;">${row.invoiceNo}</span>
+                                ${row.pincode ? `<span style="font-family: var(--font-mono); font-size: 0.78rem; color: #8a8f9e; font-weight: 700;">(${row.pincode})</span>` : ''}
                                 ${mobileOdaBadge}
                             </div>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Mark:</span>
-                            <span class="btn-toggle-outbound-mark" data-id="${row.id}" style="display: inline-flex; align-items: center; justify-content: center;">
+                        <div style="display: flex; align-items: center; gap: 4px;">
+                            <span style="font-size: 0.72rem; color: #8a8f9e; text-transform: uppercase; font-weight: 700;">MARK:</span>
+                            <span class="btn-toggle-outbound-mark" data-id="${row.id}" style="display: inline-flex; align-items: center; justify-content: center; cursor: pointer;">
                                 ${mobileCheckIcon}
                             </span>
                         </div>
                     </div>
-                    <div class="mobile-log-card-items">
-                        ${mobileItemsHtml}
-                        <div style="font-size: 0.75rem; color: var(--text-muted); border-top: 1px dashed var(--border-color); padding-top: 6px; margin-top: 4px; display: flex; justify-content: space-between; align-items: center;">
-                            <span>Total Weight:</span>
-                            <span style="font-weight: 700; color: var(--accent-emerald);">${totalWeight.toFixed(3)} kg</span>
+
+                    <!-- 3. Full Inner Product Box (All Items Visible, Zero Hidden Details) -->
+                    <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; width: 100%; box-sizing: border-box; margin-top: 4px;">
+                        <div style="display: flex; flex-direction: column; gap: 6px; width: 100%;">
+                            ${mobileItemsHtml}
                         </div>
+
+                        <div style="border-top: 1px dashed var(--border-color); margin: 2px 0;"></div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+                            <span style="color: #8a8f9e; font-weight: 500;">Total Weight:</span>
+                            <span style="color: #10b981; font-weight: 800; font-family: var(--font-mono); font-size: 0.95rem;">${totalWeight.toFixed(3)} kg</span>
+                        </div>
+
+                        ${row.courierRecommendation 
+                            ? `<div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; border-top: 1px dashed var(--border-color); padding-top: 6px;">
+                                <span style="color: #8a8f9e; font-weight: 500;">Courier:</span>
+                                <span style="background: #1d4ed8; color: #ffffff; padding: 3px 10px; border-radius: 6px; font-size: 0.78rem; font-weight: 800; display: inline-flex; align-items: center; gap: 4px;">🚚 ${row.courierRecommendation}</span>
+                               </div>`
+                            : ''}
                     </div>
-                    <div class="mobile-log-card-actions">
-                        <button type="button" class="btn-show-outbound-box-details btn-mobile-action" data-id="${row.id}" style="background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.25); color: var(--accent-blue);">
+
+                    <!-- 4. Action Buttons Row (Always Positioned at Very Bottom in Straight Horizontal Line Across Cards) -->
+                    <div style="display: flex; gap: 8px; width: 100%; margin-top: auto; padding-top: 12px;">
+                        <button type="button" class="btn-show-outbound-box-details" data-id="${row.id}" style="flex: 1; background: rgba(244, 63, 94, 0.08); border: 1px solid #f43f5e; color: #f43f5e; padding: 8px 6px; border-radius: 6px; font-weight: 800; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
                             <span>Boxes (${totalBoxes})</span>
                         </button>
-                        <button type="button" class="btn-download-outbound-excel btn-mobile-action btn-mobile-excel" data-id="${row.id}">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
+                        <button type="button" class="btn-download-outbound-excel" data-id="${row.id}" style="flex: 1; background: rgba(16, 185, 129, 0.08); border: 1px solid #10b981; color: #10b981; padding: 8px 6px; border-radius: 6px; font-weight: 800; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s;">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                             </svg>
                             <span>Excel</span>
                         </button>
-                        <button type="button" class="btn-restore-outbound-log btn-mobile-action btn-mobile-delete" data-id="${row.id}" style="color: var(--accent-blue); background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.25);">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
+                        <button type="button" class="btn-restore-outbound-log" data-id="${row.id}" style="flex: 1; background: rgba(99, 102, 241, 0.08); border: 1px solid #6366f1; color: #818cf8; padding: 8px 6px; border-radius: 6px; font-weight: 800; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s;">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                             </svg>
                             <span>Restore</span>
                         </button>
                     </div>
                 `;
-                mobileContainer.appendChild(card);
+                mobileFrag.appendChild(card);
             }
         });
+
+        body.appendChild(trFrag);
+        if (mobileContainer) {
+            mobileContainer.appendChild(mobileFrag);
+        }
+
 
         const todayOutboundBoxesEl = document.getElementById('todayOutboundBoxes');
         const todayOutboundWeightEl = document.getElementById('todayOutboundWeight');
@@ -4932,7 +5234,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sheetRows = itemSerials.map((s, idx) => ({
                     "S.No.": idx + 1,
                     "Box Number": `Box ${s.boxNo}`,
-                    "Serial Number": s.serial.startsWith("Without Serial Number") ? "Without Serial Number" : s.serial,
+                    "Serial Number": (s.serial.startsWith("Without Serial Number") || s.serial.startsWith("WOS-OUT-") || s.serial.includes("WOS-")) ? "Without Serial Number" : s.serial,
                     "Product Name": s.itemName
                 }));
 
@@ -4987,8 +5289,23 @@ document.addEventListener('DOMContentLoaded', () => {
             container.innerHTML = '';
             
             const items = activeOutboundSession.items || [];
+            const frag = document.createDocumentFragment();
+            
+            // Pre-group serials by itemName for O(1) lookup
+            const serialsByItemMap = new Map();
+            (activeOutboundSession.serials || []).forEach(s => {
+                if (s && s.itemName) {
+                    let list = serialsByItemMap.get(s.itemName);
+                    if (!list) {
+                        list = [];
+                        serialsByItemMap.set(s.itemName, list);
+                    }
+                    list.push(s);
+                }
+            });
+
             items.forEach(item => {
-                const itemSerials = activeOutboundSession.serials.filter(s => s.itemName === item.name);
+                const itemSerials = serialsByItemMap.get(item.name) || [];
                 const scannedCount = itemSerials.length;
                 
                 let subtotalWeight = 0;
@@ -5043,7 +5360,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${patternCellHtml}
                     </td>
                 `;
-                container.appendChild(tr);
+                frag.appendChild(tr);
 
                 // Bind add alternative SKU pattern button click
                 const addSkuBtn = tr.querySelector('.btn-outbound-add-alternative-sku');
@@ -5092,6 +5409,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
             });
+            container.appendChild(frag);
         }
 
         const totalPcs = activeOutboundSession.serials.length;
@@ -5117,6 +5435,16 @@ document.addEventListener('DOMContentLoaded', () => {
             weightText.textContent = `${totalWeight.toFixed(3)} kg`;
         }
 
+        // Giant Logistics badge: show if under 10 kg, hide at 10 kg+
+        const giantBadge = document.getElementById('giantLogisticsBadge');
+        if (giantBadge) {
+            if (totalWeight < 10) {
+                giantBadge.style.display = 'flex';
+            } else {
+                giantBadge.style.display = 'none';
+            }
+        }
+
         const boxesText = document.getElementById('activeOutboundBoxesCount');
         if (boxesText) {
             boxesText.textContent = `${uniqueBoxes} ${uniqueBoxes === 1 ? 'Box' : 'Boxes'}`;
@@ -5138,8 +5466,22 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const serialsByItemMap = new Map();
+        (activeOutboundSession.serials || []).forEach(s => {
+            if (s && s.itemName) {
+                let list = serialsByItemMap.get(s.itemName);
+                if (!list) {
+                    list = [];
+                    serialsByItemMap.set(s.itemName, list);
+                }
+                list.push(s);
+            }
+        });
+
+        const colFrag = document.createDocumentFragment();
+
         activeOutboundSession.items.forEach(item => {
-            const itemSerials = activeOutboundSession.serials.filter(s => s.itemName === item.name);
+            const itemSerials = serialsByItemMap.get(item.name) || [];
             const itemPieces = itemSerials.length;
             const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
 
@@ -5204,7 +5546,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 const boxNumbers = Object.keys(groups).map(Number).sort((a,b)=>b-a);
-                boxNumbers.forEach(boxNo => {
+                const MAX_VISIBLE_BOXES = item.showAllBoxes ? boxNumbers.length : 40;
+                const visibleBoxNumbers = boxNumbers.slice(0, MAX_VISIBLE_BOXES);
+                const boxFrag = document.createDocumentFragment();
+
+                visibleBoxNumbers.forEach(boxNo => {
                     const boxItems = groups[boxNo];
                     const boxCard = document.createElement('div');
                     boxCard.className = 'box-card';
@@ -5246,21 +5592,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const serialsUl = document.createElement('ul');
                     serialsUl.style.cssText = 'list-style: none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px;';
+                    const serialsFrag = document.createDocumentFragment();
                     
                     boxItems.forEach(s => {
                         const li = document.createElement('li');
                         li.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 4px; font-size:0.85rem; font-family:var(--font-mono); border: 1px solid rgba(255,255,255,0.04);';
                         
-                        const displayVal = s.serial.startsWith('WOS-OUT-') 
+                        const displayVal = (s.serial.startsWith('WOS-OUT-') || s.serial.startsWith('Without Serial Number') || s.serial.includes('WOS-')) 
                             ? `<span style="color: var(--accent-amber); font-weight: 700; font-style: italic; font-family: var(--font-sans);">[Non-Serial Item]</span>` 
                             : s.serial;
 
                         li.innerHTML = `
                             <span style="color:var(--text-secondary); word-break:break-all;">${displayVal}</span>
-                            <button type="button" class="btn-outbound-delete-serial" data-serial="${s.serial}" title="Remove Serial" style="background:none; border:none; color:var(--text-muted); cursor:pointer; padding:2px; display:flex; align-items:center; justify-content:center; transition: var(--transition-smooth); border-radius:4px;">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:14px; height:14px;">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
+                            <button type="button" class="btn-outbound-delete-serial" data-serial="${s.serial}" title="Remove serial" style="background: none; border: none; color: var(--text-muted); font-size: 1rem; cursor: pointer; padding: 0 4px; line-height: 1;">
+                                &times;
                             </button>
                         `;
 
@@ -5268,34 +5613,87 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (delBtn) {
                             delBtn.addEventListener('click', (e) => {
                                 e.stopPropagation();
-                                if (confirm(`Remove serial "${s.serial}" from this outbound session?`)) {
-                                    activeOutboundSession.serials = activeOutboundSession.serials.filter(x => x.serial !== s.serial);
-                                    
-                                    const remainingForProduct = activeOutboundSession.serials.some(x => x.itemName === item.name);
-                                    if (!remainingForProduct) {
-                                        activeOutboundSession.items = activeOutboundSession.items.filter(x => x.name !== item.name);
-                                    }
-                                    
-                                    compactOutboundBoxNumbers();
-                                    saveActiveOutboundSession();
-                                    updateOutboundSessionProgress();
-                                    renderOutboundBoxCards();
+                                activeOutboundSession.serials = activeOutboundSession.serials.filter(x => x.serial !== s.serial);
+                                const remainingForProduct = activeOutboundSession.serials.some(x => x.itemName === item.name);
+                                if (!remainingForProduct) {
+                                    activeOutboundSession.items = activeOutboundSession.items.filter(x => x.name !== item.name);
                                 }
+                                compactOutboundBoxNumbers();
+                                saveActiveOutboundSession();
+                                updateOutboundSessionProgress();
+                                renderOutboundBoxCards();
                             });
                         }
 
-                        serialsUl.appendChild(li);
+                        serialsFrag.appendChild(li);
                     });
+                    serialsUl.appendChild(serialsFrag);
                     boxCard.appendChild(serialsUl);
-                    boxListWrapper.appendChild(boxCard);
+                    boxFrag.appendChild(boxCard);
                 });
+
+                boxListWrapper.appendChild(boxFrag);
+
+                if (boxNumbers.length > MAX_VISIBLE_BOXES) {
+                    const loadMoreBtn = document.createElement('button');
+                    loadMoreBtn.type = 'button';
+                    loadMoreBtn.className = 'btn-load-more-boxes';
+                    loadMoreBtn.style.cssText = 'background: rgba(59, 130, 246, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 8px 12px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; cursor: pointer; margin-top: 8px; width: 100%; text-align: center; font-family: var(--font-mono);';
+                    loadMoreBtn.textContent = `📦 Showing top 40 of ${boxNumbers.length} boxes (Click to show all ${boxNumbers.length} boxes)`;
+                    loadMoreBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        item.showAllBoxes = true;
+                        renderOutboundBoxCards();
+                    });
+                    boxListWrapper.appendChild(loadMoreBtn);
+                }
             }
             col.appendChild(boxListWrapper);
-            container.appendChild(col);
+            colFrag.appendChild(col);
         });
+        container.appendChild(colFrag);
     }
 
 
+
+    // ── Helper: actually commit & close the outbound session ──────────────────
+    function commitAndCloseOutboundSession(courierRecommendation) {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('en-US', {
+            hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+        const frozenSerials = (activeOutboundSession.serials || []).map(s => {
+            return {
+                ...s,
+                resolvedWeight: resolveItemWeight(s.serial, s.itemName)
+            };
+        });
+
+        const logObj = {
+            id: Date.now().toString(),
+            timestamp: timeStr,
+            shopName: activeOutboundSession.shopName,
+            invoiceNo: activeOutboundSession.invoiceNo,
+            pincode: activeOutboundSession.pincode || '',
+            address: activeOutboundSession.address || '',
+            odaStatus: activeOutboundSession.odaStatus || 'Normal',
+            distanceKm: activeOutboundSession.distanceKm || calculateDistanceKm(activeOutboundSession.pincode),
+            courierRecommendation: courierRecommendation || '',
+            items: activeOutboundSession.items,
+            serials: frozenSerials
+        };
+
+        const historyData = getOutboundHistory();
+        historyData.unshift(logObj);
+        saveOutboundHistory(historyData);
+
+        // Auto download Excel immediately
+        downloadOutboundLogExcel(logObj);
+
+        activeOutboundSession = null;
+        saveActiveOutboundSession();
+        restoreOutboundSessionState();
+    }
 
     // End & Save Session
     if (endOutboundSessionBtn) {
@@ -5305,45 +5703,49 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const confirmMsg = `Are you sure you want to end and save this Outbound dispatch?\n\nShop: ${activeOutboundSession.shopName}\nInvoice: ${activeOutboundSession.invoiceNo}\nTotal Items: ${activeOutboundSession.serials.length}`;
-            if (confirm(confirmMsg)) {
-                const now = new Date();
-                const timeStr = now.toLocaleTimeString('en-US', {
-                    hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit'
-                });
-                const frozenSerials = (activeOutboundSession.serials || []).map(s => {
-                    return {
-                        ...s,
-                        resolvedWeight: resolveItemWeight(s.serial, s.itemName)
-                    };
-                });
+            // Calculate current total weight
+            let totalWeight = 0;
+            (activeOutboundSession.serials || []).forEach(s => {
+                totalWeight += resolveItemWeight(s.serial, s.itemName);
+            });
 
-                const logObj = {
-                    id: Date.now().toString(),
-                    timestamp: timeStr,
-                    shopName: activeOutboundSession.shopName,
-                    invoiceNo: activeOutboundSession.invoiceNo,
-                    pincode: activeOutboundSession.pincode || '',
-                    odaStatus: activeOutboundSession.odaStatus || 'Normal',
-                    distanceKm: activeOutboundSession.distanceKm || calculateDistanceKm(activeOutboundSession.pincode),
-                    items: activeOutboundSession.items,
-                    serials: frozenSerials
-                };
-
-                const historyData = getOutboundHistory();
-                historyData.unshift(logObj);
-                saveOutboundHistory(historyData);
-
-                // Auto download Excel immediately
-                downloadOutboundLogExcel(logObj);
-
-                activeOutboundSession = null;
-                saveActiveOutboundSession();
-                restoreOutboundSessionState();
+            if (totalWeight < 10) {
+                // Show Giant Logistics popup
+                const popup = document.getElementById('giantLogisticsPopup');
+                const weightDisplay = document.getElementById('glWeightDisplay');
+                if (weightDisplay) weightDisplay.textContent = `${totalWeight.toFixed(3)} kg`;
+                if (popup) popup.classList.add('visible');
+            } else {
+                // Normal confirm for 10 kg+
+                const confirmMsg = `Are you sure you want to end and save this Outbound dispatch?\n\nShop: ${activeOutboundSession.shopName}\nInvoice: ${activeOutboundSession.invoiceNo}\nTotal Items: ${activeOutboundSession.serials.length}`;
+                if (confirm(confirmMsg)) {
+                    commitAndCloseOutboundSession('');
+                }
             }
         });
     }
 
+    // Giant Logistics popup button handlers
+    const btnGiantYes = document.getElementById('btnGiantLogisticsYes');
+    const btnGiantCancel = document.getElementById('btnGiantLogisticsCancel');
+    const glPopup = document.getElementById('giantLogisticsPopup');
+
+    if (btnGiantYes) {
+        btnGiantYes.addEventListener('click', () => {
+            if (glPopup) glPopup.classList.remove('visible');
+            commitAndCloseOutboundSession('Giant Logistics');
+        });
+    }
+    if (btnGiantCancel) {
+        btnGiantCancel.addEventListener('click', () => {
+            if (glPopup) glPopup.classList.remove('visible');
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Giant Logistics Mail & Image Upload Handlers for Outbound History
+    // ─────────────────────────────────────────────────────────────────────────
+    let currentGlRowId = null;
     if (cancelActiveOutboundSessionBtn) {
         cancelActiveOutboundSessionBtn.addEventListener('click', () => {
             if (confirm('Cancel outbound session? All scanned serials will be lost.')) {
@@ -5493,29 +5895,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Gather all completed outbound scans and sum them by product to subtract from stock
         const outboundHistory = getOutboundHistory();
-        const outboundSerialsSet = new Set();
+        const outboundSerialsSet = new Set(getOutboundSerialLogMap().keys());
         const outboundDetailsMap = {};
         const unmatchedOutboundCounts = {};
         const outboundCountsByProduct = {};
 
         // Track all serials that exist in the inbound database so we can identify if an outbound serial is unmatched
-        const inboundSerialsSet = new Set();
+        const inboundSerialsSet = new Set(getInboundSerialLogMap().keys());
         const inboundHistory = getHistory();
-        inboundHistory.forEach(log => {
-            if (log.serials) {
-                log.serials.forEach(s => {
-                    if (s && s.serial) {
-                        inboundSerialsSet.add(s.serial.trim().toUpperCase());
-                    }
-                });
-            }
-        });
 
         outboundHistory.forEach(log => {
             if (log.serials) {
                 log.serials.forEach(s => {
+                    if (!s || !s.serial) return;
                     const cleanSerial = s.serial.trim().toUpperCase();
-                    outboundSerialsSet.add(cleanSerial);
                     outboundDetailsMap[cleanSerial] = {
                         shopName: log.shopName,
                         invoiceNo: log.invoiceNo,
@@ -5671,7 +6064,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Map Colors dynamically to products
         let colorIdx = 0;
-        const allUniqueInHistory = Array.from(new Set(inboundHistory.flatMap(log => (log.serials || []).map(s => s.itemName || log.item))));
+        const allUniqueInHistory = Object.keys(productStock);
         allUniqueInHistory.forEach(name => {
             if (!productColorsMap[name]) {
                 productColorsMap[name] = colorThemes[colorIdx % colorThemes.length];
@@ -5824,11 +6217,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getDeletedSerials() {
         const saved = localStorage.getItem('wms_deleted_serials');
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed)) return parsed;
+            } catch (e) {
+                console.error("Error parsing wms_deleted_serials:", e);
+            }
+        }
         return [];
     }
 
     function saveDeletedSerials(data) {
+        deletedSerialsFastMap = null;
         localStorage.setItem('wms_deleted_serials', JSON.stringify(data));
         firebaseSet('deleted_serials', data);
     }
@@ -6654,9 +7055,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sectionInbound.style.display = 'none';
 
             sectionWithoutSerialInbound.style.display = 'block';
-            setTimeout(() => {
-                sectionWithoutSerialInbound.classList.add('active');
-            }, 20);
+            sectionWithoutSerialInbound.classList.add('active');
 
             renderWosDropdownItems();
         });
@@ -6669,9 +7068,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sectionWithoutSerialInbound.style.display = 'none';
 
             sectionInbound.style.display = 'flex';
-            setTimeout(() => {
-                sectionInbound.classList.add('active');
-            }, 20);
+            sectionInbound.classList.add('active');
         });
     }
 
@@ -6793,9 +7190,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 sectionWithoutSerialInbound.classList.remove('active');
                 sectionWithoutSerialInbound.style.display = 'none';
                 sectionInbound.style.display = 'flex';
-                setTimeout(() => {
-                    sectionInbound.classList.add('active');
-                }, 20);
+                sectionInbound.classList.add('active');
 
                 alert(`Success! Inwarded ${qtyVal} PCs (${boxCountVal} Boxes) of "${itemVal}" without serial numbers.`);
             };
@@ -6945,7 +7340,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 for (let p = 1; p <= pcsInThisBox; p++) {
                     activeOutboundSession.serials.push({
-                        serial: `Without Serial Number (WOS-OUT-${Date.now()}-${boxNo}-${p})`,
+                        serial: `WOS-OUT-${Date.now()}-${boxNo}-${p}`,
                         boxNo: boxNo,
                         itemName: itemVal
                     });
@@ -7746,6 +8141,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentOutboundHistoryRow = null;
     let archivedSequenceKeys = new Set();
     let archivedSequenceStack = [];
+    let singleModeSeqGroups = new Set();
 
     // Inject custom animation styles for barcode pulsing border
     if (!document.getElementById('barcode-animation-style')) {
@@ -7908,6 +8304,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const items = prefixGroups[prefix];
                     items.sort((a, b) => a.num - b.num);
 
+                    // 1. Group items into raw consecutive sequence blocks
+                    const rawSeqBlocks = [];
                     let currentSeq = null;
                     items.forEach(item => {
                         if (!currentSeq) {
@@ -7916,43 +8314,62 @@ document.addEventListener('DOMContentLoaded', () => {
                                 startNum: item.num,
                                 count: 1,
                                 startBox: item.boxNo,
-                                endBox: item.boxNo
+                                endBox: item.boxNo,
+                                serials: [item]
                             };
                         } else {
                             if (item.num === currentSeq.startNum + currentSeq.count) {
                                 currentSeq.count++;
                                 currentSeq.endBox = item.boxNo;
+                                currentSeq.serials.push(item);
                             } else {
-                                allSequences.push({
-                                    key: `${pIdx}_${prefIdx}_${allSequences.length}`,
-                                    pName: pName,
-                                    startSerial: currentSeq.startSerial,
-                                    startNum: currentSeq.startNum,
-                                    count: currentSeq.count,
-                                    startBox: currentSeq.startBox,
-                                    endBox: currentSeq.endBox
-                                });
+                                rawSeqBlocks.push(currentSeq);
                                 currentSeq = {
                                     startSerial: item.serial,
                                     startNum: item.num,
                                     count: 1,
                                     startBox: item.boxNo,
-                                    endBox: item.boxNo
+                                    endBox: item.boxNo,
+                                    serials: [item]
                                 };
                             }
                         }
                     });
                     if (currentSeq) {
-                        allSequences.push({
-                            key: `${pIdx}_${prefIdx}_${allSequences.length}`,
-                            pName: pName,
-                            startSerial: currentSeq.startSerial,
-                            startNum: currentSeq.startNum,
-                            count: currentSeq.count,
-                            startBox: currentSeq.startBox,
-                            endBox: currentSeq.endBox
-                        });
+                        rawSeqBlocks.push(currentSeq);
                     }
+
+                    // 2. Expand sequence blocks to 1 PC only if that count level is in singleModeSeqGroups
+                    rawSeqBlocks.forEach(seqBlock => {
+                        const groupKey = `${pName}_${seqBlock.count}`;
+                        const isSingleGroup = singleModeSeqGroups.has(groupKey);
+
+                        if (isSingleGroup && seqBlock.count > 1) {
+                            seqBlock.serials.forEach(sItem => {
+                                allSequences.push({
+                                    key: `${pIdx}_${prefIdx}_${allSequences.length}`,
+                                    pName: pName,
+                                    startSerial: sItem.serial,
+                                    startNum: sItem.num,
+                                    count: 1,
+                                    startBox: sItem.boxNo,
+                                    endBox: sItem.boxNo,
+                                    seqGroupKey: groupKey
+                                });
+                            });
+                        } else {
+                            allSequences.push({
+                                key: `${pIdx}_${prefIdx}_${allSequences.length}`,
+                                pName: pName,
+                                startSerial: seqBlock.startSerial,
+                                startNum: seqBlock.startNum,
+                                count: seqBlock.count,
+                                startBox: seqBlock.startBox,
+                                endBox: seqBlock.endBox,
+                                seqGroupKey: groupKey
+                            });
+                        }
+                    });
                 });
             });
 
@@ -7964,13 +8381,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 return a.count - b.count;
             });
 
-            // Insert preparation cards whenever the product name or count changes
+            // Insert preparation cards whenever the product name or count changes (for count > 1)
             const finalSequences = [];
             let lastProduct = null;
             let lastCount = null;
 
             allSequences.forEach((seq, index) => {
-                if (seq.pName !== lastProduct || seq.count !== lastCount) {
+                if (seq.count > 1 && (seq.pName !== lastProduct || seq.count !== lastCount)) {
                     lastProduct = seq.pName;
                     lastCount = seq.count;
 
@@ -7979,7 +8396,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         key: `prep_${index}`,
                         isPrepCard: true,
                         pName: seq.pName,
-                        count: seq.count
+                        count: seq.count,
+                        seqGroupKey: seq.seqGroupKey || `${seq.pName}_${seq.count}`
                     });
                 }
                 finalSequences.push(seq);
@@ -8032,17 +8450,25 @@ document.addEventListener('DOMContentLoaded', () => {
                             </p>
                         </div>
 
-                        <div style="display: flex; gap: 8px; width: 100%;">
+                        <div style="display: flex; gap: 8px; width: 100%; flex-wrap: wrap;">
                             ${currentIndex > 1 ? `
-                                <button type="button" class="btn-prev-seq-barcode" style="flex: 1; padding: 14px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: var(--radius-sm); color: #475569; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5; color: #475569;">
+                                <button type="button" class="btn-prev-seq-barcode" style="flex: 1; min-width: 75px; padding: 12px 8px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: var(--radius-sm); color: #475569; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5; color: #475569;">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
                                     </svg>
                                     <span>Back</span>
                                 </button>
                             ` : ''}
-                            <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="flex: 2; padding: 14px; background: #0f172a; border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                            ${seq.count > 1 ? `
+                                <button type="button" class="btn-skip-to-single-mode" data-groupkey="${escapeHtmlAttr(seq.seqGroupKey)}" data-prepkey="${escapeHtmlAttr(seq.key)}" style="flex: 1.2; min-width: 140px; padding: 12px 8px; background: #fff7ed; border: 1px solid #f97316; border-radius: var(--radius-sm); color: #c2410c; font-weight: 800; font-size: 0.85rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 6px;" title="Switch this ${seq.count}-PC sequence block to single 1-PC barcode mode">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5; color: #ea580c;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    </svg>
+                                    <span>Skip Sequence (1 PC Mode)</span>
+                                </button>
+                            ` : ''}
+                            <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="flex: 1.5; min-width: 140px; padding: 12px 8px; background: #0f172a; border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
@@ -8110,17 +8536,17 @@ document.addEventListener('DOMContentLoaded', () => {
                             <canvas id="activeQrCanvas" style="width: 160px; height: 160px;"></canvas>
                         </div>
 
-                        <div style="display: flex; gap: 8px; width: 100%;">
+                        <div style="display: flex; gap: 8px; width: 100%; flex-wrap: wrap;">
                             ${currentIndex > 1 ? `
-                                <button type="button" class="btn-prev-seq-barcode" style="flex: 1; padding: 14px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                                <button type="button" class="btn-prev-seq-barcode" style="flex: 1; min-width: 75px; padding: 12px 8px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
                                     </svg>
                                     <span>Back</span>
                                 </button>
                             ` : ''}
-                            <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="flex: 2; padding: 14px; background: ${theme.color}; border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 2.5;">
+                            <button type="button" class="btn-archive-seq-barcode" data-key="${seq.key}" style="flex: 1.5; min-width: 140px; padding: 12px 8px; background: ${theme.color}; border: none; border-radius: var(--radius-sm); color: white; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 2.5;">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                                 </svg>
                                 <span>Archive QR Code</span>
@@ -8174,6 +8600,7 @@ document.addEventListener('DOMContentLoaded', () => {
         firstSerialsViewMode = 'list'; // Reset view mode to default List view when opened
         archivedSequenceKeys.clear(); // Clear any cached archives
         archivedSequenceStack = [];
+        singleModeSeqGroups.clear();
         
         renderFirstSerialsModalContent();
         
@@ -8206,6 +8633,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const outboundFirstSerialsModalBody = document.getElementById('outboundFirstSerialsModalBody');
     if (outboundFirstSerialsModalBody) {
         outboundFirstSerialsModalBody.addEventListener('click', (e) => {
+            const skipSingleBtn = e.target.closest('.btn-skip-to-single-mode');
+            if (skipSingleBtn) {
+                const groupKey = skipSingleBtn.getAttribute('data-groupkey');
+                const prepKey = skipSingleBtn.getAttribute('data-prepkey');
+                if (groupKey) {
+                    singleModeSeqGroups.add(groupKey);
+                    if (prepKey) {
+                        archivedSequenceKeys.add(prepKey);
+                        archivedSequenceStack.push(prepKey);
+                    }
+                    renderFirstSerialsModalContent();
+                }
+                return;
+            }
+
             const archiveBtn = e.target.closest('.btn-archive-seq-barcode');
             if (archiveBtn) {
                 const key = archiveBtn.getAttribute('data-key');
@@ -8229,6 +8671,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (resetBtn) {
                 archivedSequenceKeys.clear();
                 archivedSequenceStack = [];
+                singleModeSeqGroups.clear();
                 renderFirstSerialsModalContent();
                 return;
             }
@@ -8365,7 +8808,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // -------------------------------------------------------------
     // DAMAGE REGISTER MODULE
     // -------------------------------------------------------------
-    let cachedDamageRecords = null;
     function getDamageRecords() {
         if (cachedDamageRecords !== null) {
             return cachedDamageRecords;
@@ -8382,6 +8824,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveDamageRecords(records) {
         cachedDamageRecords = records;
+        damageSerialsFastSet = null;
         localStorage.setItem('wms_damage_records', JSON.stringify(records));
         cachedProductStockMap = null;
         firebaseSet('damage_records', records);
@@ -8391,27 +8834,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const cleanSerial = serial.trim().toUpperCase();
         if (!cleanSerial) return;
 
-        // Verify if it's already marked as damaged
-        const records = getDamageRecords();
-        const isDup = records.some(r => r.serial.trim().toUpperCase() === cleanSerial);
+        // Verify if it's already marked as damaged (O(1) Set lookup)
+        const isDup = getDamageSerialsFastSet().has(cleanSerial);
         if (isDup) {
             alert(`Error: Serial number "${cleanSerial}" is already marked as damaged!`);
             return;
         }
 
-        // Verify if serial number exists in Inbound logs
-        const inboundHistory = getHistory();
+        // Verify if serial number exists in Inbound logs (O(1) Map lookup)
+        const foundInboundLog = getInboundSerialLogMap().get(cleanSerial);
         let foundInbound = null;
-        for (const log of inboundHistory) {
-            if (log.serials) {
-                const sObj = log.serials.find(s => s.serial && s.serial.trim().toUpperCase() === cleanSerial);
-                if (sObj) {
-                    foundInbound = {
-                        itemName: sObj.itemName || log.item,
-                        inboundLogId: log.id
-                    };
-                    break;
-                }
+        if (foundInboundLog && foundInboundLog.serials) {
+            const sObj = foundInboundLog.serials.find(s => s.serial && s.serial.trim().toUpperCase() === cleanSerial);
+            if (sObj) {
+                foundInbound = {
+                    itemName: sObj.itemName || foundInboundLog.item,
+                    inboundLogId: foundInboundLog.id
+                };
             }
         }
 
@@ -8421,19 +8860,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Add to damage records
-        const damageRecord = {
-            id: Date.now().toString(),
+        const records = getDamageRecords();
+        records.push({
             serial: cleanSerial,
             itemName: foundInbound.itemName,
             inboundLogId: foundInbound.inboundLogId,
-            timestamp: new Date().toLocaleString(),
-            damageStatus: 'DAMAGED'
-        };
-
-        records.push(damageRecord);
+            timestamp: new Date().toLocaleString()
+        });
 
         saveDamageRecords(records);
-        saveDamageRecordToGoogleSheets(damageRecord, 'DAMAGED');
         renderDamageUI();
         renderInventoryPanel();
         renderOrderQueueUI();
@@ -8445,17 +8880,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!confirm(`Are you sure you want to restore serial number "${serial}" back to available stock?`)) return;
         
         let records = getDamageRecords();
-        const restoredRecord = records.find(r => r.serial.trim().toUpperCase() === serial.trim().toUpperCase());
         records = records.filter(r => r.serial.trim().toUpperCase() !== serial.trim().toUpperCase());
         saveDamageRecords(records);
-
-        if (restoredRecord) {
-            saveDamageRecordToGoogleSheets({
-                ...restoredRecord,
-                id: Date.now().toString(),
-                timestamp: new Date().toLocaleString()
-            }, 'RESTORED');
-        }
 
         renderDamageUI();
         renderInventoryPanel();
@@ -8744,31 +9170,49 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -------------------------------------------------------------
-    // ODA REGISTER MODULE (Memory Cached & Map Indexed)
     // -------------------------------------------------------------
-    let uploadedOdaRecords = [];
-    let memoryOdaRecords = []; // Flat list of {pincode, courier, remark}
-    let memoryOdaMap = new Map(); // Fast Map: pincode -> array of {courier, remark}
+    // ODA REGISTER MODULE (Memory Cached, Cumulative & File History)
+    // -------------------------------------------------------------
+    let pendingUploadedOdaRecords = [];
+    let pendingUploadedFileName = '';
+    let memoryOdaRecords = []; // Flat list of {pincode, courier, remark, fileId, fileName}
+    let memoryOdaFilesHistory = []; // List of {fileId, fileName, uploadTime, recordsCount, records}
+    let memoryOdaMap = new Map(); // Fast Map: pincode -> array of {courier, remark, fileName}
 
-    function updateOdaMemoryCache(recordsData) {
+    function updateOdaMemoryCache(recordsData, filesHistoryData) {
         memoryOdaRecords = [];
         memoryOdaMap.clear();
+
+        if (Array.isArray(filesHistoryData)) {
+            memoryOdaFilesHistory = filesHistoryData;
+        } else {
+            memoryOdaFilesHistory = [];
+        }
+
         if (Array.isArray(recordsData)) {
             recordsData.forEach(r => {
                 let pincode = '';
                 let courier = '';
                 let remark = '';
+                let fileId = '';
+                let fileName = '';
+
                 if (Array.isArray(r)) {
                     pincode = String(r[0] || '').trim();
                     courier = String(r[1] || '').trim();
                     remark = String(r[2] || '').trim();
+                    fileId = String(r[3] || '').trim();
+                    fileName = String(r[4] || '').trim();
                 } else if (r && typeof r === 'object') {
                     pincode = String(r.pincode || '').trim();
                     courier = String(r.courier || '').trim();
                     remark = String(r.remark || '').trim();
+                    fileId = String(r.fileId || '').trim();
+                    fileName = String(r.fileName || '').trim();
                 }
+
                 if (pincode) {
-                    const record = { pincode, courier, remark };
+                    const record = { pincode, courier, remark, fileId, fileName };
                     memoryOdaRecords.push(record);
                     if (!memoryOdaMap.has(pincode)) {
                         memoryOdaMap.set(pincode, []);
@@ -8777,19 +9221,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
-        console.log(`WMS Cache: ODA loaded with ${memoryOdaRecords.length} records.`);
+        console.log(`WMS Cache: ODA loaded with ${memoryOdaRecords.length} records across ${memoryOdaFilesHistory.length} files.`);
     }
 
     function getOdaRecords() {
         return memoryOdaRecords;
     }
 
-    function saveOdaRecords(records) {
-        // Store compressed structure: [ [pincode, courier, remark], ... ]
-        const compressed = records.map(r => [r.pincode, r.courier, r.remark]);
-        localStorage.setItem('wms_oda_records', JSON.stringify(compressed));
-        updateOdaMemoryCache(compressed);
-        firebaseSet('oda_records', compressed);
+    function saveOdaData(records, filesHistory) {
+        // Compress records structure: [ [pincode, courier, remark, fileId, fileName], ... ]
+        const compressedRecords = records.map(r => [r.pincode, r.courier, r.remark, r.fileId || '', r.fileName || '']);
+        
+        try {
+            localStorage.setItem('wms_oda_records', JSON.stringify(compressedRecords));
+        } catch (e) {
+            console.warn("LocalStorage quota reached for full ODA records array. Maintained in RAM cache & Firebase sync.", e);
+        }
+
+        try {
+            localStorage.setItem('wms_oda_files_history', JSON.stringify(filesHistory));
+        } catch (e) {
+            console.warn("LocalStorage quota reached for ODA files history.", e);
+        }
+
+        updateOdaMemoryCache(compressedRecords, filesHistory);
+
+        firebaseSet('oda_records', compressedRecords);
+        firebaseSet('oda_files_history', filesHistory);
     }
 
     function isOdaRemark(remark) {
@@ -8798,6 +9256,57 @@ document.addEventListener('DOMContentLoaded', () => {
             return false;
         }
         return text.includes('oda') || text.includes('out of delivery') || text === 'yes' || text.includes('out-of-delivery') || text.includes('out of area');
+    }
+
+    function getMultiCourierOdaStatus(pincode) {
+        const cleanPin = String(pincode || '').trim().replace(/\D/g, '');
+        if (!cleanPin) {
+            return {
+                hasRecords: false,
+                isAnyOda: false,
+                summaryText: 'No Pincode',
+                courierStatuses: [],
+                badgeHtml: `<span style="color: var(--text-muted); font-size: 0.75rem;">No Pincode</span>`
+            };
+        }
+
+        const matched = memoryOdaMap.get(cleanPin) || [];
+        if (matched.length === 0) {
+            return {
+                hasRecords: false,
+                isAnyOda: false,
+                summaryText: 'Normal Delivery',
+                courierStatuses: [],
+                badgeHtml: `<span style="background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">🟢 Normal</span>`
+            };
+        }
+
+        const courierStatuses = matched.map(m => {
+            const oda = isOdaRemark(m.remark);
+            return {
+                courier: m.courier || 'Courier',
+                remark: m.remark || (oda ? 'ODA' : 'Normal'),
+                isOda: oda,
+                fileName: m.fileName || ''
+            };
+        });
+
+        const isAnyOda = courierStatuses.some(c => c.isOda);
+        const summaryText = courierStatuses.map(c => `${c.courier}: ${c.isOda ? '🔴 ODA' : '🟢 Normal'}`).join(' | ');
+
+        const badgeHtml = courierStatuses.map(c => {
+            return c.isOda
+                ? `<span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; white-space: nowrap; display: inline-flex; align-items: center; gap: 3px;">🔴 ${escapeHtml(c.courier)}: ODA</span>`
+                : `<span style="background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; white-space: nowrap; display: inline-flex; align-items: center; gap: 3px;">🟢 ${escapeHtml(c.courier)}: Normal</span>`;
+        }).join(' ');
+
+        return {
+            hasRecords: true,
+            isAnyOda: isAnyOda,
+            summaryText: summaryText,
+            courierStatuses: courierStatuses,
+            badgeHtml: badgeHtml
+        };
     }
 
     function escapeHtml(str) {
@@ -8811,9 +9320,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderOdaUI() {
+        // 1. Update Record & File Counts
         const countSpan = document.getElementById('odaRecordsCount');
         if (countSpan) countSpan.textContent = memoryOdaRecords.length;
-        
+
+        const filesCountSpan = document.getElementById('odaFilesHistoryCount');
+        if (filesCountSpan) filesCountSpan.textContent = memoryOdaFilesHistory.length;
+
+        // 2. Render Uploaded ODA Files History Table
+        const filesBody = document.getElementById('odaFilesHistoryTableBody');
+        if (filesBody) {
+            filesBody.innerHTML = '';
+            if (memoryOdaFilesHistory.length === 0) {
+                filesBody.innerHTML = `
+                    <tr>
+                        <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px;">
+                            No ODA files uploaded yet. Upload a file above to build your active database.
+                        </td>
+                    </tr>
+                `;
+            } else {
+                memoryOdaFilesHistory.forEach(file => {
+                    const tr = document.createElement('tr');
+                    tr.style.borderBottom = '1px solid var(--border-color)';
+                    tr.innerHTML = `
+                        <td style="padding: 10px 12px; font-weight: 700; color: var(--text-primary);">${escapeHtml(file.fileName)}</td>
+                        <td style="padding: 10px 12px; color: var(--text-secondary); font-size: 0.82rem;">${escapeHtml(file.uploadTime)}</td>
+                        <td style="padding: 10px 12px; font-weight: 700; color: var(--accent-emerald); font-family: var(--font-mono);">${file.recordsCount} Pincodes</td>
+                        <td style="padding: 10px 12px; text-align: right;">
+                            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                                <button type="button" class="btn-download-oda-file" data-file-id="${escapeHtmlAttr(file.fileId)}" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: var(--accent-blue); padding: 6px 12px; font-size: 0.78rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                    📥 Download
+                                </button>
+                                <button type="button" class="btn-delete-oda-file" data-file-id="${escapeHtmlAttr(file.fileId)}" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose); padding: 6px 12px; font-size: 0.78rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                    🗑️ Delete
+                                </button>
+                            </div>
+                        </td>
+                    `;
+                    filesBody.appendChild(tr);
+                });
+            }
+        }
+
+        // 3. Render Active ODA Database Table
         const searchInput = document.getElementById('odaSearchInput');
         const filterText = searchInput ? searchInput.value.trim().toLowerCase() : '';
         
@@ -8826,14 +9376,15 @@ document.addEventListener('DOMContentLoaded', () => {
             filtered = memoryOdaRecords.filter(r => {
                 return r.pincode.includes(filterText) || 
                        r.courier.toLowerCase().includes(filterText) ||
-                       r.remark.toLowerCase().includes(filterText);
+                       r.remark.toLowerCase().includes(filterText) ||
+                       (r.fileName && r.fileName.toLowerCase().includes(filterText));
             });
         }
         
         if (filtered.length === 0) {
             body.innerHTML = `
                 <tr>
-                    <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                    <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">
                         ${memoryOdaRecords.length === 0 ? 'No ODA pincode records loaded. Please upload a file above.' : 'No records match search query.'}
                     </td>
                 </tr>
@@ -8841,15 +9392,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        const displayLimit = 150;
+        const displayLimit = 200;
         const displayList = filtered.slice(0, displayLimit);
         
         displayList.forEach(r => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td style="padding: 10px 8px; font-family: var(--font-mono); font-weight: 700; color: var(--text-primary);">${r.pincode}</td>
-                <td style="padding: 10px 8px; color: var(--text-secondary);">${escapeHtml(r.courier)}</td>
-                <td style="padding: 10px 8px;"><span style="color: ${isOdaRemark(r.remark) ? 'var(--accent-rose)' : 'var(--accent-emerald)'}; font-weight: 700;">${escapeHtml(r.remark)}</span></td>
+                <td style="padding: 10px 12px; font-family: var(--font-mono); font-weight: 700; color: var(--text-primary);">${r.pincode}</td>
+                <td style="padding: 10px 12px; color: var(--text-secondary);">${escapeHtml(r.courier)}</td>
+                <td style="padding: 10px 12px;"><span style="color: ${isOdaRemark(r.remark) ? 'var(--accent-rose)' : 'var(--accent-emerald)'}; font-weight: 700;">${escapeHtml(r.remark)}</span></td>
+                <td style="padding: 10px 12px; color: var(--text-muted); font-size: 0.8rem;">${escapeHtml(r.fileName || 'General')}</td>
             `;
             body.appendChild(tr);
         });
@@ -8857,8 +9409,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (filtered.length > displayLimit) {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td colspan="3" style="text-align: center; color: var(--text-muted); font-size: 0.75rem; font-style: italic; padding: 12px 8px;">
-                    Showing first ${displayLimit} of ${filtered.length} matching records. Use search above to narrow down.
+                <td colspan="4" style="text-align: center; color: var(--text-muted); font-size: 0.75rem; font-style: italic; padding: 12px 8px;">
+                    Showing first ${displayLimit} of ${filtered.length} matching pincode records. Use search above to narrow down.
                 </td>
             </tr>
             `;
@@ -8867,6 +9419,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleOdaFileUpload(file) {
+        pendingUploadedFileName = file.name || 'ODA_Sheet.xlsx';
+        
+        let derivedCourier = 'Generic';
+        if (file.name) {
+            const cleanName = file.name.split('.')[0]
+                .replace(/[-_]oda[-_]?/gi, ' ')
+                .replace(/[-_]pincodes?[-_]?/gi, ' ')
+                .replace(/[-_]list[-_]?/gi, ' ')
+                .trim();
+            if (cleanName) derivedCourier = cleanName;
+        }
+
         const reader = new FileReader();
         reader.onload = function(e) {
             try {
@@ -8882,38 +9446,88 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const firstSheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[firstSheetName];
-                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
                 
-                if (jsonData.length < 2) {
-                    alert("The uploaded sheet appears to be empty or does not have headers.");
+                if (!jsonData || jsonData.length === 0) {
+                    alert("The uploaded sheet appears to be empty.");
                     return;
                 }
                 
-                const headers = jsonData[0].map(h => String(h || '').trim().toLowerCase());
+                // 1. Smart Header Row Detection (scan first 10 rows for keywords)
+                let headerRowIdx = 0;
+                let maxMatchedKeywords = 0;
+                for (let r = 0; r < Math.min(jsonData.length, 10); r++) {
+                    const row = jsonData[r];
+                    if (!row || !Array.isArray(row)) continue;
+                    const rowText = row.map(cell => String(cell || '').toLowerCase()).join(' ');
+                    let score = 0;
+                    if (rowText.includes('pin')) score += 2;
+                    if (rowText.includes('pincode') || rowText.includes('pin code') || rowText.includes('postal')) score += 3;
+                    if (rowText.includes('courier') || rowText.includes('carrier')) score += 2;
+                    if (rowText.includes('remark') || rowText.includes('oda') || rowText.includes('status')) score += 2;
+                    if (score > maxMatchedKeywords) {
+                        maxMatchedKeywords = score;
+                        headerRowIdx = r;
+                    }
+                }
+
+                const headers = (jsonData[headerRowIdx] || []).map(h => String(h || '').trim().toLowerCase());
                 
-                let courierIdx = headers.findIndex(h => h.includes('courier'));
-                let pincodeIdx = headers.findIndex(h => h.includes('pincode') || h.includes('pin_code') || h === 'pin');
-                let remarkIdx = headers.findIndex(h => h.includes('remark') || h.includes('oda') || h.includes('status'));
+                // 2. Comprehensive Column Index Identification
+                let courierIdx = headers.findIndex(h => h.includes('courier') || h.includes('carrier') || h.includes('partner') || h.includes('provider') || h.includes('vendor'));
+                let pincodeIdx = headers.findIndex(h => h.includes('pincode') || h.includes('pin_code') || h.includes('pin code') || h.includes('postal') || h.includes('zip') || h === 'pin' || h.includes('dest pin') || h.includes('destination pin'));
+                let remarkIdx = headers.findIndex(h => h.includes('remark') || h.includes('oda') || h.includes('status') || h.includes('servic') || h.includes('zone'));
                 
-                if (courierIdx === -1) courierIdx = 0;
-                if (pincodeIdx === -1) pincodeIdx = 1;
-                if (remarkIdx === -1) remarkIdx = 2;
+                // 3. Fallback Auto-Discovery: Inspect first 30 data rows for 6-digit pincode numbers!
+                if (pincodeIdx === -1) {
+                    const colScores = {};
+                    for (let r = headerRowIdx + 1; r < Math.min(jsonData.length, headerRowIdx + 30); r++) {
+                        const row = jsonData[r];
+                        if (!row || !Array.isArray(row)) continue;
+                        row.forEach((cell, cIdx) => {
+                            const digits = String(cell || '').trim().replace(/\D/g, '');
+                            if (digits.length === 6) {
+                                colScores[cIdx] = (colScores[cIdx] || 0) + 1;
+                            }
+                        });
+                    }
+                    let bestCol = -1;
+                    let maxScore = 0;
+                    Object.keys(colScores).forEach(cIdx => {
+                        if (colScores[cIdx] > maxScore) {
+                            maxScore = colScores[cIdx];
+                            bestCol = parseInt(cIdx);
+                        }
+                    });
+                    if (bestCol !== -1) pincodeIdx = bestCol;
+                }
+
+                if (pincodeIdx === -1) pincodeIdx = 0;
+                if (courierIdx === -1) courierIdx = (pincodeIdx === 0) ? 1 : 0;
+                if (remarkIdx === -1) remarkIdx = (pincodeIdx === 2 || courierIdx === 2) ? 3 : 2;
                 
                 const parsedRecords = [];
-                for (let i = 1; i < jsonData.length; i++) {
+                let skippedRowsCount = 0;
+
+                for (let i = headerRowIdx + 1; i < jsonData.length; i++) {
                     const row = jsonData[i];
-                    if (!row || row.length === 0) continue;
+                    if (!row || row.length === 0) {
+                        skippedRowsCount++;
+                        continue;
+                    }
                     
-                    const courier = String(row[courierIdx] || '').trim();
+                    const courier = String(row[courierIdx] || '').trim() || derivedCourier;
                     const pincode = String(row[pincodeIdx] || '').trim().replace(/\D/g, '');
                     const remark = String(row[remarkIdx] || '').trim();
                     
-                    if (pincode) {
+                    if (pincode && pincode.length >= 3) {
                         parsedRecords.push({
-                            courier: courier || 'Generic',
+                            courier: courier,
                             pincode: pincode,
                             remark: remark || 'ODA'
                         });
+                    } else {
+                        skippedRowsCount++;
                     }
                 }
                 
@@ -8922,11 +9536,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 
-                uploadedOdaRecords = parsedRecords;
+                pendingUploadedOdaRecords = parsedRecords;
                 const progressText = document.getElementById('odaUploadProgressText');
                 const progressContainer = document.getElementById('odaUploadProgress');
                 
-                if (progressText) progressText.textContent = `Successfully parsed ${parsedRecords.length} records. Ready to save.`;
+                const totalSheetRows = jsonData.length - headerRowIdx - 1;
+                const skippedMsg = skippedRowsCount > 0 ? ` (${skippedRowsCount} empty/header/summary rows skipped)` : '';
+                
+                if (progressText) {
+                    progressText.textContent = `Successfully parsed ${parsedRecords.length} valid pincodes from ${totalSheetRows} total rows${skippedMsg} in "${pendingUploadedFileName}". Ready to merge.`;
+                }
                 if (progressContainer) progressContainer.style.display = 'flex';
                 
             } catch (err) {
@@ -8943,6 +9562,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const odaFileInput = document.getElementById('odaFileInput');
     const btnSaveUploadedOda = document.getElementById('btnSaveUploadedOda');
     const btnClearOdaDatabase = document.getElementById('btnClearOdaDatabase');
+    const btnExportAllOdaExcel = document.getElementById('btnExportAllOdaExcel');
     const odaSearchInput = document.getElementById('odaSearchInput');
 
     if (odaDropZone && odaFileInput) {
@@ -8981,27 +9601,147 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnSaveUploadedOda) {
         btnSaveUploadedOda.addEventListener('click', () => {
-            if (uploadedOdaRecords && uploadedOdaRecords.length > 0) {
-                if (confirm(`Are you sure you want to replace the current database with ${uploadedOdaRecords.length} new records?`)) {
-                    saveOdaRecords(uploadedOdaRecords);
-                    uploadedOdaRecords = [];
-                    const progressContainer = document.getElementById('odaUploadProgress');
-                    if (progressContainer) progressContainer.style.display = 'none';
-                    alert("ODA database updated successfully!");
-                    renderOdaUI();
+            if (pendingUploadedOdaRecords && pendingUploadedOdaRecords.length > 0) {
+                const fileId = 'file_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+                const now = new Date();
+                const uploadTime = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + 
+                                   now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                const fileName = pendingUploadedFileName || `ODA_File_${now.toISOString().slice(0, 10)}.xlsx`;
+
+                const newTaggedRecords = pendingUploadedOdaRecords.map(r => ({
+                    pincode: r.pincode,
+                    courier: r.courier,
+                    remark: r.remark,
+                    fileId: fileId,
+                    fileName: fileName
+                }));
+
+                const updatedRecords = [...memoryOdaRecords, ...newTaggedRecords];
+
+                const newFileHistory = {
+                    fileId: fileId,
+                    fileName: fileName,
+                    uploadTime: uploadTime,
+                    recordsCount: newTaggedRecords.length,
+                    records: pendingUploadedOdaRecords
+                };
+
+                const updatedHistory = [newFileHistory, ...memoryOdaFilesHistory];
+
+                saveOdaData(updatedRecords, updatedHistory);
+
+                pendingUploadedOdaRecords = [];
+                pendingUploadedFileName = '';
+                const progressContainer = document.getElementById('odaUploadProgress');
+                if (progressContainer) progressContainer.style.display = 'none';
+                const odaFileInput = document.getElementById('odaFileInput');
+                if (odaFileInput) odaFileInput.value = '';
+
+                alert(`Successfully merged ${newTaggedRecords.length} pincodes from "${fileName}" into the Active ODA Database!\nTotal Active Pincodes: ${memoryOdaRecords.length}`);
+                renderOdaUI();
+            }
+        });
+    }
+
+    const odaFilesHistoryTableBody = document.getElementById('odaFilesHistoryTableBody');
+    if (odaFilesHistoryTableBody) {
+        odaFilesHistoryTableBody.addEventListener('click', (e) => {
+            // Download File
+            const dlBtn = e.target.closest('.btn-download-oda-file');
+            if (dlBtn) {
+                const fileId = dlBtn.getAttribute('data-file-id');
+                const fileObj = memoryOdaFilesHistory.find(f => f.fileId === fileId);
+                if (fileObj && window.XLSX) {
+                    const exportData = fileObj.records.map(r => ({
+                        'Courier Name': r.courier || 'Generic',
+                        'Pincode': r.pincode,
+                        'Remark / ODA Status': r.remark || 'ODA'
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(exportData);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "ODA_Pincodes");
+                    XLSX.writeFile(wb, fileObj.fileName || "ODA_Pincodes.xlsx");
                 }
+                return;
+            }
+
+            // Delete File
+            const delBtn = e.target.closest('.btn-delete-oda-file');
+            if (delBtn) {
+                const fileId = delBtn.getAttribute('data-file-id');
+                const fileObj = memoryOdaFilesHistory.find(f => f.fileId === fileId);
+                if (fileObj) {
+                    if (confirm(`Are you sure you want to delete file "${fileObj.fileName}"?\nThis will remove all ${fileObj.recordsCount} pincodes from the Active ODA Database.`)) {
+                        const updatedHistory = memoryOdaFilesHistory.filter(f => f.fileId !== fileId);
+                        const updatedRecords = memoryOdaRecords.filter(r => r.fileId !== fileId);
+
+                        saveOdaData(updatedRecords, updatedHistory);
+                        alert(`File "${fileObj.fileName}" and its ${fileObj.recordsCount} pincodes were deleted from history and Active ODA Database.`);
+                        renderOdaUI();
+                    }
+                }
+                return;
+            }
+        });
+    }
+
+    if (btnExportAllOdaExcel) {
+        btnExportAllOdaExcel.addEventListener('click', () => {
+            if (memoryOdaRecords.length === 0) {
+                alert("The Active ODA Database is empty.");
+                return;
+            }
+            if (window.XLSX) {
+                const exportData = memoryOdaRecords.map(r => ({
+                    'Pincode': r.pincode,
+                    'Courier Name': r.courier || 'Generic',
+                    'Remark / ODA Status': r.remark || 'ODA',
+                    'Source File': r.fileName || 'General'
+                }));
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "All_Active_ODA");
+                XLSX.writeFile(wb, `Active_ODA_Pincodes_Mix_${new Date().toISOString().slice(0, 10)}.xlsx`);
+            }
+        });
+    }
+
+    const btnDownloadSampleOdaTemplate = document.getElementById('btnDownloadSampleOdaTemplate');
+    if (btnDownloadSampleOdaTemplate) {
+        btnDownloadSampleOdaTemplate.addEventListener('click', () => {
+            if (window.XLSX) {
+                const sampleRows = [
+                    { "Courier Name": "Delhivery", "Pincode": "110001", "Remark / ODA Status": "ODA" },
+                    { "Courier Name": "Delhivery", "Pincode": "400001", "Remark / ODA Status": "Normal" },
+                    { "Courier Name": "Bluedart", "Pincode": "110001", "Remark / ODA Status": "Normal" },
+                    { "Courier Name": "Bluedart", "Pincode": "560001", "Remark / ODA Status": "ODA" },
+                    { "Courier Name": "Xpressbees", "Pincode": "700001", "Remark / ODA Status": "ODA" },
+                    { "Courier Name": "Xpressbees", "Pincode": "390001", "Remark / ODA Status": "Normal" }
+                ];
+
+                const ws = XLSX.utils.json_to_sheet(sampleRows);
+                ws['!cols'] = [
+                    { wch: 18 },
+                    { wch: 14 },
+                    { wch: 22 }
+                ];
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "ODA_Sample_Format");
+                XLSX.writeFile(wb, "Sample_ODA_Template.xlsx");
+            } else {
+                alert("Excel library not loaded.");
             }
         });
     }
 
     if (btnClearOdaDatabase) {
         btnClearOdaDatabase.addEventListener('click', () => {
-            if (confirm("Are you sure you want to clear the entire ODA database? This will disable ODA warnings during dispatch.")) {
+            if (confirm("Are you sure you want to clear the entire ODA database and history? This will disable ODA warnings during dispatch.")) {
                 const pwd = prompt("Enter passcode to confirm clearing ODA database:");
                 if (pwd === '2026' || pwd === '1998') {
-                    saveOdaRecords([]);
+                    saveOdaData([], []);
                     renderOdaUI();
-                    alert("ODA database cleared.");
+                    alert("ODA database and file history cleared.");
                 } else if (pwd !== null) {
                     alert("Incorrect passcode! Action denied.");
                 }
@@ -9019,13 +9759,23 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Remove any leftover festival themes
+    document.documentElement.removeAttribute('data-festival');
+    localStorage.removeItem('wms_festival_theme');
+
+
     // Initial load: Restore states on page load/reload
     const savedOda = localStorage.getItem('wms_oda_records');
+    const savedOdaHistory = localStorage.getItem('wms_oda_files_history');
     let parsedSavedOda = [];
+    let parsedSavedOdaHistory = [];
     try {
         parsedSavedOda = savedOda ? JSON.parse(savedOda) : [];
     } catch(e) {}
-    updateOdaMemoryCache(parsedSavedOda);
+    try {
+        parsedSavedOdaHistory = savedOdaHistory ? JSON.parse(savedOdaHistory) : [];
+    } catch(e) {}
+    updateOdaMemoryCache(parsedSavedOda, parsedSavedOdaHistory);
 
     restoreSidebarCollapsedState();
     restoreSessionState();
