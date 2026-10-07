@@ -466,6 +466,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderHistoryTable();
             } else if (targetSectionId === 'sectionOutbound') {
                 renderOutboundHistoryTable();
+            } else if (targetSectionId === 'sectionExpense') {
+                renderExpenseUI();
             }
             
             console.log(`Navigated to section: ${targetSectionId}`);
@@ -8787,6 +8789,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (key === 'g') {
             e.preventDefault();
             navigateToTab('navOda');
+        } else if (key === 'w' || key === 'x') {
+            e.preventDefault();
+            navigateToTab('navExpense');
         } else if (key === 'n') {
             // "o" tabane ke bad (if Outbound section is active), pressing "n" starts a New Outbound Session
             const sectionOutbound = document.getElementById('sectionOutbound');
@@ -9792,4 +9797,244 @@ document.addEventListener('DOMContentLoaded', () => {
     populateMisProductsDropdown();
     renderOrderQueueUI();
     checkDeviceApprovalStatus();
+
+
+    // -------------------------------------------------------------
+    // WAREHOUSE EXPENSE & ATTENDANCE MODULE (100% FIREBASE CLOUD ONLY)
+    // -------------------------------------------------------------
+    let memoryExpenses = [];
+
+    function getWarehouseExpenses() {
+        return memoryExpenses;
+    }
+
+    function saveWarehouseExpensesToCloud(expenses) {
+        memoryExpenses = expenses;
+        // Direct Cloud Write to Firebase node: wms_data/warehouse_expenses
+        firebaseSet('warehouse_expenses', expenses);
+        renderExpenseUI();
+    }
+
+    function renderExpenseUI() {
+        const body = document.getElementById('expenseTableBody');
+        const totalAmountEl = document.getElementById('totalExpenseAmount');
+        const monthAmountEl = document.getElementById('monthExpenseAmount');
+        const presentCountEl = document.getElementById('todayPresentCount');
+        const attendanceDateEl = document.getElementById('attendanceTodayDateDisplay');
+        const expenseDateInput = document.getElementById('expenseDate');
+
+        const now = new Date();
+        const todayIso = now.toISOString().slice(0, 10);
+        const currentMonthIso = todayIso.slice(0, 7); // YYYY-MM
+
+        if (expenseDateInput && !expenseDateInput.value) {
+            expenseDateInput.value = todayIso;
+        }
+
+        if (attendanceDateEl) {
+            attendanceDateEl.textContent = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+
+        let totalAllTime = 0;
+        let totalThisMonth = 0;
+        let presentToday = 0;
+
+        memoryExpenses.forEach(exp => {
+            const amt = parseFloat(exp.amount) || 0;
+            totalAllTime += amt;
+
+            if (exp.date && exp.date.startsWith(currentMonthIso)) {
+                totalThisMonth += amt;
+            }
+
+            if (exp.type === 'Attendance' && exp.date === todayIso && (exp.status === 'Present' || exp.status === 'Half Day' || exp.status === 'Overtime')) {
+                presentToday++;
+            }
+        });
+
+        if (totalAmountEl) totalAmountEl.textContent = '₹' + totalAllTime.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+        if (monthAmountEl) monthAmountEl.textContent = '₹' + totalThisMonth.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+        if (presentCountEl) presentCountEl.textContent = presentToday + ' Staff Present';
+
+        if (!body) return;
+        body.innerHTML = '';
+
+        if (memoryExpenses.length === 0) {
+            body.innerHTML = 
+                <tr>
+                    <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">No expense or attendance records logged. Add one above!</td>
+                </tr>
+            ;
+            return;
+        }
+
+        // Render newest on top
+        const reversed = [...memoryExpenses].reverse();
+        reversed.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--border-color)';
+
+            const isAttendance = item.type === 'Attendance';
+            const catBadgeColor = isAttendance ? 'var(--accent-emerald)' : 'var(--accent-amber)';
+            const catBadgeBg = isAttendance ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)';
+
+            const displayAmount = (parseFloat(item.amount) > 0) ? '₹' + parseFloat(item.amount).toFixed(2) : '—';
+
+            tr.innerHTML = 
+                <td style="padding: 10px 12px; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-secondary);"> <span style="font-size: 0.72rem; color: var(--text-muted);"></span></td>
+                <td style="padding: 10px 12px;">
+                    <span style="background: ; color: ; border: 1px solid ; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; white-space: nowrap;">
+                        
+                    </span>
+                </td>
+                <td style="padding: 10px 12px; font-weight: 700; color: var(--text-primary);"></td>
+                <td style="padding: 10px 12px; font-size: 0.85rem; color: var(--text-secondary);"></td>
+                <td style="padding: 10px 12px; text-align: right; font-weight: 800; font-family: var(--font-mono); color: var(--accent-amber);"></td>
+                <td style="padding: 10px 12px; text-align: right;">
+                    <button type="button" class="btn-delete-expense" data-id="" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth);">
+                        Delete
+                    </button>
+                </td>
+            ;
+
+            const delBtn = tr.querySelector('.btn-delete-expense');
+            if (delBtn) {
+                delBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const idToDelete = delBtn.getAttribute('data-id');
+                    if (confirm('Are you sure you want to delete this expense/attendance record from Firebase Cloud?')) {
+                        const updated = memoryExpenses.filter(x => x.id !== idToDelete);
+                        saveWarehouseExpensesToCloud(updated);
+                    }
+                });
+            }
+
+            body.appendChild(tr);
+        });
+    }
+
+    // Form: Add Warehouse Expense
+    const formAddExpense = document.getElementById('formAddExpense');
+    if (formAddExpense) {
+        formAddExpense.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const category = document.getElementById('expenseCategory').value;
+            const amount = parseFloat(document.getElementById('expenseAmount').value) || 0;
+            const person = document.getElementById('expensePerson').value.trim();
+            const note = document.getElementById('expenseNote').value.trim();
+            const date = document.getElementById('expenseDate').value;
+
+            if (amount <= 0) {
+                alert('Please enter a valid expense amount.');
+                return;
+            }
+
+            const now = new Date();
+            const newRecord = {
+                id: 'exp_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                type: 'Expense',
+                category: category,
+                amount: amount,
+                person: person || 'General',
+                note: note,
+                date: date || now.toISOString().slice(0, 10),
+                time: now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' }),
+                timestamp: Date.now()
+            };
+
+            const list = [...memoryExpenses, newRecord];
+            saveWarehouseExpensesToCloud(list);
+
+            document.getElementById('expenseAmount').value = '';
+            document.getElementById('expensePerson').value = '';
+            document.getElementById('expenseNote').value = '';
+
+            alert('✓ Expense saved to 100% Firebase Cloud!');
+        });
+    }
+
+    // Form: Add Staff Attendance
+    const formAddAttendance = document.getElementById('formAddAttendance');
+    if (formAddAttendance) {
+        formAddAttendance.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('attendeeName').value.trim();
+            const role = document.getElementById('attendeeRole').value;
+            const status = document.getElementById('attendanceStatus').value;
+            const wage = parseFloat(document.getElementById('attendanceWage').value) || 0;
+
+            if (!name) {
+                alert('Please enter staff name.');
+                return;
+            }
+
+            const now = new Date();
+            const newRecord = {
+                id: 'att_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                type: 'Attendance',
+                category: 'Staff Attendance (' + role + ')',
+                amount: wage,
+                person: name,
+                note: 'Status: ' + status + ' (' + role + ')',
+                status: status,
+                role: role,
+                date: now.toISOString().slice(0, 10),
+                time: now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' }),
+                timestamp: Date.now()
+            };
+
+            const list = [...memoryExpenses, newRecord];
+            saveWarehouseExpensesToCloud(list);
+
+            document.getElementById('attendeeName').value = '';
+            document.getElementById('attendanceWage').value = '';
+
+            alert('✓ Attendance marked to 100% Firebase Cloud!');
+        });
+    }
+
+    // Excel Export: Expenses & Attendance
+    const btnDownloadExpenseExcel = document.getElementById('btnDownloadExpenseExcel');
+    if (btnDownloadExpenseExcel) {
+        btnDownloadExpenseExcel.addEventListener('click', () => {
+            if (memoryExpenses.length === 0) {
+                alert('No expense records to download.');
+                return;
+            }
+            if (window.XLSX) {
+                const sheetRows = memoryExpenses.map((r, i) => ({
+                    'S.No.': i + 1,
+                    'Date': r.date,
+                    'Time': r.time || '',
+                    'Type': r.type,
+                    'Category': r.category,
+                    'Staff / Person': r.person,
+                    'Details / Status': r.note,
+                    'Amount (₹)': r.amount || 0
+                }));
+
+                const ws = XLSX.utils.json_to_sheet(sheetRows);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Warehouse_Expenses');
+                XLSX.writeFile(wb, 'Warehouse_Expenses_Report_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+            }
+        });
+    }
+
+    // Realtime Firebase Listener for Warehouse Expenses
+    if (isFirebaseConnected && db) {
+        db.ref('wms_data/warehouse_expenses').on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val && Array.isArray(val)) {
+                memoryExpenses = val;
+            } else if (val && typeof val === 'object') {
+                memoryExpenses = Object.values(val);
+            } else {
+                memoryExpenses = [];
+            }
+            console.log('Firebase Cloud: Warehouse expenses synced. Total records:', memoryExpenses.length);
+            renderExpenseUI();
+        });
+    }
+
 });

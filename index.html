@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
@@ -323,6 +323,12 @@ td{color:#222!important;border-color:#eee7c9!important}
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                     </svg>
                     <span>ODA Register</span>
+                </a>
+                <a href="javascript:void(0);" class="nav-link" id="navExpense">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Warehouse Expense</span>
                 </a>
             </nav>
 
@@ -1339,6 +1345,129 @@ td{color:#222!important;border-color:#eee7c9!important}
                             </div>
                         </div>
 
+                    </div>
+                </section>
+                <!-- 8. WAREHOUSE EXPENSE & ATTENDANCE SECTION -->
+                <section class="content-section" id="sectionExpense" style="display: none; padding: 24px; box-sizing: border-box; height: 100%; overflow-y: auto;">
+                    <div style="display: flex; flex-direction: column; gap: 24px; width: 100%;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; width: 100%;">
+                            <div class="dashboard-card" style="padding: 18px; display: flex; flex-direction: column; gap: 6px;">
+                                <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">💰 Total Expenses</span>
+                                <span style="font-size: 1.6rem; font-weight: 800; color: var(--accent-amber);" id="totalExpenseAmount">₹0.00</span>
+                            </div>
+                            <div class="dashboard-card" style="padding: 18px; display: flex; flex-direction: column; gap: 6px;">
+                                <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">📅 This Month</span>
+                                <span style="font-size: 1.6rem; font-weight: 800; color: var(--accent-blue);" id="monthExpenseAmount">₹0.00</span>
+                            </div>
+                            <div class="dashboard-card" style="padding: 18px; display: flex; flex-direction: column; gap: 6px;">
+                                <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">👥 Attendance Today</span>
+                                <span style="font-size: 1.6rem; font-weight: 800; color: var(--accent-emerald);" id="todayPresentCount">0 Present</span>
+                            </div>
+                            <div class="dashboard-card" style="padding: 18px; display: flex; flex-direction: column; gap: 6px;">
+                                <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">☁️ Cloud Lock Status</span>
+                                <span style="font-size: 1rem; font-weight: 800; color: var(--accent-emerald);">● 100% Cloud Locked</span>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; width: 100%;">
+                            <div class="dashboard-card" style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                                <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin: 0;">Add Warehouse Expense</h3>
+                                <form id="formAddExpense" style="display: flex; flex-direction: column; gap: 14px;" onsubmit="event.preventDefault();">
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label for="expenseCategory" style="font-weight: 600; font-size: 0.85rem;">Expense Category</label>
+                                        <select id="expenseCategory" style="background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.9rem; width: 100%;">
+                                            <option value="Staff Salary / Daily Wage">Staff Salary / Daily Wage</option>
+                                            <option value="Packing Material (Tape/Boxes)">Packing Material (Tape, Boxes, Wrap)</option>
+                                            <option value="Transportation / Tempo / Porter">Transportation / Tempo / Porter</option>
+                                            <option value="Electricity / Utility">Electricity / Utility Bills</option>
+                                            <option value="Tea / Food / Refreshment">Tea / Refreshment / Food</option>
+                                            <option value="Maintenance / Repairs">Warehouse Maintenance / Repairs</option>
+                                            <option value="Miscellaneous">Miscellaneous Expense</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label for="expenseAmount" style="font-weight: 600; font-size: 0.85rem;">Amount (₹)</label>
+                                        <input type="number" id="expenseAmount" min="1" step="0.01" placeholder="e.g. 1500" required style="background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.9rem; width: 100%;">
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label for="expensePerson" style="font-weight: 600; font-size: 0.85rem;">Person / Staff Name (Optional)</label>
+                                        <input type="text" id="expensePerson" placeholder="e.g. Ramesh" style="background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.9rem; width: 100%;">
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label for="expenseNote" style="font-weight: 600; font-size: 0.85rem;">Note / Description</label>
+                                        <input type="text" id="expenseNote" placeholder="e.g. Tape rolls and helper wage" required style="background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.9rem; width: 100%;">
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label for="expenseDate" style="font-weight: 600; font-size: 0.85rem;">Date</label>
+                                        <input type="date" id="expenseDate" required style="background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.9rem; width: 100%;">
+                                    </div>
+                                    <button type="submit" id="btnSaveExpense" class="btn-primary" style="width: 100%; padding: 12px; font-weight: 700; cursor: pointer;">
+                                        ☁️ Save Expense to Cloud
+                                    </button>
+                                </form>
+                            </div>
+                            <div class="dashboard-card" style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                                <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin: 0;">Staff Attendance Register</h3>
+                                <form id="formAddAttendance" style="display: flex; flex-direction: column; gap: 14px;" onsubmit="event.preventDefault();">
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label for="attendeeName" style="font-weight: 600; font-size: 0.85rem;">Staff / Worker Name</label>
+                                        <input type="text" id="attendeeName" placeholder="e.g. Rahul Sharma" required style="background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.9rem; width: 100%;">
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label for="attendeeRole" style="font-weight: 600; font-size: 0.85rem;">Role / Designation</label>
+                                        <select id="attendeeRole" style="background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.9rem; width: 100%;">
+                                            <option value="Picker / Packer">Picker / Packer</option>
+                                            <option value="Scanner Operator">Scanner Operator</option>
+                                            <option value="Loading / Unloading">Loading / Unloading</option>
+                                            <option value="Supervisor">Supervisor</option>
+                                            <option value="Security / Guard">Security / Guard</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label for="attendanceStatus" style="font-weight: 600; font-size: 0.85rem;">Status</label>
+                                        <select id="attendanceStatus" style="background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.9rem; width: 100%;">
+                                            <option value="Present">Present (Full Day)</option>
+                                            <option value="Half Day">Half Day</option>
+                                            <option value="Overtime">Present + Overtime</option>
+                                            <option value="Absent">Absent</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label for="attendanceWage" style="font-weight: 600; font-size: 0.85rem;">Daily Wage / Payment (₹) (Optional)</label>
+                                        <input type="number" id="attendanceWage" min="0" placeholder="e.g. 600" style="background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.9rem; width: 100%;">
+                                    </div>
+                                    <button type="submit" id="btnSaveAttendance" class="btn-primary" style="width: 100%; padding: 12px; font-weight: 700; cursor: pointer; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-color: #059669; color: white;">
+                                        ✓ Mark Attendance to Cloud
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="dashboard-card" style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                                <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary); margin: 0;">Expenses & Attendance History</h4>
+                                <button type="button" id="btnDownloadExpenseExcel" class="btn-primary" style="background: rgba(244, 196, 0, 0.1); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); padding: 6px 14px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer;">
+                                    <span>Download Report (.xlsx)</span>
+                                </button>
+                            </div>
+                            <div class="table-container" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-x: auto; max-height: 420px;">
+                                <table class="portal-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                                    <thead>
+                                        <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">
+                                            <th style="padding: 10px 12px;">Date & Time</th>
+                                            <th style="padding: 10px 12px;">Category / Type</th>
+                                            <th style="padding: 10px 12px;">Staff / Person</th>
+                                            <th style="padding: 10px 12px;">Description / Status</th>
+                                            <th style="padding: 10px 12px; text-align: right;">Amount (₹)</th>
+                                            <th style="padding: 10px 12px; text-align: right;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="expenseTableBody">
+                                        <tr>
+                                            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">No expense records found.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </section>
             </div>
