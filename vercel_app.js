@@ -9802,6 +9802,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderOrderQueueUI();
     checkDeviceApprovalStatus();
 
+
     // -------------------------------------------------------------
     // WAREHOUSE EXPENSE & ATTENDANCE MODULE (100% FIREBASE CLOUD ONLY)
     // -------------------------------------------------------------
@@ -9813,6 +9814,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveWarehouseExpensesToCloud(expenses) {
         memoryExpenses = expenses;
+        // Direct Cloud Write to Firebase node: wms_data/warehouse_expenses
         firebaseSet('warehouse_expenses', expenses);
         renderExpenseUI();
     }
@@ -9827,7 +9829,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const now = new Date();
         const todayIso = now.toISOString().slice(0, 10);
-        const currentMonthIso = todayIso.slice(0, 7);
+        const currentMonthIso = todayIso.slice(0, 7); // YYYY-MM
 
         if (expenseDateInput && !expenseDateInput.value) {
             expenseDateInput.value = todayIso;
@@ -9841,11 +9843,11 @@ document.addEventListener('DOMContentLoaded', () => {
         let totalThisMonth = 0;
         let presentToday = 0;
 
-        memoryExpenses.forEach(function(exp) {
+        memoryExpenses.forEach(exp => {
             const amt = parseFloat(exp.amount) || 0;
             totalAllTime += amt;
 
-            if (exp.date && exp.date.indexOf(currentMonthIso) === 0) {
+            if (exp.date && exp.date.startsWith(currentMonthIso)) {
                 totalThisMonth += amt;
             }
 
@@ -9854,72 +9856,62 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        if (totalAmountEl) totalAmountEl.textContent = 'Rs. ' + totalAllTime.toLocaleString('en-IN', { minimumFractionDigits: 2 });
-        if (monthAmountEl) monthAmountEl.textContent = 'Rs. ' + totalThisMonth.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+        if (totalAmountEl) totalAmountEl.textContent = '₹' + totalAllTime.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+        if (monthAmountEl) monthAmountEl.textContent = '₹' + totalThisMonth.toLocaleString('en-IN', { minimumFractionDigits: 2 });
         if (presentCountEl) presentCountEl.textContent = presentToday + ' Staff Present';
 
         if (!body) return;
         body.innerHTML = '';
 
         if (memoryExpenses.length === 0) {
-            body.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">No expense or attendance records logged. Add one above!</td></tr>';
+            body.innerHTML = 
+                <tr>
+                    <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">No expense or attendance records logged. Add one above!</td>
+                </tr>
+            ;
             return;
         }
 
-        const reversed = memoryExpenses.slice().reverse();
-        reversed.forEach(function(item) {
+        // Render newest on top
+        const reversed = [...memoryExpenses].reverse();
+        reversed.forEach(item => {
             const tr = document.createElement('tr');
             tr.style.borderBottom = '1px solid var(--border-color)';
 
             const isAttendance = item.type === 'Attendance';
             const catBadgeColor = isAttendance ? 'var(--accent-emerald)' : 'var(--accent-amber)';
             const catBadgeBg = isAttendance ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)';
-            const displayAmount = (parseFloat(item.amount) > 0) ? 'Rs. ' + parseFloat(item.amount).toFixed(2) : '-';
 
-            const tdDate = document.createElement('td');
-            tdDate.style.cssText = 'padding: 10px 12px; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-secondary);';
-            tdDate.innerHTML = (item.date || '') + ' <span style="font-size: 0.72rem; color: var(--text-muted);">' + (item.time || '') + '</span>';
+            const displayAmount = (parseFloat(item.amount) > 0) ? '₹' + parseFloat(item.amount).toFixed(2) : '—';
 
-            const tdCat = document.createElement('td');
-            tdCat.style.padding = '10px 12px';
-            const spanBadge = document.createElement('span');
-            spanBadge.style.cssText = 'background: ' + catBadgeBg + '; color: ' + catBadgeColor + '; border: 1px solid ' + catBadgeColor + '; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; white-space: nowrap;';
-            spanBadge.textContent = item.category || item.type || 'Expense';
-            tdCat.appendChild(spanBadge);
+            tr.innerHTML = 
+                <td style="padding: 10px 12px; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-secondary);"> <span style="font-size: 0.72rem; color: var(--text-muted);"></span></td>
+                <td style="padding: 10px 12px;">
+                    <span style="background: ; color: ; border: 1px solid ; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; white-space: nowrap;">
+                        
+                    </span>
+                </td>
+                <td style="padding: 10px 12px; font-weight: 700; color: var(--text-primary);"></td>
+                <td style="padding: 10px 12px; font-size: 0.85rem; color: var(--text-secondary);"></td>
+                <td style="padding: 10px 12px; text-align: right; font-weight: 800; font-family: var(--font-mono); color: var(--accent-amber);"></td>
+                <td style="padding: 10px 12px; text-align: right;">
+                    <button type="button" class="btn-delete-expense" data-id="" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth);">
+                        Delete
+                    </button>
+                </td>
+            ;
 
-            const tdPerson = document.createElement('td');
-            tdPerson.style.cssText = 'padding: 10px 12px; font-weight: 700; color: var(--text-primary);';
-            tdPerson.textContent = item.person || '-';
-
-            const tdDesc = document.createElement('td');
-            tdDesc.style.cssText = 'padding: 10px 12px; font-size: 0.85rem; color: var(--text-secondary);';
-            tdDesc.textContent = item.note || item.status || '-';
-
-            const tdAmount = document.createElement('td');
-            tdAmount.style.cssText = 'padding: 10px 12px; text-align: right; font-weight: 800; font-family: var(--font-mono); color: var(--accent-amber);';
-            tdAmount.textContent = displayAmount;
-
-            const tdAction = document.createElement('td');
-            tdAction.style.cssText = 'padding: 10px 12px; text-align: right;';
-            const delBtn = document.createElement('button');
-            delBtn.type = 'button';
-            delBtn.style.cssText = 'background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--accent-rose); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: var(--transition-smooth);';
-            delBtn.textContent = 'Delete';
-            delBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                if (confirm('Are you sure you want to delete this expense/attendance record from Firebase Cloud?')) {
-                    const updated = memoryExpenses.filter(function(x) { return x.id !== item.id; });
-                    saveWarehouseExpensesToCloud(updated);
-                }
-            });
-            tdAction.appendChild(delBtn);
-
-            tr.appendChild(tdDate);
-            tr.appendChild(tdCat);
-            tr.appendChild(tdPerson);
-            tr.appendChild(tdDesc);
-            tr.appendChild(tdAmount);
-            tr.appendChild(tdAction);
+            const delBtn = tr.querySelector('.btn-delete-expense');
+            if (delBtn) {
+                delBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const idToDelete = delBtn.getAttribute('data-id');
+                    if (confirm('Are you sure you want to delete this expense/attendance record from Firebase Cloud?')) {
+                        const updated = memoryExpenses.filter(x => x.id !== idToDelete);
+                        saveWarehouseExpensesToCloud(updated);
+                    }
+                });
+            }
 
             body.appendChild(tr);
         });
@@ -9928,7 +9920,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Form: Add Warehouse Expense
     const formAddExpense = document.getElementById('formAddExpense');
     if (formAddExpense) {
-        formAddExpense.addEventListener('submit', function(e) {
+        formAddExpense.addEventListener('submit', (e) => {
             e.preventDefault();
             const category = document.getElementById('expenseCategory').value;
             const amount = parseFloat(document.getElementById('expenseAmount').value) || 0;
@@ -9954,21 +9946,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 timestamp: Date.now()
             };
 
-            const list = memoryExpenses.concat([newRecord]);
+            const list = [...memoryExpenses, newRecord];
             saveWarehouseExpensesToCloud(list);
 
             document.getElementById('expenseAmount').value = '';
             document.getElementById('expensePerson').value = '';
             document.getElementById('expenseNote').value = '';
 
-            alert('Expense saved to 100% Firebase Cloud!');
+            alert('✓ Expense saved to 100% Firebase Cloud!');
         });
     }
 
     // Form: Add Staff Attendance
     const formAddAttendance = document.getElementById('formAddAttendance');
     if (formAddAttendance) {
-        formAddAttendance.addEventListener('submit', function(e) {
+        formAddAttendance.addEventListener('submit', (e) => {
             e.preventDefault();
             const name = document.getElementById('attendeeName').value.trim();
             const role = document.getElementById('attendeeRole').value;
@@ -9995,37 +9987,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 timestamp: Date.now()
             };
 
-            const list = memoryExpenses.concat([newRecord]);
+            const list = [...memoryExpenses, newRecord];
             saveWarehouseExpensesToCloud(list);
 
             document.getElementById('attendeeName').value = '';
             document.getElementById('attendanceWage').value = '';
 
-            alert('Attendance marked to 100% Firebase Cloud!');
+            alert('✓ Attendance marked to 100% Firebase Cloud!');
         });
     }
 
     // Excel Export: Expenses & Attendance
     const btnDownloadExpenseExcel = document.getElementById('btnDownloadExpenseExcel');
     if (btnDownloadExpenseExcel) {
-        btnDownloadExpenseExcel.addEventListener('click', function() {
+        btnDownloadExpenseExcel.addEventListener('click', () => {
             if (memoryExpenses.length === 0) {
                 alert('No expense records to download.');
                 return;
             }
             if (window.XLSX) {
-                const sheetRows = memoryExpenses.map(function(r, i) {
-                    return {
-                        'S.No.': i + 1,
-                        'Date': r.date,
-                        'Time': r.time || '',
-                        'Type': r.type,
-                        'Category': r.category,
-                        'Staff / Person': r.person,
-                        'Details / Status': r.note,
-                        'Amount (Rs)': r.amount || 0
-                    };
-                });
+                const sheetRows = memoryExpenses.map((r, i) => ({
+                    'S.No.': i + 1,
+                    'Date': r.date,
+                    'Time': r.time || '',
+                    'Type': r.type,
+                    'Category': r.category,
+                    'Staff / Person': r.person,
+                    'Details / Status': r.note,
+                    'Amount (₹)': r.amount || 0
+                }));
 
                 const ws = XLSX.utils.json_to_sheet(sheetRows);
                 const wb = XLSX.utils.book_new();
@@ -10037,7 +10027,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Realtime Firebase Listener for Warehouse Expenses
     if (isFirebaseConnected && db) {
-        db.ref('wms_data/warehouse_expenses').on('value', function(snapshot) {
+        db.ref('wms_data/warehouse_expenses').on('value', (snapshot) => {
             const val = snapshot.val();
             if (val && Array.isArray(val)) {
                 memoryExpenses = val;
