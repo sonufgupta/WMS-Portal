@@ -1,4 +1,4 @@
-﻿/**
+/**
 
 });
         // 0. Sync Reset Timestamp - Safe Realtime in-memory check (no infinite reload)
@@ -7661,10 +7661,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Device Access Authorization Control ---
-    let deviceId = localStorage.getItem('wms_device_id');
+    // Keep device identity and speaker preferences in browser storage.
+    // The app's localStorage adapter above is intentionally memory-only for warehouse data,
+    // so using it here caused a new device ID and a muted speaker after every reload.
+    function getPersistentSetting(key) {
+        try { return window.localStorage.getItem(key); } catch (e) { return null; }
+    }
+    function setPersistentSetting(key, value) {
+        try { window.localStorage.setItem(key, String(value)); } catch (e) {}
+    }
+
+    let deviceId = getPersistentSetting('wms_device_id');
     if (!deviceId) {
         deviceId = 'DEV-' + Math.floor(1000 + Math.random() * 9000);
-        localStorage.setItem('wms_device_id', deviceId);
+        setPersistentSetting('wms_device_id', deviceId);
     }
 
     const accessLockOverlay = document.getElementById('accessLockOverlay');
@@ -7676,8 +7686,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Real-time speech synthesis notification helpers ---
-    let localSpeakerActive = localStorage.getItem('wms_speaker_active') === 'true';
-    let baseSpeakerSpeed = parseFloat(localStorage.getItem('wms_speaker_speed')) || 0.95;
+    // Speaker defaults ON for each active WMS device unless the user explicitly mutes it.
+    let localSpeakerActive = getPersistentSetting('wms_speaker_active') !== 'false';
+    let baseSpeakerSpeed = parseFloat(getPersistentSetting('wms_speaker_speed')) || 0.95;
     let wakeLock = null;
     let silentAudioEl = null;
     let ttsAudioEl = null;
@@ -7756,17 +7767,19 @@ document.addEventListener('DOMContentLoaded', () => {
     let isSpeaking = false;
 
     function playLocalSpeak(text) {
-        if (!localSpeakerActive) return;
+        if (!localSpeakerActive || !text) return;
         if (isFirebaseConnected && db) {
             db.ref('wms_data/devices/' + deviceId).once('value').then(snapshot => {
                 const dev = snapshot.val();
-                if (dev && dev.status === 'approved' && dev.speakerApproved) {
-                    speechQueue.push(text);
+                // Device access still requires normal WMS approval. Speaker permission can
+                // be approved directly on this device using the existing Speaker button.
+                if (dev && dev.status === 'approved' && dev.speakerApproved === true) {
+                    speechQueue.push(String(text));
                     processSpeechQueue();
                 }
-            });
+            }).catch(err => console.warn('Speaker permission check failed:', err));
         } else {
-            speechQueue.push(text);
+            speechQueue.push(String(text));
             processSpeechQueue();
         }
     }
@@ -7894,7 +7907,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnToggleLocalSpeaker) {
         btnToggleLocalSpeaker.addEventListener('click', () => {
             localSpeakerActive = !localSpeakerActive;
-            localStorage.setItem('wms_speaker_active', localSpeakerActive ? 'true' : 'false');
+            setPersistentSetting('wms_speaker_active', localSpeakerActive ? 'true' : 'false');
             updateLocalSpeakerUI();
             if (localSpeakerActive) {
                 startSilenceLoop();
@@ -7919,7 +7932,7 @@ document.addEventListener('DOMContentLoaded', () => {
         inputSpeakerSpeed.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
             baseSpeakerSpeed = val;
-            localStorage.setItem('wms_speaker_speed', val.toString());
+            setPersistentSetting('wms_speaker_speed', val.toString());
             lblSpeakerSpeedVal.textContent = val.toFixed(2) + 'x';
         });
     }
@@ -7935,6 +7948,52 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     updateLocalSpeakerUI();
+
+    // Per-device speaker approval control. It appears only when this WMS device
+    // has normal access approval but its speaker notifications are not yet approved.
+    let btnApproveLocalSpeaker = document.getElementById('btnApproveLocalSpeaker');
+    if (!btnApproveLocalSpeaker && btnToggleLocalSpeaker && isFirebaseConnected && db) {
+        btnApproveLocalSpeaker = document.createElement('button');
+        btnApproveLocalSpeaker.id = 'btnApproveLocalSpeaker';
+        btnApproveLocalSpeaker.type = 'button';
+        btnApproveLocalSpeaker.className = 'btn-primary';
+        btnApproveLocalSpeaker.textContent = 'Approve Speaker Notifications';
+        btnApproveLocalSpeaker.style.cssText = 'margin-left:8px;padding:6px 10px;font-size:0.75rem;font-weight:700;cursor:pointer;border-radius:var(--radius-sm);';
+        btnToggleLocalSpeaker.insertAdjacentElement('afterend', btnApproveLocalSpeaker);
+        btnApproveLocalSpeaker.addEventListener('click', async () => {
+            try {
+                const snap = await db.ref('wms_data/devices/' + deviceId).once('value');
+                const dev = snap.val();
+                if (!dev || dev.status !== 'approved') {
+                    alert('Please get this WMS device approved first. Speaker approval does not bypass device access approval.');
+                    return;
+                }
+                await db.ref('wms_data/devices/' + deviceId + '/speakerApproved').set(true);
+                localSpeakerActive = true;
+                setPersistentSetting('wms_speaker_active', 'true');
+                updateLocalSpeakerUI();
+                startSilenceLoop();
+                requestWakeLock();
+                refreshLocalSpeakerApprovalButton();
+                playLocalSpeak('Speaker notifications approved');
+            } catch (err) {
+                console.warn('Speaker approval failed:', err);
+                alert('Speaker approval could not be saved. Please check the connection and try again.');
+            }
+        });
+    }
+
+    function refreshLocalSpeakerApprovalButton() {
+        if (!btnApproveLocalSpeaker || !isFirebaseConnected || !db) return;
+        db.ref('wms_data/devices/' + deviceId).once('value').then(snapshot => {
+            const dev = snapshot.val();
+            btnApproveLocalSpeaker.style.display = (dev && dev.status === 'approved' && dev.speakerApproved !== true) ? 'inline-block' : 'none';
+        }).catch(err => console.warn('Could not check speaker approval:', err));
+    }
+    if (isFirebaseConnected && db) {
+        db.ref('wms_data/devices/' + deviceId).on('value', refreshLocalSpeakerApprovalButton);
+        refreshLocalSpeakerApprovalButton();
+    }
 
     // Bind real-time listener for speak events across all authorized speaker devices
     if (isFirebaseConnected && db) {
