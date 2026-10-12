@@ -1850,6 +1850,24 @@ td{color:#222!important;border-color:#eee7c9!important}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="app.js"></script>
 
+    <!-- Cloud Email Configuration -->
+    <div class="modal-overlay" id="cloudEmailConfig">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Cloud Email Configuration</h3>
+                <button type="button" id="btnCloseCloudEmail">Close</button>
+            </div>
+            <div class="modal-body">
+                <label for="cloudEmailTo">To Email IDs</label>
+                <input type="text" id="cloudEmailTo" placeholder="company@example.com">
+                <label for="cloudEmailCc">CC Email IDs</label>
+                <input type="text" id="cloudEmailCc" placeholder="Optional; separate multiple IDs with commas">
+                <p id="cloudEmailStatus"></p>
+                <button type="button" id="btnSaveCloudEmail">Save Configuration</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Email Configuration Modal -->
     <div class="modal-overlay" id="emailConfigModal">
         <div class="modal-content" style="max-width: 500px;">

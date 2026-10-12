@@ -5692,6 +5692,23 @@ document.addEventListener('DOMContentLoaded', () => {
         historyData.unshift(logObj);
         saveOutboundHistory(historyData);
 
+        // Queue outbound email for 2 hours after dispatch.
+        if (isFirebaseConnected && db) {
+            const queueEntry = {
+                status: 'pending',
+                dueAt: Date.now() + (2 * 60 * 60 * 1000),
+                createdAt: Date.now(),
+                attempts: 0,
+                dispatch: logObj
+            };
+
+            db.ref('wms_data/dispatch_email_queue')
+                .push(queueEntry)
+                .catch(err => {
+                    console.error('Failed to queue dispatch email:', err);
+                });
+        }
+
         // Auto download Excel immediately
         downloadOutboundLogExcel(logObj);
 
@@ -9827,6 +9844,81 @@ document.addEventListener('DOMContentLoaded', () => {
     document.documentElement.removeAttribute('data-festival');
     localStorage.removeItem('wms_festival_theme');
 
+
+
+    // Cloud email configuration: fixed company To/CC recipients.
+    const cloudEmailModal = document.getElementById('cloudEmailConfig');
+    const cloudEmailTo = document.getElementById('cloudEmailTo');
+    const cloudEmailCc = document.getElementById('cloudEmailCc');
+    const cloudEmailStatus = document.getElementById('cloudEmailStatus');
+    const btnSaveCloudEmail = document.getElementById('btnSaveCloudEmail');
+
+    const openCloudEmail = document.getElementById('btnOpenEmailConfig');
+    if (openCloudEmail && cloudEmailModal) {
+        openCloudEmail.addEventListener('click', () => {
+            const legacyModal = document.getElementById('emailConfigModal');
+            if (legacyModal) legacyModal.classList.remove('active');
+            cloudEmailModal.classList.add('active');
+            if (isFirebaseConnected && db) {
+                db.ref('wms_data/email_config').once('value')
+                    .then(snapshot => {
+                        const config = snapshot.val() || {};
+                        cloudEmailTo.value = config.to || '';
+                        cloudEmailCc.value = config.cc || '';
+                    })
+                    .catch(err => {
+                        console.error('Email config load failed:', err);
+                        if (cloudEmailStatus) cloudEmailStatus.textContent =
+                            'Could not load settings. Check Firebase permissions.';
+                    });
+            }
+        });
+    }
+
+    const closeCloudEmail = document.getElementById('btnCloseCloudEmail');
+    if (closeCloudEmail && cloudEmailModal) {
+        closeCloudEmail.addEventListener('click', () =>
+            cloudEmailModal.classList.remove('active'));
+    }
+
+    if (btnSaveCloudEmail) {
+        btnSaveCloudEmail.addEventListener('click', async () => {
+            const to = (cloudEmailTo.value || '').trim();
+            const cc = (cloudEmailCc.value || '').trim();
+            const validList = value => !value || value.split(/[;, \n]+/)
+                .filter(Boolean).every(email =>
+                    /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(email));
+
+            if (!to || !validList(to) || !validList(cc)) {
+                cloudEmailStatus.textContent =
+                    'Enter valid To email IDs. Separate multiple IDs with commas.';
+                return;
+            }
+            if (!isFirebaseConnected || !db) {
+                cloudEmailStatus.textContent = 'Firebase is not connected.';
+                return;
+            }
+
+            btnSaveCloudEmail.disabled = true;
+            cloudEmailStatus.textContent = 'Saving...';
+            try {
+                await db.ref('wms_data/email_config').update({
+                    enabled: true,
+                    autoEmailEnabled: true,
+                    to: to,
+                    cc: cc,
+                    updatedAt: Date.now()
+                });
+                cloudEmailStatus.textContent = 'Configuration saved successfully.';
+            } catch (err) {
+                console.error('Email config save failed:', err);
+                cloudEmailStatus.textContent =
+                    'Save failed. Check Firebase Realtime Database permissions.';
+            } finally {
+                btnSaveCloudEmail.disabled = false;
+            }
+        });
+    }
 
     // Initial load: Restore states on page load/reload
     const savedOda = localStorage.getItem('wms_oda_records');
