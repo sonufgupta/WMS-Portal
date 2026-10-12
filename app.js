@@ -5055,6 +5055,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </svg>
                         Excel
                     </button>
+                    <button type="button" class="btn-email-now-outbound" data-id="${row.id}" title="Send dispatch email now" style="background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; color: #f59e0b; padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; margin-left: 6px;">Email Now</button>
                     <button type="button" class="btn-restore-outbound-log" data-id="${row.id}" title="Restore Outbound Session" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: var(--accent-blue); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: var(--transition-smooth); border-style: solid; margin-left: 6px;">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
@@ -5178,6 +5179,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </svg>
                             <span>Excel</span>
                         </button>
+                        <button type="button" class="btn-email-now-outbound" data-id="${row.id}" style="flex: 1; background: rgba(245, 158, 11, 0.08); border: 1px solid #f59e0b; color: #f59e0b; padding: 8px 6px; border-radius: 6px; font-weight: 800; font-size: 0.82rem; cursor: pointer;">Email Now</button>
                         <button type="button" class="btn-restore-outbound-log" data-id="${row.id}" style="flex: 1; background: rgba(99, 102, 241, 0.08); border: 1px solid #6366f1; color: #818cf8; padding: 8px 6px; border-radius: 6px; font-weight: 800; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s;">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2.5;">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
@@ -5817,6 +5819,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     alert('Log record not found.');
                 }
+            }
+
+            const emailNowBtn = e.target.closest('.btn-email-now-outbound');
+            if (emailNowBtn) {
+                e.stopPropagation();
+                const logId = emailNowBtn.getAttribute('data-id');
+                const logItem = getOutboundHistory().find(item => item.id === logId);
+                if (!logItem) { alert('Dispatch record not found.'); return; }
+                if (!isFirebaseConnected || !db) { alert('Firebase is not connected.'); return; }
+                if (!confirm('Queue email now for ' + (logItem.shopName || 'dispatch') + ' / ' + (logItem.invoiceNo || logItem.id) + '?')) return;
+                const btnText = emailNowBtn.textContent;
+                emailNowBtn.disabled = true;
+                emailNowBtn.textContent = 'Queuing...';
+                (async () => {
+                    try {
+                        const ref = db.ref('wms_data/dispatch_email_queue');
+                        const snap = await ref.once('value');
+                        const queue = snap.val() || {};
+                        const matches = Object.entries(queue).filter(([k,j]) => j && String((j.dispatch || j.log || {}).id || '') === String(logId));
+                        if (matches.some(([k,j]) => j.status === 'sent')) { alert('Email already sent.'); return; }
+                        if (matches.some(([k,j]) => j.status === 'processing')) { alert('Email is already processing.'); return; }
+                        const pending = matches.find(([k,j]) => j.status === 'pending');
+                        if (pending) {
+                            await ref.child(pending[0]).update({dueAt:Date.now(),manualRequested:true,manualRequestedAt:Date.now()});
+                        } else if (matches.length) {
+                            alert('Existing queue item is not pending; check its status.'); return;
+                        } else {
+                            const hs = await db.ref('wms_data/dispatch_email_history').once('value');
+                            if (Object.values(hs.val() || {}).some(x => x && x.status === 'sent' && String(x.dispatchId || '') === String(logId))) { alert('Email already sent.'); return; }
+                            await ref.push({status:'pending',dueAt:Date.now(),createdAt:Date.now(),attempts:0,manualRequested:true,dispatch:logItem});
+                        }
+                        alert('Email queued. Processing may take up to one minute.');
+                    } catch (err) { console.error(err); alert('Queue failed: ' + (err.message || err)); }
+                    finally { emailNowBtn.disabled = false; emailNowBtn.textContent = btnText; }
+                })();
+                return;
             }
 
             const btn = e.target.closest('.btn-download-outbound-excel');

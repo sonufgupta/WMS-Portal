@@ -177,7 +177,7 @@ exports.sendDueDispatchEmails = onSchedule(
 
         const enabled =
           config.enabled !== false &&
-          config.autoEmailEnabled !== false;
+          (claimedJob.manualRequested === true || config.autoEmailEnabled !== false);
 
         const to = parseAddresses(
           config.to || config.toEmails || config.recipientsTo
@@ -196,6 +196,14 @@ exports.sendDueDispatchEmails = onSchedule(
         }
 
         const log = claimedJob.dispatch || claimedJob.log || {};
+        const dispatchId = String(log.id || queueKey);
+        const sentSnapshot = await db.ref(HISTORY_PATH).orderByChild("dispatchId").equalTo(dispatchId).get();
+        const alreadySent = Object.values(sentSnapshot.val() || {}).some(item => item && item.status === "sent");
+        if (alreadySent) {
+          await db.ref(`${QUEUE_PATH}/${queueKey}`).update({ status: "sent", sentAt: Date.now(), lastError: null, duplicateSkipped: true });
+          logger.info("Duplicate dispatch email skipped", { queueKey, dispatchId });
+          continue;
+        }
         const buffer = await makeOutboundWorkbook(log);
 
         const safeShop = String(log.shopName || "Outbound")
