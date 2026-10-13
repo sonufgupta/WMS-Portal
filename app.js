@@ -1045,8 +1045,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Auto-SKU Alphabet Pattern Extraction and Matching Helpers ---
+    // SKU identity rule: every serial has the letter "V" inside it, e.g. GXOCOPL7BV|04H60228.
+    // Everything up to and including the first "V" identifies the product (item name).
+    // Everything after "V" (batch/running digits and letters) changes from unit to unit
+    // and must never be compared.
+    function getSkuIdentityEnd(pattern) {
+        if (!pattern) return -1;
+        let end = -1;
+        for (const key in pattern) {
+            const idx = parseInt(key);
+            if (idx >= 1 && pattern[key] === 'V' && (end === -1 || idx < end)) {
+                end = idx;
+            }
+        }
+        return end;
+    }
+
     function extractAlphabetPattern(serial) {
         const pattern = {};
+        // New rule: freeze every character (letters AND digits) from the start up to the first "V".
+        const vIdx = serial.toUpperCase().indexOf('V', 1);
+        if (vIdx !== -1) {
+            for (let i = 0; i <= vIdx; i++) {
+                pattern[i] = serial[i].toUpperCase();
+            }
+            return pattern;
+        }
+        // No "V" in the serial (e.g. other barcode types): keep the old letter-based behaviour.
         for (let i = 0; i < serial.length; i++) {
             const char = serial[i];
             // Check if it is a letter (A-Z, a-z)
@@ -1066,8 +1091,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function matchesAlphabetPattern(serial, pattern) {
         if (!pattern) return false;
+        const identityEnd = getSkuIdentityEnd(pattern);
         for (const index in pattern) {
             const idx = parseInt(index);
+            if (identityEnd !== -1 && idx > identityEnd) continue; // ignore everything after "V"
             if (idx >= serial.length) return false;
             const expectedChar = pattern[index];
             if (expectedChar !== null && expectedChar !== undefined && expectedChar !== '') {
@@ -1082,8 +1109,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function matchesAlphabetPatternPartial(serial, pattern) {
         if (!pattern) return false;
         let checkedCount = 0;
+        const identityEnd = getSkuIdentityEnd(pattern);
         for (const index in pattern) {
             const idx = parseInt(index);
+            if (identityEnd !== -1 && idx > identityEnd) continue; // ignore everything after "V"
             // Only verify if index is within scanned serial range
             if (idx < serial.length) {
                 const char = serial[idx];
@@ -4514,9 +4543,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!productName) {
             productName = lookupProductBySkuPattern(serial);
         }
-        if (!productName && activeOutboundSession && activeOutboundSession.items) {
-            productName = deriveProductNameFromPattern(serial, activeOutboundSession.items);
-        }
+        // NOTE: the old guess "deriveProductNameFromPattern" is switched off on purpose. It invented a
+        // product name by swapping one character of a known name, which made the system name items
+        // wrongly. Product identity is now exact: the text up to "V" must match a known SKU.
+        // To switch the guessing back on, restore the 3 lines that were here:
+        //   if (!productName && activeOutboundSession && activeOutboundSession.items) {
+        //       productName = deriveProductNameFromPattern(serial, activeOutboundSession.items);
+        //   }
 
         // Unrecognized barcode popup - directly reject scan
         if (!productName) {
