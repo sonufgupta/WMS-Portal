@@ -69,6 +69,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let weightResolutionCache = null;
     let cachedProductStockMap = null;
     let cachedDamageRecords = null;
+    // SKU prefix (text up to and including the first "V") -> item name; null when two different items share it
+    let skuPrefixCache = null;
+    let skuPrefixCacheSource = null;
 
     // O(1) Fast Index Lookup Maps for Instant Barcode Scanning
     let inboundSerialLogMap = null;    // cleanSerialUpper -> log
@@ -1045,29 +1048,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Auto-SKU Alphabet Pattern Extraction and Matching Helpers ---
-    // SKU identity rule: every serial has the letter "V" inside it, e.g. GXOCOPL7BV|04H60228.
-    // Everything up to and including the first "V" identifies the product (item name).
-    // Everything after "V" (batch/running digits and letters) changes from unit to unit
-    // and must never be compared.
-    function getSkuIdentityEnd(pattern) {
-        if (!pattern) return -1;
-        let end = -1;
-        for (const key in pattern) {
-            const idx = parseInt(key);
-            if (idx >= 1 && pattern[key] === 'V' && (end === -1 || idx < end)) {
-                end = idx;
-            }
-        }
-        return end;
-    }
-
+    // SKU rule: every serial contains the letter "V", e.g. GXTFT185V13BI68876.
+    //  - Everything up to and including the first "V" (letters AND digits) identifies the item
+    //    and is kept exactly:                              GXTFT185V
+    //  - After the "V" the letters stay in their positions, the numbers are hidden (wildcards),
+    //    because the numbers change from unit to unit:     **BI*****
+    //  => pattern GXTFT185V**BI*****  (shown with * for every hidden position)
     function extractAlphabetPattern(serial) {
         const pattern = {};
-        // New rule: freeze every character (letters AND digits) from the start up to the first "V".
         const vIdx = serial.toUpperCase().indexOf('V', 1);
         if (vIdx !== -1) {
-            for (let i = 0; i <= vIdx; i++) {
-                pattern[i] = serial[i].toUpperCase();
+            for (let i = 0; i < serial.length; i++) {
+                const char = serial[i];
+                if (i <= vIdx) {
+                    pattern[i] = char.toUpperCase();          // before/at V: letters and digits
+                } else if (/[a-zA-Z]/.test(char)) {
+                    pattern[i] = char.toUpperCase();          // after V: letters only
+                }
             }
             return pattern;
         }
@@ -1091,10 +1088,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function matchesAlphabetPattern(serial, pattern) {
         if (!pattern) return false;
-        const identityEnd = getSkuIdentityEnd(pattern);
         for (const index in pattern) {
             const idx = parseInt(index);
-            if (identityEnd !== -1 && idx > identityEnd) continue; // ignore everything after "V"
             if (idx >= serial.length) return false;
             const expectedChar = pattern[index];
             if (expectedChar !== null && expectedChar !== undefined && expectedChar !== '') {
@@ -1109,10 +1104,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function matchesAlphabetPatternPartial(serial, pattern) {
         if (!pattern) return false;
         let checkedCount = 0;
-        const identityEnd = getSkuIdentityEnd(pattern);
         for (const index in pattern) {
             const idx = parseInt(index);
-            if (identityEnd !== -1 && idx > identityEnd) continue; // ignore everything after "V"
             // Only verify if index is within scanned serial range
             if (idx < serial.length) {
                 const char = serial[idx];
@@ -1135,11 +1128,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!pattern || length === 0) return 'Not Locked Yet';
         let str = '';
         for (let i = 0; i < length; i++) {
-            if (pattern[i]) {
-                str += pattern[i];
-            } else {
-                str += '.';
-            }
+            // hidden (changing) positions are shown as *
+            str += pattern[i] ? pattern[i] : '*';
         }
         return str;
     }
@@ -2863,6 +2853,29 @@ document.addEventListener('DOMContentLoaded', () => {
             }] : [];
         }
 
+        // --- ANOTHER-PRODUCT GUARD ---
+        // If Inbound history already knows this serial's SKU (text up to "V") under a DIFFERENT product,
+        // it must not be scanned into this product (also stops a wrong first scan from locking a wrong pattern).
+        const knownProduct = lookupProductBySkuPrefix(cleanSerial);
+        if (knownProduct && knownProduct !== matchedItem.name && inboundItems.includes(knownProduct)) {
+            const firstCfg = matchedItem.allowedPatterns[0];
+            lastRejectedSerial = cleanSerial;
+            lastRejectedItemName = knownProduct;
+            lastRejectedIsSequence = false;
+            showSkuWarningModal(
+                'Another Product Detected!',
+                `Scanned serial barcode "${cleanSerial}" belongs to product: "${knownProduct}". Do you want to add or switch to this product in the active session?`,
+                'EXPECTED SKU:',
+                firstCfg ? formatAlphabetPattern(firstCfg.pattern, firstCfg.length) : matchedItem.name,
+                'SCANNED BARCODE:',
+                `${knownProduct} (${cleanSerial})`,
+                false,
+                true,
+                cleanSerial
+            );
+            return false;
+        }
+
         // --- LOCK PATTERN IF FIRST SCAN ---
         if (matchedItem.allowedPatterns.length === 0) {
             const pattern = extractAlphabetPattern(cleanSerial);
@@ -2886,13 +2899,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Check if barcode matches any allowed pattern configuration strictly
-        const isStrictMatch = matchedItem.allowedPatterns.some(cfg => {
+        const prefixOk = sameSkuPrefixInSession(activeSession.serials, matchedItem.name, cleanSerial);
+        const isStrictMatch = prefixOk && matchedItem.allowedPatterns.some(cfg => {
             return cleanSerial.length === cfg.length && matchesAlphabetPattern(cleanSerial, cfg.pattern);
         });
 
         if (!isStrictMatch) {
             // Check if barcode partially matches any configured pattern
-            const isPartialMatch = matchedItem.allowedPatterns.some(cfg => {
+            const isPartialMatch = prefixOk && matchedItem.allowedPatterns.some(cfg => {
                 return matchesAlphabetPatternPartial(cleanSerial, cfg.pattern);
             });
 
@@ -3226,6 +3240,22 @@ document.addEventListener('DOMContentLoaded', () => {
             length: firstSerialOfBatch.length
         }];
 
+        // Another-product guard for sequences (same rule as a single scan)
+        const knownSeqProduct = lookupProductBySkuPrefix(firstSerialOfBatch);
+        if (knownSeqProduct && knownSeqProduct !== matchedItem.name && inboundItems.includes(knownSeqProduct)) {
+            showSkuWarningModal(
+                'Another Product Detected!',
+                `The sequence base serial "${firstSerialOfBatch}" belongs to product: "${knownSeqProduct}", not "${matchedItem.name}". Sequence is rejected.`,
+                'EXPECTED PRODUCT:',
+                matchedItem.name,
+                'SCANNED BARCODE:',
+                `${knownSeqProduct} (${firstSerialOfBatch})`,
+                false,
+                false
+            );
+            return;
+        }
+
         // Pre-build sets for O(1) duplicate checks
         const existingSerialsSet = new Set(activeSession.serials.map(s => s.serial));
         const batchSerialsSet = new Set();
@@ -3278,12 +3308,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Validate strictly against the active pattern layout configuration
-            const isStrictMatch = activeAllowedPatterns.some(cfg => {
+            const seqPrefixOk = sameSkuPrefixInSession(activeSession.serials, matchedItem.name, checkSerial);
+            const isStrictMatch = seqPrefixOk && activeAllowedPatterns.some(cfg => {
                 return checkSerial.length === cfg.length && matchesAlphabetPattern(checkSerial, cfg.pattern);
             });
 
             if (!isStrictMatch) {
-                const isPartialMatch = activeAllowedPatterns.some(cfg => {
+                const isPartialMatch = seqPrefixOk && activeAllowedPatterns.some(cfg => {
                     return matchesAlphabetPatternPartial(checkSerial, cfg.pattern);
                 });
 
@@ -4384,12 +4415,95 @@ document.addEventListener('DOMContentLoaded', () => {
         if (found && found.itemName) {
             return found.itemName;
         }
-        if (cleanUpper.startsWith("GXTFT")) return 'LED Monitor 19.5" (Geonix)';
+        // Product identity = every character up to the first "V" (letters AND digits),
+        // learned from real serials already saved in Inbound history.
+        const byPrefix = lookupProductBySkuPrefix(cleanUpper);
+        if (byPrefix) return byPrefix;
+        if (isSkuPrefixAmbiguous(cleanUpper)) return null; // same prefix, two item names: do not guess
+        // Fixed fallback only for the 19.5" monitor (serials start GXTFT195V). It used to be ANY "GXTFT"
+        // serial, which named the 18.5" monitor (GXTFT185V...) as 19.5". No size is guessed any more.
+        if (cleanUpper.startsWith("GXTFT195V")) return 'LED Monitor 19.5" (Geonix)';
         if (cleanUpper.startsWith("BWR")) return 'Bubble Wrap Roll';
         return lookupProductBySkuPattern(serial);
     }
 
+    function getSkuPrefixMap() {
+        const source = getInboundSerialLogMap(); // gets a new object whenever history changes
+        if (skuPrefixCache !== null && skuPrefixCacheSource === source) return skuPrefixCache;
+        const map = new Map();
+        for (const log of getHistory()) {
+            if (!log || !log.serials) continue;
+            let single = null;
+            if (log.items && log.items.length === 1) {
+                single = typeof log.items[0] === 'string' ? log.items[0] : (log.items[0].name || null);
+            }
+            for (const s of log.serials) {
+                if (!s || !s.serial) continue;
+                const name = s.itemName || single;
+                if (!name) continue;
+                const up = s.serial.trim().toUpperCase();
+                const v = up.indexOf('V', 1);
+                if (v === -1) continue;
+                const prefix = up.slice(0, v + 1);
+                if (!map.has(prefix)) map.set(prefix, name);
+                else if (map.get(prefix) !== name) map.set(prefix, null); // ambiguous: do not guess
+            }
+        }
+        skuPrefixCache = map;
+        skuPrefixCacheSource = source;
+        return map;
+    }
+
+    // text up to and including the first "V" (the item identity), or null when the serial has no "V"
+    function getSkuPrefix(serial) {
+        if (!serial) return null;
+        const up = serial.trim().toUpperCase();
+        const v = up.indexOf('V', 1);
+        return v === -1 ? null : up.slice(0, v + 1);
+    }
+
+    // true when Inbound history has two different item names for the same prefix (never guess then)
+    function isSkuPrefixAmbiguous(serial) {
+        const prefix = getSkuPrefix(serial);
+        if (prefix === null) return false;
+        const map = getSkuPrefixMap();
+        return map.has(prefix) && map.get(prefix) === null;
+    }
+
+    // true when a saved pattern fixes EVERY character up to its "V" (old saved patterns left the
+    // digits before "V" open, so they cannot tell 18.5" from 19.5" and must not be used to name items)
+    function patternCoversSkuPrefix(pattern) {
+        let v = -1;
+        for (const key in pattern) {
+            const idx = parseInt(key);
+            if (idx >= 1 && pattern[key] === 'V' && (v === -1 || idx < v)) v = idx;
+        }
+        if (v === -1) return true;
+        for (let i = 0; i <= v; i++) {
+            if (!pattern[i]) return false;
+        }
+        return true;
+    }
+
+    // true when the serial has the same item identity (text up to "V") as the serials of that item
+    // already scanned in this session (protects sessions that still hold an old saved pattern)
+    function sameSkuPrefixInSession(sessionSerials, itemName, serial) {
+        const prefix = getSkuPrefix(serial);
+        if (prefix === null || !sessionSerials) return true;
+        const ref = sessionSerials.find(s => s && s.itemName === itemName && getSkuPrefix(s.serial) !== null);
+        return !ref || getSkuPrefix(ref.serial) === prefix;
+    }
+
+    function lookupProductBySkuPrefix(serial) {
+        if (!serial) return null;
+        const up = serial.trim().toUpperCase();
+        const v = up.indexOf('V', 1);
+        if (v === -1) return null;
+        return getSkuPrefixMap().get(up.slice(0, v + 1)) || null;
+    }
+
     function lookupProductBySkuPattern(serial) {
+        if (isSkuPrefixAmbiguous(serial)) return null;
         const history = getHistory();
         for (const log of history) {
             const itemsList = [];
@@ -4406,14 +4520,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 let allowed = (item && typeof item === 'object') ? item.allowedPatterns : null;
                 if (!allowed || allowed.length === 0) {
                     // Inject fallback allowedPatterns for legacy/mock data checks
-                    if (itemName.includes("LED Monitor")) {
-                        allowed = [{
-                            pattern: { 0: "G", 1: "X", 2: "T", 3: "F", 4: "T", 8: "V", 9: "C", 10: "P", 11: "B" },
-                            length: 18
-                        }, {
-                            pattern: { 0: "G", 1: "X", 2: "T", 3: "F", 4: "T", 8: "V", 9: "C", 10: "P", 11: "B" },
-                            length: 19
-                        }];
+                    // The monitor size is part of the serial (GXTFT185V = 18.5", GXTFT195V = 19.5"), so the
+                    // fallback pattern must contain the size digits from the item name. Without a size in the
+                    // name nothing is guessed (before, every LED Monitor item matched every GXTFT serial).
+                    const ledSize = itemName.includes("LED Monitor") ? itemName.match(/(\d{2})\.(\d)/) : null;
+                    if (ledSize) {
+                        const ledPattern = { 0: "G", 1: "X", 2: "T", 3: "F", 4: "T", 5: ledSize[1][0], 6: ledSize[1][1], 7: ledSize[2], 8: "V", 9: "C", 10: "P", 11: "B" };
+                        allowed = [{ pattern: ledPattern, length: 18 }, { pattern: ledPattern, length: 19 }];
                     } else if (itemName.includes("Bubble Wrap")) {
                         allowed = [{
                             pattern: { 0: "B", 1: "W", 2: "R" },
@@ -4424,7 +4537,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (allowed) {
                     const match = allowed.some(cfg => {
-                        return cfg && cfg.pattern && matchesAlphabetPattern(serial, cfg.pattern) && serial.length === cfg.length;
+                        return cfg && cfg.pattern && patternCoversSkuPrefix(cfg.pattern) && matchesAlphabetPattern(serial, cfg.pattern) && serial.length === cfg.length;
                     });
                     if (match) return itemName;
                 }
