@@ -3962,11 +3962,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (activeOutboundSession.pincode) {
                     const pincode = activeOutboundSession.pincode;
                     const odaInfo = getMultiCourierOdaStatus(pincode);
-                    
+                    const savedStatuses = Array.isArray(activeOutboundSession.odaCourierStatuses)
+                        ? activeOutboundSession.odaCourierStatuses
+                        : [];
+
+                    const hasSavedStatuses = savedStatuses.length > 0;
+                    const displayIsAnyOda = hasSavedStatuses
+                        ? savedStatuses.some(c => c.isOda === true)
+                        : activeOutboundSession.odaStatus === 'ODA';
+
+                    let statusHtml;
+
+                    if (hasSavedStatuses) {
+                        statusHtml = savedStatuses.map(c => {
+                            const courier = escapeHtml(c.courier || 'Courier');
+                            return c.isOda
+                                ? `<span style="color:#f43f5e;font-weight:700;">🔴 ${courier}: ODA</span>`
+                                : `<span style="color:#10b981;font-weight:700;">🟢 ${courier}: Normal</span>`;
+                        }).join(' ');
+                    } else if (activeOutboundSession.odaStatus === 'Not Found') {
+                        statusHtml = '<span style="color:#f43f5e;font-weight:800;">🔴 Invalid / Not Found</span>';
+                    } else {
+                        statusHtml = odaInfo.badgeHtml;
+                    }
+
                     odaBadge.style.display = 'flex';
-                    odaBadge.innerHTML = `<span style="font-weight: 800; font-family: var(--font-mono); margin-right: 4px;">PIN ${pincode}:</span> ${odaInfo.badgeHtml}`;
-                    
-                    if (odaInfo.isAnyOda) {
+                    odaBadge.innerHTML = `<span style="font-weight:800;font-family:var(--font-mono);margin-right:4px;">PIN ${escapeHtml(String(pincode))}:</span> ${statusHtml}`;
+
+                    if (displayIsAnyOda || activeOutboundSession.odaStatus === 'Not Found') {
                         odaBadge.style.backgroundColor = 'rgba(244, 63, 94, 0.1)';
                         odaBadge.style.borderColor = 'var(--accent-rose)';
                         odaBadge.style.animation = 'pulseOda 1.5s infinite';
@@ -3979,7 +4002,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     odaBadge.style.display = 'none';
                 }
             }
-            
+
             compactOutboundBoxNumbers();
             updateOutboundSessionProgress();
             renderOutboundBoxCards();
@@ -4097,27 +4120,30 @@ document.addEventListener('DOMContentLoaded', () => {
             const addrEl = document.getElementById('configAddress');
             const addrVal = addrEl ? addrEl.value.trim() : '';
 
-            if (!shopVal || !invoiceVal) {
-                alert('Please enter both Shop Name and Invoice Number.');
+            if (!shopVal || !invoiceVal || !pinVal) {
+                alert('Please enter Shop Name, Sale Order ID and Pincode.');
                 return;
             }
 
-            if (pinVal && pinVal.length !== 6) {
+            if (pinVal.length !== 6) {
                 alert('Pincode must be exactly a 6-digit number.');
                 return;
             }
 
-            const checkOdaStatusForPincode = (pincode) => {
-                if (!pincode) return 'Normal';
-                const records = getOdaRecords();
-                const matched = records.filter(r => String(r.pincode) === String(pincode));
-                if (matched.length === 0) return 'Normal';
-                
-                const hasOda = matched.some(r => isOdaRemark(r.remark));
-                return hasOda ? 'ODA' : 'Normal';
-            };
+            const odaInfo = getMultiCourierOdaStatus(pinVal);
+            const odaStatus = !odaInfo.hasRecords
+                ? 'Not Found'
+                : (odaInfo.isAnyOda ? 'ODA' : 'Normal');
 
-            const odaStatus = checkOdaStatusForPincode(pinVal);
+            const courierList = odaInfo.courierStatuses.length
+                ? odaInfo.courierStatuses.map(c =>
+                    `${c.courier}: ${c.isOda ? 'ODA' : 'Normal'}`
+                  ).join('\n')
+                : 'No matching pincode in Active ODA Database';
+
+            alert(
+                `Pincode: ${pinVal}\nODA Status: ${odaStatus}\n\n${courierList}`
+            );
 
             if (isEditingOutboundSession && activeOutboundSession) {
                 activeOutboundSession.shopName = shopVal;
@@ -4125,6 +4151,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeOutboundSession.pincode = pinVal || '';
                 activeOutboundSession.address = addrVal || activeOutboundSession.address || '';
                 activeOutboundSession.odaStatus = odaStatus;
+                activeOutboundSession.odaCourierStatuses = odaInfo.courierStatuses.map(c => ({
+                    courier: c.courier,
+                    remark: c.remark,
+                    isOda: c.isOda,
+                    fileName: c.fileName
+                }));
+                activeOutboundSession.odaPincodeFound = odaInfo.hasRecords;
             } else {
                 activeOutboundSession = {
                     shopName: shopVal,
@@ -4132,6 +4165,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     pincode: pinVal || '',
                     address: addrVal || '',
                     odaStatus: odaStatus,
+                    odaCourierStatuses: odaInfo.courierStatuses.map(c => ({
+                        courier: c.courier,
+                        remark: c.remark,
+                        isOda: c.isOda,
+                        fileName: c.fileName
+                    })),
+                    odaPincodeFound: odaInfo.hasRecords,
                     items: [],
                     serials: []
                 };
@@ -5025,12 +5065,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>
                     ${(() => {
                         if (!row.pincode) return `<span style="color: var(--text-muted); font-size: 0.8rem;">—</span>`;
+                        const savedStatuses = Array.isArray(row.odaCourierStatuses) ? row.odaCourierStatuses : [];
                         const odaInfo = getMultiCourierOdaStatus(row.pincode);
+                        const statusBadges = savedStatuses.length
+                            ? savedStatuses.map(c => c.isOda
+                                ? `<span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800;">🔴 ${escapeHtml(c.courier || 'Courier')}: ODA</span>`
+                                : `<span style="background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800;">🟢 ${escapeHtml(c.courier || 'Courier')}: Normal</span>`
+                              ).join(' ')
+                            : (row.odaStatus === 'Not Found'
+                                ? `<span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800;">🔴 Invalid / Not Found</span>`
+                                : odaInfo.badgeHtml);
                         return `<div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
                                     <span style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono); font-weight: 700;">PIN: ${row.pincode}</span>
                                     <div style="display: flex; gap: 4px; flex-wrap: wrap;">
-                                        ${odaInfo.badgeHtml}
+                                        ${statusBadges}
                                     </div>
+                                    ${row.odaConfirmationRequired ? `<span style="font-size:0.7rem;color:var(--accent-rose);font-weight:700;">ODA confirmation: ${row.odaConfirmed ? 'Confirmed' : 'Not confirmed'}</span>` : ''}
                                 </div>`;
                     })()}
                 </td>
@@ -5103,8 +5153,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 let mobileOdaBadge = '';
                 if (row.pincode) {
+                    const savedStatuses = Array.isArray(row.odaCourierStatuses) ? row.odaCourierStatuses : [];
                     const odaInfo = getMultiCourierOdaStatus(row.pincode);
-                    mobileOdaBadge = `<div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;">${odaInfo.badgeHtml}</div>`;
+                    const statusBadges = savedStatuses.length
+                        ? savedStatuses.map(c => c.isOda
+                            ? `<span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800;">🔴 ${escapeHtml(c.courier || 'Courier')}: ODA</span>`
+                            : `<span style="background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800;">🟢 ${escapeHtml(c.courier || 'Courier')}: Normal</span>`
+                          ).join(' ')
+                        : (row.odaStatus === 'Not Found'
+                            ? `<span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800;">🔴 Invalid / Not Found</span>`
+                            : odaInfo.badgeHtml);
+                    mobileOdaBadge = `<div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;">${statusBadges}</div>`;
                 }
 
                 // Format Full Date + Time Display
@@ -5683,7 +5742,12 @@ document.addEventListener('DOMContentLoaded', () => {
             invoiceNo: activeOutboundSession.invoiceNo,
             pincode: activeOutboundSession.pincode || '',
             address: activeOutboundSession.address || '',
-            odaStatus: activeOutboundSession.odaStatus || 'Normal',
+            odaStatus: activeOutboundSession.odaStatus || 'Not Found',
+            odaCourierStatuses: activeOutboundSession.odaCourierStatuses || [],
+            odaPincodeFound: activeOutboundSession.odaPincodeFound === true,
+            odaConfirmationRequired: activeOutboundSession.odaConfirmationRequired === true,
+            odaConfirmed: activeOutboundSession.odaConfirmed === true,
+            odaConfirmedAt: activeOutboundSession.odaConfirmedAt || '',
             distanceKm: activeOutboundSession.distanceKm || calculateDistanceKm(activeOutboundSession.pincode),
             courierRecommendation: courierRecommendation || '',
             items: activeOutboundSession.items,
@@ -5726,6 +5790,49 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('No serials scanned to dispatch.');
                 return;
             }
+
+            // Recheck ODA status before ending the dispatch.
+            const endOdaInfo = getMultiCourierOdaStatus(activeOutboundSession.pincode);
+            const endOdaStatus = !endOdaInfo.hasRecords
+                ? 'Not Found'
+                : (endOdaInfo.isAnyOda ? 'ODA' : 'Normal');
+
+            activeOutboundSession.odaStatus = endOdaStatus;
+            activeOutboundSession.odaCourierStatuses = endOdaInfo.courierStatuses.map(c => ({
+                courier: c.courier,
+                remark: c.remark,
+                isOda: c.isOda,
+                fileName: c.fileName
+            }));
+            activeOutboundSession.odaPincodeFound = endOdaInfo.hasRecords;
+            activeOutboundSession.odaConfirmationRequired =
+                !endOdaInfo.hasRecords || endOdaInfo.isAnyOda;
+
+            if (activeOutboundSession.odaConfirmationRequired) {
+                const courierDetails = endOdaInfo.courierStatuses.length
+                    ? endOdaInfo.courierStatuses.map(c =>
+                        `${c.courier}: ${c.isOda ? 'ODA' : 'Normal'}`
+                    ).join('\n')
+                    : 'No matching pincode in Active ODA Database';
+
+                const odaConfirmMessage =
+                    `ODA CONFIRMATION REQUIRED\n\n` +
+                    `Pincode: ${activeOutboundSession.pincode || 'Not provided'}\n` +
+                    `Status: ${endOdaStatus}\n\n${courierDetails}\n\n` +
+                    `Have you checked this ODA status and want to continue?`;
+
+                if (!confirm(odaConfirmMessage)) {
+                    return;
+                }
+
+                activeOutboundSession.odaConfirmed = true;
+                activeOutboundSession.odaConfirmedAt = new Date().toISOString();
+            } else {
+                activeOutboundSession.odaConfirmed = false;
+                activeOutboundSession.odaConfirmedAt = '';
+            }
+
+            saveActiveOutboundSession();
 
             // Calculate current total weight
             let totalWeight = 0;
@@ -9394,9 +9501,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return {
                 hasRecords: false,
                 isAnyOda: false,
-                summaryText: 'Normal Delivery',
+                summaryText: 'Invalid / Not Found',
                 courierStatuses: [],
-                badgeHtml: `<span style="background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">🟢 Normal</span>`
+                badgeHtml: `<span style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid var(--accent-rose); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800;">🔴 Invalid / Not Found</span>`
             };
         }
 
