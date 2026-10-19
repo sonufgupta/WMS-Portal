@@ -296,6 +296,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     loadInboundItems();
                     renderDropdownItems();
                     renderActiveDropdownItems();
+                    if (typeof populateNoSerialDamageProducts === 'function') {
+                        populateNoSerialDamageProducts();
+                    }
                     console.log("Inbound History synchronized.");
                 }
             }
@@ -453,7 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 sec.style.display = 'none';
             });
 
-            
+
             // Activate and show target section instantly
             const targetSection = document.getElementById(targetSectionId);
             if (targetSection) {
@@ -470,7 +473,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (targetSectionId === 'sectionOutbound') {
                 renderOutboundHistoryTable();
             }
-            
+
             console.log(`Navigated to section: ${targetSectionId}`);
         });
     });
@@ -488,6 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const history = getHistory();
             const outboundHistory = getOutboundHistory();
             const weights = getProductWeights();
+            const damageSerials = new Set(getDamageRecords().map(r => String(r.serial || '').trim().toUpperCase()));
 
             // 1. Gather all completed outbound scans and build normalizations
             const outboundSerialsSet = new Set();
@@ -529,7 +533,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 2. Map inbound arrivals and box counts with FIFO weights
             const productStock = {};
-            const remainingWosOutbound = {};
+            const remainingQuantityDamage = {};
+        getDamageRecords().forEach(r => {
+            if (r && !r.serial && r.itemName) {
+                remainingQuantityDamage[r.itemName] = (remainingQuantityDamage[r.itemName] || 0) + Math.max(0, Number(r.quantity) || 0);
+            }
+        });
+        const remainingWosOutbound = {};
             Object.keys(outboundCountsByProduct).forEach(key => {
                 remainingWosOutbound[key] = outboundCountsByProduct[key];
             });
@@ -541,7 +551,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Process inbound history from oldest to newest (FIFO)
             const inboundHistoryReversed = [...history].reverse();
-            
+
             inboundHistoryReversed.forEach(log => {
                 const name = log.item;
                 if (log.serials && log.serials.length > 0) {
@@ -556,13 +566,15 @@ document.addEventListener('DOMContentLoaded', () => {
                                 name: itemName,
                                 inboundCount: 0,
                                 serialsCount: 0,
+                                freshCount: 0,
+                                damagedCount: 0,
                                 availableWeight: 0,
                                 boxNumbers: new Set()
                             };
                         }
-                        
+
                         productStock[itemName].inboundCount++;
-                        
+
                         let isDispatched = false;
                         if (outboundSerialsSet.has(cleanInboundSerial)) {
                             isDispatched = true;
@@ -573,6 +585,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         if (!isDispatched) {
                             productStock[itemName].serialsCount++;
+                            if (damageSerials.has(cleanInboundSerial)) {
+                                productStock[itemName].damagedCount++;
+                            } else {
+                                productStock[itemName].freshCount++;
+                            }
                             productStock[itemName].availableWeight += unitWeight;
                             productStock[itemName].boxNumbers.add(s.boxNo);
                         }
@@ -582,17 +599,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (name && log.count > 0) {
                         const logW = resolveLogWeight(log, name);
                         const unitWeight = (logW !== undefined) ? logW : (parseFloat(weights[name]) || 0);
-                        
+
                         if (!productStock[name]) {
                             productStock[name] = {
                                 name: name,
                                 inboundCount: 0,
                                 serialsCount: 0,
+                                freshCount: 0,
+                                damagedCount: 0,
                                 availableWeight: 0,
                                 boxNumbers: new Set()
                             };
                         }
-                        
+
                         productStock[name].inboundCount += log.count;
 
                         // FIFO deduction for WOS
@@ -603,9 +622,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         } else {
                             const availableQty = inboundQty - remOut;
                             remainingWosOutbound[name] = 0;
-                            
+
+                            const qtyDamaged = Math.min(availableQty, remainingQuantityDamage[name] || 0);
+                            remainingQuantityDamage[name] = Math.max(0, (remainingQuantityDamage[name] || 0) - qtyDamaged);
+                            const freshQty = availableQty - qtyDamaged;
                             productStock[name].serialsCount += availableQty;
-                            productStock[name].availableWeight += (availableQty * unitWeight);
+                            productStock[name].freshCount += freshQty;
+                            productStock[name].damagedCount += qtyDamaged;
+                            productStock[name].availableWeight += (freshQty * unitWeight);
                             if (log.wosBoxNo || log.boxNo) {
                                 productStock[name].boxNumbers.add(log.wosBoxNo || log.boxNo);
                             }
@@ -618,13 +642,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const sheetRows = [];
             let rowIdx = 1;
             let sumPcs = 0;
+            let sumFresh = 0;
+            let sumDamaged = 0;
             let sumBoxes = 0;
             let sumWeight = 0.0;
 
             // Sort to place Out of Stock items at the top
             const sortedExcelStock = Object.values(productStock).sort((a, b) => {
-                const aIsOut = a.serialsCount === 0 ? 1 : 0;
-                const bIsOut = b.serialsCount === 0 ? 1 : 0;
+                const aIsOut = a.freshCount === 0 ? 1 : 0;
+                const bIsOut = b.freshCount === 0 ? 1 : 0;
                 if (aIsOut !== bIsOut) {
                     return bIsOut - aIsOut;
                 }
@@ -632,6 +658,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             sortedExcelStock.forEach(item => {
+                const freshQty = item.freshCount;
+                const damagedQty = item.damagedCount;
                 const currentPcQty = item.serialsCount;
                 const currentBoxQty = item.boxNumbers.size;
                 const totalWeight = item.availableWeight;
@@ -639,11 +667,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 sheetRows.push({
                     "S.No.": rowIdx++,
                     "Product Name": item.name,
-                    "Piece Quantity (PCs)": currentPcQty === 0 ? "Out of Stock" : currentPcQty,
+                    "Fresh PC": freshQty,
+                    "Damaged PC": damagedQty,
+                    "Total PC": currentPcQty,
                     "Total Weight (kg)": totalWeight > 0 ? parseFloat(totalWeight.toFixed(3)) : 0
                 });
 
                 sumPcs += currentPcQty;
+                sumFresh += freshQty;
+                sumDamaged += damagedQty;
                 sumBoxes += currentBoxQty;
                 sumWeight += totalWeight;
             });
@@ -657,14 +689,18 @@ document.addEventListener('DOMContentLoaded', () => {
             sheetRows.push({
                 "S.No.": "",
                 "Product Name": "",
-                "Piece Quantity (PCs)": "",
+                "Fresh PC": "",
+                "Damaged PC": "",
+                "Total PC": "",
                 "Total Weight (kg)": ""
             });
 
             sheetRows.push({
                 "S.No.": "",
                 "Product Name": "TOTAL",
-                "Piece Quantity (PCs)": sumPcs,
+                "Fresh PC": sumFresh,
+                "Damaged PC": sumDamaged,
+                "Total PC": sumPcs,
                 "Total Weight (kg)": parseFloat(sumWeight.toFixed(3))
             });
 
@@ -784,7 +820,7 @@ document.addEventListener('DOMContentLoaded', () => {
         themeTogglerButton.addEventListener('click', () => {
             const currentTheme = htmlElement.getAttribute('data-theme');
             const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-            
+
             htmlElement.setAttribute('data-theme', newTheme);
             console.log(`Theme toggled to: ${newTheme}`);
         });
@@ -796,18 +832,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelActiveInboundSessionBtn = document.getElementById('cancelActiveInboundSessionBtn');
     const inboundInactiveState = document.getElementById('inboundInactiveState');
     const inboundActiveState = document.getElementById('inboundActiveState');
-    
+
     // Modals & Controls
     const inboundConfigModal = document.getElementById('inboundConfigModal');
     const closeInboundConfigModalBtn = document.getElementById('closeInboundConfigModalBtn');
     const cancelInboundConfigModalBtn = document.getElementById('cancelInboundConfigModalBtn');
     const inboundConfigForm = document.getElementById('inboundConfigForm');
-    
+
     const addItemModal = document.getElementById('addItemModal');
     const openAddItemModalBtnInModal = document.getElementById('openAddItemModalBtnInModal');
     const closeAddItemModalBtn = document.getElementById('closeAddItemModalBtn');
     const cancelAddItemModalBtn = document.getElementById('cancelAddItemModalBtn');
-    
+
     const newItemForm = document.getElementById('newItemForm');
     const newItemNameInput = document.getElementById('newItemName');
     const configItemSelect = document.getElementById('configItemSelect');
@@ -816,7 +852,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const configItemDropdownSelectedText = document.getElementById('configItemDropdownSelectedText');
     const configItemDropdownMenu = document.getElementById('configItemDropdownMenu');
     const configItemDropdownList = document.getElementById('configItemDropdownList');
-    
+
     // SKU Warning Reject Modal elements
     const skuWarningModal = document.getElementById('skuWarningModal');
     const warningTitleText = document.getElementById('warningTitleText');
@@ -853,7 +889,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeAddProductToActiveSessionModalBtn = document.getElementById('closeAddProductToActiveSessionModalBtn');
     const cancelAddProductToActiveSessionModalBtn = document.getElementById('cancelAddProductToActiveSessionModalBtn');
     const addProductToActiveSessionForm = document.getElementById('addProductToActiveSessionForm');
-    
+
     // Add product custom dropdown select fields
     const activeConfigItemSelect = document.getElementById('activeConfigItemSelect');
     const activeConfigItemDropdownContainer = document.getElementById('activeConfigItemDropdownContainer');
@@ -909,11 +945,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return;
         }
-        
+
         if (!log.weights) {
             log.weights = [];
         }
-        
+
         if (Array.isArray(log.weights)) {
             const existing = log.weights.find(w => w.name === itemName);
             if (existing) {
@@ -1033,16 +1069,16 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             weights[itemName] = parsed;
         }
-        
+
         cachedProductWeights = weights;
         weightResolutionCache = null;
-        
+
         // Convert dictionary to array of objects to bypass Firebase path segment key restrictions
         const weightsArray = Object.keys(weights).map(name => ({
             name: name,
             weight: weights[name]
         }));
-        
+
         localStorage.setItem('wms_product_weights', JSON.stringify(weightsArray));
         firebaseSet('product_weights', weightsArray);
     }
@@ -1152,10 +1188,10 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const cfg of patterns) {
                 if (!cfg || !cfg.pattern || cfg.length !== cleanSerial.length) continue;
                 const refPattern = cfg.pattern;
-                
+
                 let diffIndex = -1;
                 let diffCount = 0;
-                
+
                 const allKeys = new Set([...Object.keys(refPattern), ...Object.keys(newPattern)]);
                 for (const k of allKeys) {
                     if (refPattern[k] !== newPattern[k]) {
@@ -1179,7 +1215,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function sanitizeSessionItems(session) {
         if (!session || !session.items || session.items.length === 0 || !session.serials) return;
-        
+
         session.items.forEach(item => {
             if (!item.allowedPatterns || item.allowedPatterns.length <= 1) return;
             const itemSerials = session.serials.filter(s => s.itemName === item.name);
@@ -1196,7 +1232,7 @@ document.addEventListener('DOMContentLoaded', () => {
         session.items.forEach(item => {
             if (!item.allowedPatterns || item.allowedPatterns.length === 0) return;
             const primaryCfg = item.allowedPatterns[0];
-            
+
             const mismatched = session.serials.filter(s => {
                 return s.itemName === item.name && !matchesAlphabetPattern(s.serial, primaryCfg.pattern);
             });
@@ -1430,11 +1466,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (modalContainer) {
                 modalContainer.style.maxWidth = '620px';
             }
-            
+
             // Raw detected serial is passed in extraVal
             const detectedSerial = extraVal || scannedVal;
             let detectedProduct = lookupProductBySerial(detectedSerial) || lookupProductBySkuPattern(detectedSerial) || 'Unknown Product';
-            
+
             // Find box number of the detected serial from Inbound history
             let detectedBoxNo = 'N/A';
             const inboundHistory = getHistory();
@@ -1530,7 +1566,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     warningModalConfirmInput.focus();
                 }, 50);
 
-                let sequenceStep = 1; 
+                let sequenceStep = 1;
                 const lastSessionSerial = (activeOutboundSession && activeOutboundSession.serials.length > 0)
                     ? activeOutboundSession.serials[activeOutboundSession.serials.length - 1].serial
                     : null;
@@ -1553,7 +1589,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         evt.preventDefault();
                         const val = warningModalConfirmInput.value.trim();
                         if (!val) return;
-                        
+
                         // 1. Check for reject scan gesture (scanning the same detected serial while in Step 1)
                         if (sequenceStep === 1 && val === detectedSerial) {
                             skuWarningModal.classList.remove('active');
@@ -1585,7 +1621,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 return;
                             }
                         }
-                        
+
                         // 3. Incorrect scan alerts for sequence steps (non-blocking)
                         if (sequenceStep === 1) {
                             warningModalConfirmInput.value = '';
@@ -1641,10 +1677,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (mobileContainer) {
             mobileContainer.innerHTML = '';
         }
-        
+
         const historyData = getHistory();
         let needsUpdate = false;
-        
+
         const trFrag = document.createDocumentFragment();
         const mobileFrag = document.createDocumentFragment();
 
@@ -1655,7 +1691,7 @@ document.addEventListener('DOMContentLoaded', () => {
         displayData.forEach((row, idx) => {
             const tr = document.createElement('tr');
             const vehicleDisplay = row.vehicle === 'Not Specified' ? '<span class="text-muted">Not Specified</span>' : row.vehicle;
-            
+
             // Assign unique ID to legacy mock logs if missing
             if (!row.id) {
                 row.id = `log_${idx}_${Date.now()}`;
@@ -1671,15 +1707,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
             }
-            
+
             const itemsList = row.items || [{ name: row.item, expectedQty: row.expected }];
             const itemsHtml = itemsList.map(item => {
                 const weight = resolveLogWeight(row, item.name);
                 const weightLabel = (weight !== undefined) ? ` (${weight} kg)` : ' (Set Weight)';
-                const badgeStyle = weight 
-                    ? 'background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--accent-emerald);' 
+                const badgeStyle = weight
+                    ? 'background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--accent-emerald);'
                     : 'background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--accent-blue);';
-                
+
                 return `
                     <button type="button" class="btn-item-weight-trigger" data-log-id="${row.id}" data-item-name="${escapeHtmlAttr(item.name)}" style="${badgeStyle} padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; transition: var(--transition-smooth); gap: 4px; margin-right: 6px; margin-bottom: 4px; border-style: solid;">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2.5;">
@@ -1743,14 +1779,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     min-width: 0;
                     overflow: hidden;
                 `;
-                
+
                 const mobileItemsHtml = itemsList.map(item => {
                     const weight = resolveLogWeight(row, item.name);
                     const weightLabel = (weight !== undefined) ? ` (${weight} kg)` : ' (Set Weight)';
-                    const badgeStyle = weight 
-                        ? 'background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--accent-emerald);' 
+                    const badgeStyle = weight
+                        ? 'background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--accent-emerald);'
                         : 'background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--accent-blue);';
-                    
+
                     return `
                         <div style="display: flex; align-items: flex-start; gap: 6px; font-size: 0.82rem; color: var(--text-primary); font-weight: 600; line-height: 1.35; word-break: break-word;">
                             <span style="color: #f43f5e; font-size: 0.7rem; margin-top: 3px; flex-shrink: 0;">●</span>
@@ -1847,14 +1883,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Create new Excel Workbook
         const wb = XLSX.utils.book_new();
-        
+
         const items = log.items || [{ name: log.item || 'Product', expectedQty: log.expected }];
         const serials = log.serials || [];
 
         items.forEach(item => {
             // Filter serials matching this item name
             const itemSerials = serials.filter(s => s.itemName === item.name);
-            
+
             // Map serial data to sheet rows
             let sheetRows = [];
             if (itemSerials.length > 0) {
@@ -1894,7 +1930,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const ws = XLSX.utils.json_to_sheet(sheetRows);
-            
+
             // Clean sheet name (SheetJS limits sheet tab names to max 31 characters)
             let sheetName = item.name.replace(/[\\\/\?\*\[\]\:]/g, "").substring(0, 30);
             if (!sheetName.trim()) {
@@ -1921,7 +1957,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const historyData = getHistory();
         const updated = historyData.filter(log => log.id !== logId);
-        
+
         saveHistory(updated);
         renderHistoryTable();
         renderInventoryPanel();
@@ -1939,7 +1975,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const logId = btn.getAttribute('data-id');
                     const historyData = getHistory();
                     const logItem = historyData.find(item => item.id === logId);
-                    
+
                     if (logItem) {
                         downloadLogExcel(logItem);
                     } else {
@@ -1990,7 +2026,7 @@ document.addEventListener('DOMContentLoaded', () => {
         itemsList.forEach(activeItem => {
             // Find all scanned serials belonging to this item
             const itemSerials = serialsByItemNameMap.get(activeItem.name) || [];
-            
+
             // Calculate item-specific pieces and unique boxes count
             const itemPieces = itemSerials.length;
             const uniqueBoxesSet = new Set(itemSerials.map(s => s.boxNo));
@@ -2125,7 +2161,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (items.length > 1) {
             // Show the selector group
             workstationProductSelectorGroup.style.display = 'block';
-            
+
             // Re-populate options, keeping current selection if valid
             const currentVal = workstationProductSelect.value;
             workstationProductSelect.innerHTML = '';
@@ -2159,7 +2195,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (activeSession && !activeSession.items) {
                 activeSession.items = [];
             }
-            
+
             // Backward compatibility conversion of legacy format to items array format
             if (!activeSession.items && activeSession.item) {
                 activeSession.items = [{
@@ -2226,7 +2262,7 @@ document.addEventListener('DOMContentLoaded', () => {
             compactBoxNumbers();
             updateSessionProgress();
             updateWorkstationProductSelector();
-            
+
             // Render restored cards
             renderBoxCards();
             // Check join authorization
@@ -2300,7 +2336,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function syncInventoryItemsToInboundList() {
         const uniqueItems = new Set();
-        
+
         // Gather from Inbound History (only from serialized logs)
         const inboundHistory = getHistory();
         inboundHistory.forEach(log => {
@@ -2354,7 +2390,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const li = document.createElement('li');
             li.className = 'custom-dropdown-item';
             li.setAttribute('data-value', item);
-            
+
             li.innerHTML = `
                 <span class="custom-dropdown-item-text">${item}</span>
                 <button type="button" class="btn-delete-dropdown-item" data-item="${item}" title="Delete Item">
@@ -2378,13 +2414,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', (e) => {
                     e.stopPropagation(); // Avoid triggering trigger toggle or selection click
-                    
+
                     const pwd = prompt(`Enter password to delete item "${item}":`);
                     if (pwd === '2026') {
                         inboundItems = inboundItems.filter(i => i !== item);
                         saveInboundItems();
                         renderDropdownItems();
-                        
+
                         // Reset if active item was deleted
                         if (configItemSelect && configItemSelect.value === item) {
                             configItemSelect.value = '';
@@ -2463,7 +2499,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (closeAddItemModalBtn) closeAddItemModalBtn.addEventListener('click', closeAddItemModal);
     if (cancelAddItemModalBtn) cancelAddItemModalBtn.addEventListener('click', closeAddItemModal);
-    
+
     // Save New Item and Add to selector dropdown
     if (newItemForm && newItemNameInput) {
         newItemForm.addEventListener('submit', (e) => {
@@ -2487,7 +2523,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === addItemModal) closeAddItemModal();
         if (e.target === addProductToActiveSessionModal) closeActiveProductModal();
         if (e.target === productWeightModal) closeWeightModal();
-        
+
         if (configItemDropdownContainer && !configItemDropdownContainer.contains(e.target)) {
             closeDropdownMenu();
         }
@@ -2511,7 +2547,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (inboundConfigForm) {
         inboundConfigForm.addEventListener('submit', (e) => {
             e.preventDefault();
-            
+
             const vehicleVal = document.getElementById('configVehicleNo').value.trim();
             const itemVal = configItemSelect.value;
             const parsed = parseInt(document.getElementById('configExpectedQty').value);
@@ -2538,14 +2574,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // Lock and update active session display
             if (activeSessionVehicle) activeSessionVehicle.textContent = activeSession.vehicle;
             updateSessionProgress();
-            
+
             // Render empty box cards container
             renderBoxCards();
             // Toggle dashboard states & set joined status
             localStorage.setItem('wms_inbound_joined', 'true');
             inboundInactiveState.style.display = 'none';
             inboundActiveState.style.display = 'flex';
-            
+
             // Save state to localStorage
             saveActiveSession();
             // Cleanup modals & autofocus unified scan input
@@ -2572,7 +2608,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const items = activeSession.items || [];
-        
+
         // Pre-group serials by itemName for O(1) lookup
         const serialsByItemMap = new Map();
         (activeSession.serials || []).forEach(s => {
@@ -2588,7 +2624,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let totalExpected = 0;
         let totalScanned = 0;
-        
+
         items.forEach(item => {
             totalExpected += parseInt(item.expectedQty) || 0;
             const itemSerials = serialsByItemMap.get(item.name) || [];
@@ -2605,7 +2641,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeSessionProgress.textContent = `${totalScanned} Scanned`;
             }
         }
-        
+
         // Pieces count
         const sessionScannedCount = document.getElementById('sessionScannedCount');
         if (sessionScannedCount) sessionScannedCount.textContent = totalScanned;
@@ -2625,15 +2661,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Render table rows inside activeSessionRowsContainer
         if (activeSessionRowsContainer) {
             activeSessionRowsContainer.innerHTML = '';
-            
+
             items.forEach(item => {
                 const tr = document.createElement('tr');
                 tr.style.cssText = 'border-bottom: 1px solid rgba(255, 255, 255, 0.05); font-size: 0.9rem;';
-                
-                const progressColor = item.expectedQty > 0 
+
+                const progressColor = item.expectedQty > 0
                     ? (item.scannedCount >= item.expectedQty ? 'var(--accent-emerald)' : 'var(--text-secondary)')
                     : 'var(--accent-blue)';
-                
+
                 // Initialize allowedPatterns if missing (legacy recovery)
                 if (!item.allowedPatterns) {
                     item.allowedPatterns = item.skuAlphabetPattern ? [{
@@ -2645,7 +2681,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Get accepted lengths list
                 const lengthsList = item.allowedPatterns.map(cfg => cfg.length);
                 const lengthVal = lengthsList.length > 0 ? `${lengthsList.join(', ')} Chars` : 'Not Locked Yet';
-                
+
                 const patternStyle = 'background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: var(--accent-blue); padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.8rem; font-family: var(--font-mono); display: block; margin-bottom: 4px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
 
                 let patternCellHtml = '';
@@ -2654,7 +2690,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const patStr = formatAlphabetPattern(cfg.pattern, cfg.length);
                         return `<span style="${patternStyle}" title="${patStr}">${patStr}</span>`;
                     }).join('');
-                    
+
                     patternCellHtml = `
                         <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: 250px; overflow: hidden;">
                             ${badgesHtml}
@@ -2697,7 +2733,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (addSkuBtn) {
                     addSkuBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        
+
                         const pwd = prompt(`Enter password to authorize adding a new SKU pattern structure (e.g. 2026):`);
                         if (pwd === '2026') {
                             const refSerial = prompt(`Scan or enter a reference serial number representing the new SKU format for "${item.name}":`);
@@ -2706,25 +2742,25 @@ document.addEventListener('DOMContentLoaded', () => {
                                 if (cleanRef) {
                                     const newPattern = extractAlphabetPattern(cleanRef);
                                     const newConfig = { pattern: newPattern, length: cleanRef.length };
-                                    
+
                                     if (!item.allowedPatterns) {
                                         item.allowedPatterns = item.skuAlphabetPattern ? [{
                                             pattern: item.skuAlphabetPattern,
                                             length: item.lockedLength || 15
                                         }] : [];
                                     }
-                                    
+
                                     // Avoid duplicates
                                     const exists = item.allowedPatterns.some(cfg => {
                                         return cfg.length === cleanRef.length && matchesAlphabetPattern(cleanRef, cfg.pattern);
                                     });
-                                    
+
                                     if (!exists) {
                                         item.allowedPatterns.push(newConfig);
                                         // update legacy fields for safety
                                         item.skuAlphabetPattern = newPattern;
                                         item.lockedLength = cleanRef.length;
-                                        
+
                                         updateSessionProgress();
                                         saveActiveSession();
                                         alert(`Success! Registered new SKU format of ${cleanRef.length} characters.`);
@@ -2744,7 +2780,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (deleteBtn) {
                     deleteBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        
+
                         if (activeSession.items.length <= 1) {
                             alert('Cannot delete the last remaining product in the session. Please use "Cancel Session" if you want to discard the entire session.');
                             return;
@@ -2754,7 +2790,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (pwd === '2026') {
                             // 1. Remove product item
                             activeSession.items = activeSession.items.filter(i => i.name !== item.name);
-                            
+
                             // 2. Remove all serials scanned under this product item
                             activeSession.serials = activeSession.serials.filter(s => s.itemName !== item.name);
 
@@ -2813,7 +2849,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Add Scanned Serial Helper (with Length Locking & SKU Verification) ---
     function addSerialToSession(serial, targetBoxNo) {
         if (!activeSession) return false;
-        
+
         lastRejectedIsSequence = false;
 
         // Clean serial number
@@ -2916,7 +2952,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 const firstConfig = matchedItem.allowedPatterns[0];
                 const expectedPatternStr = firstConfig ? formatAlphabetPattern(firstConfig.pattern, firstConfig.length) : 'Any Pattern';
-                
+
                 lastRejectedSerial = cleanSerial;
                 lastRejectedItemName = lookupProductBySerial(cleanSerial) || lookupProductBySkuPattern(cleanSerial) || 'Another Product';
                 lastRejectedIsSequence = false;
@@ -3000,7 +3036,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
             uniqueBoxes.sort((a, b) => a - b);
-            
+
             activeSession.serials.forEach(s => {
                 if (s.itemName === activeItem.name) {
                     s.boxNo = uniqueBoxes.indexOf(s.boxNo) + 1;
@@ -3022,7 +3058,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
             uniqueBoxes.sort((a, b) => a - b);
-            
+
             activeOutboundSession.serials.forEach(s => {
                 if (s.itemName === activeItem.name) {
                     s.boxNo = uniqueBoxes.indexOf(s.boxNo) + 1;
@@ -3052,9 +3088,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const deleteSerialBtn = e.target.closest('.btn-delete-serial');
             if (deleteSerialBtn && activeSession) {
                 const serialToRemove = deleteSerialBtn.getAttribute('data-serial');
-                
+
                 activeSession.serials = activeSession.serials.filter(s => s.serial !== serialToRemove);
-                
+
                 // Unlock length/pattern if scans drop to 0
                 checkAndUnlockProducts();
 
@@ -3070,7 +3106,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (deleteBoxBtn && activeSession) {
                 const boxToRemove = parseInt(deleteBoxBtn.getAttribute('data-box'));
                 const itemName = deleteBoxBtn.getAttribute('data-item-name');
-                
+
                 let confirmMsg = `Are you sure you want to delete entire Box ${boxToRemove} and all its serial numbers?`;
                 if (itemName) {
                     confirmMsg = `Are you sure you want to delete all serial numbers of "${itemName}" from Box ${boxToRemove}?`;
@@ -3082,7 +3118,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         activeSession.serials = activeSession.serials.filter(s => s.boxNo !== boxToRemove);
                     }
-                    
+
                     // Unlock length/pattern if scans drop to 0
                     checkAndUnlockProducts();
 
@@ -3186,7 +3222,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // We will collect all generated serials across all base codes to validate and insert them
         const allTempSerials = []; // Array of { serial, boxNo }
-        
+
         const itemSerials = activeSession.serials.filter(s => s.itemName === matchedItem.name);
         let maxBoxNo = itemSerials.reduce((max, item) => item.boxNo > max ? item.boxNo : max, 0);
 
@@ -3320,13 +3356,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (isPartialMatch) {
                     const expectedStr = activeAllowedPatterns.map(cfg => cfg.length).join(', ');
-                    
+
                     // Capture recovery state variables for approval handler
                     lastRejectedIsSequence = true;
                     lastRejectedSeqBase = baseCode;
                     lastRejectedSeqCount = count;
                     lastRejectedSerial = checkSerial;
-                    
+
                     const workstationProductSelect = document.getElementById('workstationProductSelect');
                     if (activeSession.items.length === 1) {
                         lastRejectedItemName = activeSession.items[0].name;
@@ -3386,7 +3422,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!activeSession) return;
             const count = activeSession.serials.length;
             const totalExpected = activeSession.items.reduce((sum, item) => sum + item.expectedQty, 0);
-            
+
             // Warn if count is less than expected, but allow them to bypass it with confirmation
             if (count < totalExpected) {
                 const remaining = totalExpected - count;
@@ -3395,7 +3431,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
             }
-            
+
             const productSummary = activeSession.items.map(i => `${i.name} (${i.expectedQty} expected)`).join(', ');
             const confirmMsg = `Are you sure you want to end and save this session?\n\nVehicle: ${activeSession.vehicle}\nProducts: ${productSummary}\nTotal Scanned: ${count} / ${totalExpected}`;
             if (confirm(confirmMsg)) {
@@ -3424,18 +3460,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 saveHistory(historyData);
                 currentEndingSessionLogId = newLogId;
- 
+
                 // Define callback to complete the session closure after weight configuration
                 const itemsToConfigure = activeSession.items.map(i => i.name).filter(Boolean);
                 window.completeEndInboundSession = function() {
                     // Reset dashboard inactive state
                     inboundActiveState.style.display = 'none';
                     inboundInactiveState.style.display = 'block';
-                    
+
                     // Clear state & active localStorage
                     activeSession = null;
                     saveActiveSession();
-     
+
                     // Re-render historical logs list
                     renderHistoryTable();
                     renderInventoryPanel();
@@ -3459,7 +3495,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (confirm("Are you sure you want to cancel this inbound session? All scanned serials in this session will be discarded.")) {
                 inboundActiveState.style.display = 'none';
                 inboundInactiveState.style.display = 'block';
-                
+
                 // Clear state & active localStorage
                 activeSession = null;
                 saveActiveSession();
@@ -3500,7 +3536,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const li = document.createElement('li');
             li.className = 'custom-dropdown-item';
             li.setAttribute('data-value', item);
-            
+
             li.innerHTML = `
                 <span class="custom-dropdown-item-text">${item}</span>
                 <button type="button" class="btn-delete-dropdown-item" data-item="${item}" title="Delete Item">
@@ -3530,7 +3566,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         saveInboundItems();
                         renderDropdownItems();
                         renderActiveDropdownItems();
-                        
+
                         if (activeConfigItemSelect && activeConfigItemSelect.value === item) {
                             activeConfigItemSelect.value = '';
                             if (activeConfigItemDropdownSelectedText) activeConfigItemDropdownSelectedText.textContent = 'Choose an item...';
@@ -3633,25 +3669,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const pwd = prompt("Enter password to authorize and register this new SKU pattern structure (e.g. 2026):");
             if (pwd === '2026') {
                 skuWarningModal.classList.remove('active');
-                
+
                 // Inbound recovery
                 if (lastRejectedSerial && lastRejectedItemName && activeSession) {
                     const targetItem = activeSession.items.find(i => i.name === lastRejectedItemName);
                     if (targetItem) {
                         const newPattern = extractAlphabetPattern(lastRejectedSerial);
                         const newConfig = { pattern: newPattern, length: lastRejectedSerial.length };
-                        
+
                         if (!targetItem.allowedPatterns) {
                             targetItem.allowedPatterns = targetItem.skuAlphabetPattern ? [{
                                 pattern: targetItem.skuAlphabetPattern,
                                 length: targetItem.lockedLength || 15
                             }] : [];
                         }
-                        
+
                         const exists = targetItem.allowedPatterns.some(cfg => {
                             return cfg.length === lastRejectedSerial.length && matchesAlphabetPattern(lastRejectedSerial, cfg.pattern);
                         });
-                        
+
                         if (!exists) {
                             targetItem.allowedPatterns.push(newConfig);
                             targetItem.skuAlphabetPattern = newPattern;
@@ -3673,18 +3709,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (targetItem) {
                         const newPattern = extractAlphabetPattern(lastRejectedSerial);
                         const newConfig = { pattern: newPattern, length: lastRejectedSerial.length };
-                        
+
                         if (!targetItem.allowedPatterns) {
                             targetItem.allowedPatterns = targetItem.skuAlphabetPattern ? [{
                                 pattern: targetItem.skuAlphabetPattern,
                                 length: targetItem.lockedLength || 15
                             }] : [];
                         }
-                        
+
                         const exists = targetItem.allowedPatterns.some(cfg => {
                             return cfg.length === lastRejectedSerial.length && matchesAlphabetPattern(lastRejectedSerial, cfg.pattern);
                         });
-                        
+
                         if (!exists) {
                             targetItem.allowedPatterns.push(newConfig);
                             targetItem.skuAlphabetPattern = newPattern;
@@ -3716,7 +3752,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (warningAddProductBtn && skuWarningModal) {
         warningAddProductBtn.addEventListener('click', () => {
             skuWarningModal.classList.remove('active');
-            
+
             // Outbound recovery & add product
             if (lastRejectedSerial && lastRejectedItemName && activeOutboundSession) {
                 let targetItem = activeOutboundSession.items.find(i => i.name === lastRejectedItemName);
@@ -3741,7 +3777,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 saveActiveOutboundSession();
-                
+
                 if (lastRejectedIsSequence) {
                     generateOutboundSequenceSerials(lastRejectedSeqBase, lastRejectedSeqCount);
                 } else {
@@ -3808,7 +3844,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (weightModalProductDesc) {
                         weightModalProductDesc.textContent = `Configure the weight per piece for "${itemName}". This will be used in outbound logs.`;
                     }
-                    
+
                     const weights = getProductWeights();
                     let activeWeight = weights[itemName];
                     if (logId) {
@@ -3819,7 +3855,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             activeWeight = logW;
                         }
                     }
-                    
+
                     if (weightInputVal) {
                         weightInputVal.value = activeWeight !== undefined ? activeWeight : '';
                     }
@@ -3840,7 +3876,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return;
         }
-        
+
         const itemName = weightConfigureQueue.shift();
         selectedWeightItemName = itemName;
         if (weightModalProductDesc) {
@@ -3886,7 +3922,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (selectedWeightItemName && weightInputVal) {
                 const val = weightInputVal.value.trim();
                 saveProductWeight(selectedWeightItemName, val);
-                
+
                 // If ending a session or editing a past log, save the weight specifically inside that history log
                 if (currentEndingSessionLogId) {
                     const historyData = getHistory();
@@ -3909,7 +3945,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderHistoryTable();
                 renderInventoryPanel();
                 renderOutboundHistoryTable();
-                
+
                 if (weightConfigureQueue.length > 0) {
                     setTimeout(() => {
                         processWeightConfigureQueue();
@@ -3935,10 +3971,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const startOutboundSessionBtn = document.getElementById('startOutboundSessionBtn');
     const endOutboundSessionBtn = document.getElementById('endOutboundSessionBtn');
     const cancelActiveOutboundSessionBtn = document.getElementById('cancelActiveOutboundSessionBtn');
-    
+
     const outboundInactiveState = document.getElementById('outboundInactiveState');
     const outboundActiveState = document.getElementById('outboundActiveState');
-    
+
     const outboundConfigModal = document.getElementById('outboundConfigModal');
     const closeOutboundConfigModalBtn = document.getElementById('closeOutboundConfigModalBtn');
     const cancelOutboundConfigModalBtn = document.getElementById('cancelOutboundConfigModalBtn');
@@ -3983,7 +4019,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (activeOutboundSession && !activeOutboundSession.items) {
                 activeOutboundSession.items = [];
             }
-            
+
             // Sanitize activeOutboundSession items
             if (activeOutboundSession.items) {
                 activeOutboundSession.items.forEach(item => {
@@ -4016,7 +4052,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('activeOutboundInvoice').textContent = activeOutboundSession.invoiceNo;
             const pincodeEl = document.getElementById('activeOutboundPincode');
             if (pincodeEl) pincodeEl.textContent = activeOutboundSession.pincode || 'N/A';
-            
+
             const odaBadge = document.getElementById('odaIndicatorBadge');
             if (odaBadge) {
                 if (activeOutboundSession.pincode) {
@@ -4111,14 +4147,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const modalSubmitBtn = document.getElementById('confirmOutboundSessionBtn');
                 if (modalTitle) modalTitle.textContent = 'Configure Outbound Session';
                 if (modalSubmitBtn) modalSubmitBtn.textContent = 'Lock Details & Start Scanning';
-                
+
                 document.getElementById('configShopName').value = '';
                 document.getElementById('configInvoiceNo').value = '';
                 const pinElReset = document.getElementById('configPincode');
                 if (pinElReset) pinElReset.value = '';
                 const addrElReset = document.getElementById('configAddress');
                 if (addrElReset) addrElReset.value = '';
-                
+
                 outboundConfigModal.classList.add('active');
             }
         });
@@ -4129,20 +4165,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnEditOutboundSessionInfo && outboundConfigModal) {
         btnEditOutboundSessionInfo.addEventListener('click', () => {
             if (!activeOutboundSession) return;
-            
+
             isEditingOutboundSession = true;
             const modalTitle = document.getElementById('outboundConfigModalTitle');
             const modalSubmitBtn = document.getElementById('confirmOutboundSessionBtn');
             if (modalTitle) modalTitle.textContent = 'Edit Outbound Session Details';
             if (modalSubmitBtn) modalSubmitBtn.textContent = 'Update Details';
-            
+
             document.getElementById('configShopName').value = activeOutboundSession.shopName || '';
             document.getElementById('configInvoiceNo').value = activeOutboundSession.invoiceNo || '';
             const pinEl = document.getElementById('configPincode');
             if (pinEl) pinEl.value = activeOutboundSession.pincode || '';
             const addrEl = document.getElementById('configAddress');
             if (addrEl) addrEl.value = activeOutboundSession.address || '';
-            
+
             outboundConfigModal.classList.add('active');
         });
     }
@@ -4252,11 +4288,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Parser logic
             const lines = val.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-            
+
             let shopName = '';
             let invoiceNo = '';
             let pincode = '';
-            
+
             // 1. Extract Invoice / Sales Order Number
             const invoiceRegexes = [
                 /\b(SO\s*-\s*[A-Za-z0-9\-\_\/]+(?:\s*\/[A-Za-z0-9\-\_\/]+)*)\b/i,
@@ -4264,7 +4300,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 /(?:Sales\s*Order|Invoice|SO|Order)\s*(?:No\.?|#)\s*[:\-]?\s*([A-Za-z0-9\-\_\/\s]+)/i,
                 /(?:Sales\s*Order|Invoice|SO|Order)\s*[:\-]\s*([A-Za-z0-9\-\_\/\s]+)/i
             ];
-            
+
             for (const regex of invoiceRegexes) {
                 const match = val.match(regex);
                 if (match && match[1]) {
@@ -4272,7 +4308,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Split by double-spaces, tab, or common keywords to avoid capturing trailing fields
                     cleaned = cleaned.split(/\s{2,}/)[0]; // stop at double spaces
                     cleaned = cleaned.split('\t')[0]; // stop at tabs
-                    
+
                     // Stop at common invoice keywords
                     const stopKeywords = [/order\s*date/i, /date/i, /terms/i, /place/i, /gst/i];
                     for (const kw of stopKeywords) {
@@ -4281,20 +4317,20 @@ document.addEventListener('DOMContentLoaded', () => {
                             cleaned = cleaned.substring(0, kwIdx).trim();
                         }
                     }
-                    
+
                     // Remove trailing non-alphanumeric punctuation
                     cleaned = cleaned.replace(/[\:\-\s]+$/, '').trim();
-                    
+
                     // Reject if it matches a common keyword like "Sales Order" or "Order" or is too short
                     if (cleaned.toLowerCase() === 'sales order' || cleaned.toLowerCase() === 'order' || cleaned.length < 3) {
                         continue;
                     }
-                    
+
                     invoiceNo = cleaned;
                     break;
                 }
             }
-            
+
             // 2. Extract Shop Name
             let headerIndex = -1;
             for (let i = 0; i < lines.length; i++) {
@@ -4303,7 +4339,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                 }
             }
-            
+
             if (headerIndex !== -1) {
                 // Find the first valid non-empty line after "Bill To" or "Ship To"
                 for (let i = headerIndex + 1; i < Math.min(lines.length, headerIndex + 6); i++) {
@@ -4313,18 +4349,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (/Date|Order|SO|Invoice/i.test(line)) continue;
                     if (/Address|Mobile|Phone|Email/i.test(line)) continue;
                     if (line.match(/^\d+$/)) continue; // skip pure numbers
-                    
+
                     shopName = line;
                     break;
                 }
             }
-            
+
             // 3. Extract Shipping Pincode (last 6-digit number in the document)
             const pincodes = val.match(/\b\d{6}\b/g) || [];
             if (pincodes.length > 0) {
                 pincode = pincodes[pincodes.length - 1];
             }
-            
+
             // 4. Extract Drop Address (text after customer GSTIN / last GSTIN)
             let extractedAddress = '';
             const gstinRegex = /(?:GSTIN|GST)\s*[:\-]?\s*([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Zz][0-9A-Z]{1})|\b([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Zz][0-9A-Z]{1})\b/gi;
@@ -4377,7 +4413,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (addrEl) addrEl.value = extractedAddress;
                 filled = true;
             }
-            
+
             if (filled) {
                 // Clear the paste area immediately after successful extraction to keep UI clean
                 outboundInvoicePasteArea.value = '';
@@ -4619,7 +4655,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 false,
                 false
             );
-            
+
             deletedSerialDismissTimer = setTimeout(() => {
                 skuWarningModal.classList.remove('active');
                 deletedSerialDismissTimer = null;
@@ -4729,12 +4765,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     lockedLength: null,
                     allowedPatterns: []
                 };
-                
+
                 const newPattern = extractAlphabetPattern(serial);
                 newItemObj.skuAlphabetPattern = newPattern;
                 newItemObj.lockedLength = serial.length;
                 newItemObj.allowedPatterns.push({ pattern: newPattern, length: serial.length });
-                
+
                 activeOutboundSession.items.push(newItemObj);
                 saveOutboundSerial(serial, productName);
                 return true;
@@ -4823,7 +4859,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveOutboundSerial(serial, productName) {
         if (!activeOutboundSession) return;
-        
+
         // 1 action = 1 box: get max box number for this product and add 1
         const itemSerials = activeOutboundSession.serials.filter(s => s.itemName === productName);
         const maxBoxNo = itemSerials.reduce((max, item) => item.boxNo > max ? item.boxNo : max, 0);
@@ -4884,12 +4920,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     lockedLength: null,
                     allowedPatterns: []
                 };
-                
+
                 const newPattern = extractAlphabetPattern(baseCode);
                 newItemObj.skuAlphabetPattern = newPattern;
                 newItemObj.lockedLength = baseCode.length;
                 newItemObj.allowedPatterns.push({ pattern: newPattern, length: baseCode.length });
-                
+
                 activeOutboundSession.items.push(newItemObj);
                 generateOutboundSequenceSerials(baseCode, count);
                 return;
@@ -4955,7 +4991,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         });
-        
+
         const activeSerialsSet = new Set(activeOutboundSession.serials.map(s => s.serial));
 
         for (const code of generatedBatch) {
@@ -5108,15 +5144,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const body = document.getElementById('outboundHistoryBody');
         if (!body) return;
         body.innerHTML = '';
-        
+
         const mobileContainer = document.getElementById('outboundHistoryMobileCards');
         if (mobileContainer) {
             mobileContainer.innerHTML = '';
         }
-        
+
         let todayBoxesSum = 0;
         let todayWeightSum = 0;
-        
+
         const historyData = getOutboundHistory();
 
         const trFrag = document.createDocumentFragment();
@@ -5197,8 +5233,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Build checkbox indicator HTML
             const isChecked = row.isChecked || false;
-            const checkedIcon = isChecked 
-                ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width: 20px; height: 20px; color: var(--accent-emerald); display: block; margin: 0 auto;"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd" /></svg>` 
+            const checkedIcon = isChecked
+                ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width: 20px; height: 20px; color: var(--accent-emerald); display: block; margin: 0 auto;"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd" /></svg>`
                 : `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px; color: var(--text-muted); display: block; margin: 0 auto;"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
 
             tr.innerHTML = `
@@ -5231,7 +5267,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     })()}
                 </td>
                 <td>
-                    ${row.courierRecommendation 
+                    ${row.courierRecommendation
                         ? `<span style="display:inline-flex; align-items:center; gap:5px; background:#1d4ed8; color:#fff; padding:3px 10px; border-radius:6px; font-size:0.75rem; font-weight:800; white-space:nowrap;">🚚 ${row.courierRecommendation}</span>`
                         : `<span style="color:var(--text-muted); font-size:0.8rem;">—</span>`}
                 </td>
@@ -5283,7 +5319,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Checkbox mark status indicator
                 const mobileCheckIcon = isChecked
-                    ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width: 18px; height: 18px; color: var(--accent-emerald); cursor: pointer;"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd" /></svg>` 
+                    ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width: 18px; height: 18px; color: var(--accent-emerald); cursor: pointer;"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd" /></svg>`
                     : `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; color: var(--text-muted); cursor: pointer;"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
 
                 // Item pills list with pink bullet point
@@ -5365,7 +5401,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span style="color: #10b981; font-weight: 800; font-family: var(--font-mono); font-size: 0.95rem;">${totalWeight.toFixed(3)} kg</span>
                         </div>
 
-                        ${row.courierRecommendation 
+                        ${row.courierRecommendation
                             ? `<div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; border-top: 1px dashed var(--border-color); padding-top: 6px;">
                                 <span style="color: #8a8f9e; font-weight: 500;">Courier:</span>
                                 <span style="background: #1d4ed8; color: #ffffff; padding: 3px 10px; border-radius: 6px; font-size: 0.78rem; font-weight: 800; display: inline-flex; align-items: center; gap: 4px;">🚚 ${row.courierRecommendation}</span>
@@ -5431,7 +5467,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const now = new Date();
             const dateStr = now.toLocaleDateString('en-GB').replace(/\//g, '-'); // DD-MM-YYYY
             const timeStr = now.toLocaleTimeString('en-US', { hour12: false });
-            
+
             // Header text inside cell A1 of every sheet
             let headerText = `${log.shopName} - ${lastIdPart} - ${dateStr} ${timeStr}`;
             if (log.pincode) {
@@ -5483,7 +5519,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const safeId = lastIdPart.replace(/[^a-zA-Z0-9]/g, '_');
             const fileDate = now.toISOString().slice(0, 10).replace(/-/g, '_');
             const fileTime = now.toLocaleTimeString('en-US', { hour12: false }).replace(/:/g, '-');
-            
+
             const filename = `${safeShop}_${safeId}_${fileDate}_${fileTime}`.toUpperCase() + ".xlsx";
             XLSX.writeFile(wb, filename);
         } catch (excelErr) {
@@ -5499,10 +5535,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('outboundActiveRowsContainer');
         if (container) {
             container.innerHTML = '';
-            
+
             const items = activeOutboundSession.items || [];
             const frag = document.createDocumentFragment();
-            
+
             // Pre-group serials by itemName for O(1) lookup
             const serialsByItemMap = new Map();
             (activeOutboundSession.serials || []).forEach(s => {
@@ -5519,14 +5555,14 @@ document.addEventListener('DOMContentLoaded', () => {
             items.forEach(item => {
                 const itemSerials = serialsByItemMap.get(item.name) || [];
                 const scannedCount = itemSerials.length;
-                
+
                 let subtotalWeight = 0;
                 itemSerials.forEach(s => {
                     subtotalWeight += resolveItemWeight(s.serial, s.itemName);
                 });
-                
+
                 const tr = document.createElement('tr');
-                
+
                 // Initialize allowedPatterns if missing (legacy recovery)
                 if (!item.allowedPatterns) {
                     item.allowedPatterns = item.skuAlphabetPattern ? [{
@@ -5543,7 +5579,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const patStr = formatAlphabetPattern(cfg.pattern, cfg.length);
                         return `<span style="${patternStyle}" title="${patStr}">${patStr}</span>`;
                     }).join('');
-                    
+
                     patternCellHtml = `
                         <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: 250px; overflow: hidden;">
                             ${badgesHtml}
@@ -5579,7 +5615,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (addSkuBtn) {
                     addSkuBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        
+
                         const pwd = prompt(`Enter password to authorize adding a new SKU pattern structure (e.g. 2026):`);
                         if (pwd === '2026') {
                             const refSerial = prompt(`Scan or enter a reference serial number representing the new SKU format for "${item.name}":`);
@@ -5588,25 +5624,25 @@ document.addEventListener('DOMContentLoaded', () => {
                                 if (cleanRef) {
                                     const newPattern = extractAlphabetPattern(cleanRef);
                                     const newConfig = { pattern: newPattern, length: cleanRef.length };
-                                    
+
                                     if (!item.allowedPatterns) {
                                         item.allowedPatterns = item.skuAlphabetPattern ? [{
                                             pattern: item.skuAlphabetPattern,
                                             length: item.lockedLength || 15
                                         }] : [];
                                     }
-                                    
+
                                     // Avoid duplicates
                                     const exists = item.allowedPatterns.some(cfg => {
                                         return cfg.length === cleanRef.length && matchesAlphabetPattern(cleanRef, cfg.pattern);
                                     });
-                                    
+
                                     if (!exists) {
                                         item.allowedPatterns.push(newConfig);
                                         // update legacy fields for safety
                                         item.skuAlphabetPattern = newPattern;
                                         item.lockedLength = cleanRef.length;
-                                        
+
                                         saveActiveOutboundSession();
                                         updateOutboundSessionProgress();
                                         alert(`Success! Registered new SKU format of ${cleanRef.length} characters.`);
@@ -5631,7 +5667,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const itemBoxes = new Set(itemSerials.map(s => s.boxNo)).size;
             uniqueBoxes += itemBoxes;
         });
-        
+
         let totalWeight = 0;
         activeOutboundSession.serials.forEach(s => {
             totalWeight += resolveItemWeight(s.serial, s.itemName);
@@ -5641,7 +5677,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (countText) {
             countText.textContent = `${totalPcs} Scans across ${uniqueBoxes} boxes`;
         }
-        
+
         const weightText = document.getElementById('activeOutboundWeight');
         if (weightText) {
             weightText.textContent = `${totalWeight.toFixed(3)} kg`;
@@ -5788,12 +5824,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             e.stopPropagation();
                             if (confirm(`Are you sure you want to delete entire Box #${boxNo} of product "${item.name}"? This will delete all ${boxItems.length} scanned serials in this box.`)) {
                                 activeOutboundSession.serials = activeOutboundSession.serials.filter(x => !(x.boxNo === boxNo && x.itemName === item.name));
-                                
+
                                 const remainingForProduct = activeOutboundSession.serials.some(x => x.itemName === item.name);
                                 if (!remainingForProduct) {
                                     activeOutboundSession.items = activeOutboundSession.items.filter(x => x.name !== item.name);
                                 }
-                                
+
                                 compactOutboundBoxNumbers();
                                 saveActiveOutboundSession();
                                 updateOutboundSessionProgress();
@@ -5805,13 +5841,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     const serialsUl = document.createElement('ul');
                     serialsUl.style.cssText = 'list-style: none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px;';
                     const serialsFrag = document.createDocumentFragment();
-                    
+
                     boxItems.forEach(s => {
                         const li = document.createElement('li');
                         li.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 4px; font-size:0.85rem; font-family:var(--font-mono); border: 1px solid rgba(255,255,255,0.04);';
-                        
-                        const displayVal = (s.serial.startsWith('WOS-OUT-') || s.serial.startsWith('Without Serial Number') || s.serial.includes('WOS-')) 
-                            ? `<span style="color: var(--accent-amber); font-weight: 700; font-style: italic; font-family: var(--font-sans);">[Non-Serial Item]</span>` 
+
+                        const displayVal = (s.serial.startsWith('WOS-OUT-') || s.serial.startsWith('Without Serial Number') || s.serial.includes('WOS-'))
+                            ? `<span style="color: var(--accent-amber); font-weight: 700; font-style: italic; font-family: var(--font-sans);">[Non-Serial Item]</span>`
                             : s.serial;
 
                         li.innerHTML = `
@@ -6127,24 +6163,24 @@ document.addEventListener('DOMContentLoaded', () => {
             if (restoreBtn) {
                 e.stopPropagation();
                 const logId = restoreBtn.getAttribute('data-id');
-                
+
                 const pass = prompt("Enter Admin Password to restore this Outbound Session:");
                 if (pass === null) return;
                 if (pass !== '1998') {
                     alert("Incorrect password!");
                     return;
                 }
-                
+
                 if (activeOutboundSession) {
                     alert("Cannot restore! An active Outbound session is already running. Please cancel or save the current session first.");
                     return;
                 }
-                
+
                 const historyData = getOutboundHistory();
                 const logIndex = historyData.findIndex(item => item.id === logId);
                 if (logIndex !== -1) {
                     const restoredLog = historyData[logIndex];
-                    
+
                     // Populate activeOutboundSession
                     activeOutboundSession = {
                         id: restoredLog.id,
@@ -6153,16 +6189,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         items: restoredLog.items || [],
                         serials: restoredLog.serials || []
                     };
-                    
+
                     // Remove from history
                     historyData.splice(logIndex, 1);
-                    
+
                     // Save & reload
                     saveActiveOutboundSession();
                     saveOutboundHistory(historyData);
                     restoreOutboundSessionState();
                     renderInventoryPanel();
-                    
+
                     alert("Outbound session successfully restored to workstation!");
                 } else {
                     alert('Log record not found.');
@@ -6249,23 +6285,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const productStock = {};
         const weights = getProductWeights();
         const damageRecords = getDamageRecords();
-        const damageSerials = new Set(damageRecords.map(r => r.serial.trim().toUpperCase()));
- 
+        const damageSerials = new Set(damageRecords.map(r => String(r.serial || '').trim().toUpperCase()).filter(Boolean));
+
         // Copy outbound counts to keep track of remaining to deduct for WOS (FIFO)
+        const remainingQuantityDamage = {};
+        getDamageRecords().forEach(r => {
+            if (r && !r.serial && r.itemName) {
+                remainingQuantityDamage[r.itemName] = (remainingQuantityDamage[r.itemName] || 0) + Math.max(0, Number(r.quantity) || 0);
+            }
+        });
         const remainingWosOutbound = {};
         Object.keys(outboundCountsByProduct).forEach(key => {
             remainingWosOutbound[key] = outboundCountsByProduct[key];
         });
- 
+
         // Copy unmatched outbound counts to decrement them as we deduct from inbound logs in FIFO order
         const remainingUnmatchedOutbound = {};
         Object.keys(unmatchedOutboundCounts).forEach(key => {
             remainingUnmatchedOutbound[key] = unmatchedOutboundCounts[key];
         });
- 
+
         // Process inbound history from oldest to newest (FIFO)
         const inboundHistoryReversed = [...inboundHistory].reverse();
-        
+
         inboundHistoryReversed.forEach(log => {
             const name = log.item;
             if (log.serials && log.serials.length > 0) {
@@ -6281,13 +6323,15 @@ document.addEventListener('DOMContentLoaded', () => {
                             name: itemName,
                             inboundCount: 0,
                             serialsCount: 0,
+                            freshCount: 0,
+                            damagedCount: 0,
                             availableWeight: 0,
                             boxNumbers: new Set()
                         };
                     }
-                    
+
                     productStock[itemName].inboundCount++;
-                    
+
                     // Deduction logic: dispatch if matched exactly, or if matched to an unmatched count for this product in FIFO order
                     let isDispatched = false;
                     if (outboundSerialsSet.has(cleanInboundSerial)) {
@@ -6299,9 +6343,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (!isDispatched) {
                         productStock[itemName].serialsCount++;
+                        if (damageSerials.has(cleanInboundSerial)) {
+                            productStock[itemName].damagedCount++;
+                        } else {
+                            productStock[itemName].freshCount++;
+                        }
                         productStock[itemName].availableWeight += unitWeight;
                         productStock[itemName].boxNumbers.add(s.boxNo);
-                        
+
                         availableSerials.push({
                             serial: s.serial,
                             itemName: itemName,
@@ -6316,17 +6365,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (name && log.count > 0) {
                     const logW = resolveLogWeight(log, name);
                     const unitWeight = (logW !== undefined) ? logW : (parseFloat(weights[name]) || 0);
-                    
+
                     if (!productStock[name]) {
                         productStock[name] = {
                             name: name,
                             inboundCount: 0,
                             serialsCount: 0,
+                            freshCount: 0,
+                            damagedCount: 0,
                             availableWeight: 0,
                             boxNumbers: new Set()
                         };
                     }
-                    
+
                     productStock[name].inboundCount += log.count;
 
                     // FIFO subtraction logic for WOS
@@ -6338,9 +6389,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         const availableQty = inboundQty - remOut;
                         remainingWosOutbound[name] = 0;
-                        
+
+                        const qtyDamaged = Math.min(availableQty, remainingQuantityDamage[name] || 0);
+                        remainingQuantityDamage[name] = Math.max(0, (remainingQuantityDamage[name] || 0) - qtyDamaged);
+                        const freshQty = availableQty - qtyDamaged;
                         productStock[name].serialsCount += availableQty;
-                        productStock[name].availableWeight += (availableQty * unitWeight);
+                        productStock[name].freshCount += freshQty;
+                        productStock[name].damagedCount += qtyDamaged;
+                        productStock[name].availableWeight += (freshQty * unitWeight);
                         if (log.wosBoxNo || log.boxNo) {
                             productStock[name].boxNumbers.add(log.wosBoxNo || log.boxNo);
                         }
@@ -6350,16 +6406,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Set Overview Available Stock Counters
-        const uniqueProductNames = Object.keys(productStock).filter(name => productStock[name].serialsCount > 0);
-        const totalAvailableCount = Object.values(productStock).reduce((sum, item) => sum + item.serialsCount, 0);
-        const outOfStockProducts = Object.values(productStock).filter(item => item.serialsCount === 0);
+        const uniqueProductNames = Object.keys(productStock).filter(name => productStock[name].freshCount > 0);
+        const totalAvailableCount = Object.values(productStock).reduce((sum, item) => sum + item.freshCount, 0);
+        const outOfStockProducts = Object.values(productStock).filter(item => item.freshCount === 0);
         const outOfStockCount = outOfStockProducts.length;
-        
+
         const totalBoxesEl = document.getElementById('inventoryTotalBoxes');
         const totalWeightEl = document.getElementById('inventoryTotalWeight');
         const outOfStockCountEl = document.getElementById('inventoryOutOfStockCount');
 
-        const totalAvailableBoxes = Object.values(productStock).reduce((sum, item) => sum + (item.serialsCount > 0 ? item.boxNumbers.size : 0), 0);
+        const totalAvailableBoxes = Object.values(productStock).reduce((sum, item) => sum + (item.freshCount > 0 ? item.boxNumbers.size : 0), 0);
         const totalAvailableWeight = Object.values(productStock).reduce((sum, item) => {
             return sum + item.availableWeight;
         }, 0);
@@ -6372,7 +6428,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const totalDamagedEl = document.getElementById('inventoryTotalDamaged');
         if (totalDamagedEl) {
-            totalDamagedEl.textContent = damageRecords.length;
+            totalDamagedEl.textContent = Object.values(productStock).reduce((sum, item) => sum + item.damagedCount, 0);
         }
 
         // Map Colors dynamically to products
@@ -6389,8 +6445,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (registerBody) {
             // Sort to place Out of Stock items at the top
             const sortedRegisterStock = Object.values(productStock).sort((a, b) => {
-                const aIsOut = a.serialsCount === 0 ? 1 : 0;
-                const bIsOut = b.serialsCount === 0 ? 1 : 0;
+                const aIsOut = a.freshCount === 0 ? 1 : 0;
+                const bIsOut = b.freshCount === 0 ? 1 : 0;
                 if (aIsOut !== bIsOut) {
                     return bIsOut - aIsOut;
                 }
@@ -6400,18 +6456,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const registerRowsHtml = sortedRegisterStock.map(item => {
                 const totalWeight = item.availableWeight;
                 const theme = productColorsMap[item.name] || colorThemes[0];
-                const isOut = item.serialsCount === 0;
-                
-                const qtyHtml = isOut 
-                    ? `<span style="color: var(--accent-rose); font-weight: 800; background: rgba(244, 63, 94, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(244, 63, 94, 0.15); font-size: 0.72rem; text-transform: uppercase;">Out of Stock</span>` 
-                    : item.serialsCount;
-                
+                const isOut = item.freshCount === 0;
+
+                const qtyHtml = isOut
+                    ? `<span style="color: var(--accent-rose); font-weight: 800; background: rgba(244, 63, 94, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(244, 63, 94, 0.15); font-size: 0.72rem; text-transform: uppercase;">Out of Stock</span>`
+                    : item.freshCount;
+
                 return `
                     <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05); ${isOut ? 'opacity: 0.75;' : ''}">
                         <td style="padding: 10px 8px; font-weight: 700; color: var(--text-primary);" title="${item.name}">
                             <span style="border-left: 3px solid ${isOut ? 'var(--accent-rose)' : theme.text}; padding-left: 6px;">${item.name}</span>
                         </td>
-                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: var(--text-secondary);">${qtyHtml}</td>
+                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: var(--accent-emerald);">${qtyHtml}</td>
+                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: var(--accent-rose);">${item.damagedCount}</td>
+                        <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: var(--text-secondary);">${item.serialsCount}</td>
                         <td class="font-mono" style="padding: 10px 8px; text-align: right; font-weight: 700; color: ${isOut ? 'var(--text-muted)' : 'var(--accent-emerald)'};">${totalWeight.toFixed(3)} kg</td>
                     </tr>
                 `;
@@ -6446,7 +6504,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             const isDispatched = outboundSerialsSet.has(s.serial);
                             const isDamaged = damageSerials.has(s.serial.trim().toUpperCase());
                             const outDetails = outboundDetailsMap[s.serial];
-                            
+
                             let status = 'In Stock';
                             if (isDispatched) status = 'Dispatched';
                             else if (isDamaged) status = 'Damaged';
@@ -6455,7 +6513,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 serial: s.serial,
                                 itemName: name,
                                 status: status,
-                                details: isDispatched 
+                                details: isDispatched
                                     ? `Out to: ${outDetails.shopName} | Invoice: ${outDetails.invoiceNo} (${outDetails.timestamp})`
                                     : `Inwarded: ${log.timestamp} | Vehicle: ${log.vehicle || 'N/A'}`
                             });
@@ -6487,7 +6545,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const card = document.createElement('div');
             card.className = 'inventory-serial-card';
             const theme = productColorsMap[s.itemName] || colorThemes[0];
-            
+
             let borderStyle = `border: 1px solid ${theme.border};`;
             let badgeBg = 'rgba(16, 185, 129, 0.15)';
             let badgeColor = 'var(--accent-emerald)';
@@ -6550,10 +6608,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderDeletedSerialsPanel() {
         const container = document.getElementById('deletedSerialsListContainer');
         if (!container) return;
-        
+
         container.innerHTML = '';
         const deletedList = getDeletedSerials();
-        
+
         if (deletedList.length === 0) {
             container.innerHTML = `
                 <div style="color: var(--text-muted); font-style: italic; text-align: center; padding: 32px 16px;">
@@ -6612,13 +6670,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     sourceInboundLogId = log.id;
                     sourceBoxNo = found.boxNo || 1;
                     itemName = found.itemName || log.item;
-                    
+
                     // Filter out the serial
                     log.serials = log.serials.filter(s => s.serial !== serial);
                     inboundUpdated = true;
                     // Recalculate count
                     log.count = log.serials.length;
-                    
+
                     // If multi-item format exists, update matching item's scannedCount
                     if (log.items) {
                         log.items.forEach(item => {
@@ -6643,11 +6701,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const found = log.serials.find(s => s.serial === serial);
                 if (found) {
                     sourceOutboundLogId = log.id;
-                    
+
                     // Filter out
                     log.serials = log.serials.filter(s => s.serial !== serial);
                     outboundUpdated = true;
-                    
+
                     // Update items scannedCount
                     if (log.items) {
                         log.items.forEach(item => {
@@ -6884,7 +6942,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         let text = '';
-        
+
         for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
@@ -7069,13 +7127,13 @@ document.addEventListener('DOMContentLoaded', () => {
             lines.forEach((line, idx) => {
                 if (line.toLowerCase().includes('monitor') || line.toLowerCase().includes('led') || line.toLowerCase().includes('warranty')) {
                     if (idx > 0 && (lines[idx-1].toLowerCase().includes('monitor') || lines[idx-1].toLowerCase().includes('led'))) {
-                        return; 
+                        return;
                     }
                     let qty = 1;
                     const nextLine = lines[idx + 1] || '';
                     const qtyMatch = nextLine.match(/\b(\d+)\b/);
                     if (qtyMatch) qty = parseInt(qtyMatch[1]);
-                    
+
                     parsedItems.push({
                         rawName: line,
                         qty: qty
@@ -7110,10 +7168,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // State (matching list of Indian States)
         const statesList = [
-            "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", 
-            "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", 
-            "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", 
-            "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", 
+            "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat",
+            "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh",
+            "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab",
+            "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh",
             "Uttarakhand", "West Bengal", "Delhi", "Jammu and Kashmir", "Ladakh", "Puducherry"
         ];
         let foundState = '';
@@ -7163,9 +7221,9 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(`Duplicate Order Alert!\nSales Order "${soNum}" already exists in the Active Queue.`);
             return;
         }
-        
+
         const orderId = "q_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
-        
+
         queue.push({
             id: orderId,
             shopName: shopName,
@@ -7195,13 +7253,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const clean = soItemName.trim().toLowerCase();
         const exact = knownProducts.find(p => p.toLowerCase() === clean);
         if (exact) return exact;
-        
+
         const contains = knownProducts.find(p => {
             const lp = p.toLowerCase();
             return lp.includes(clean) || clean.includes(lp);
         });
         if (contains) return contains;
-        
+
         const parts = clean.split(/\s+/).filter(p => p.length > 2 && p !== 'led' && p !== 'hdmi');
         if (parts.length > 0) {
             const matched = knownProducts.find(p => {
@@ -7224,7 +7282,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const unmatchedOutboundCounts = {};
 
         const damageRecords = getDamageRecords();
-        const damageSerials = new Set(damageRecords.map(r => r.serial.trim().toUpperCase()));
+        const damageSerials = new Set(damageRecords.map(r => String(r.serial || '').trim().toUpperCase()).filter(Boolean));
 
         const inboundSerialsSet = new Set();
         const inboundHistory = getHistory();
@@ -7262,6 +7320,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const productStock = {};
         const weights = getProductWeights();
 
+        const remainingQuantityDamage = {};
+        getDamageRecords().forEach(r => {
+            if (r && !r.serial && r.itemName) {
+                remainingQuantityDamage[r.itemName] = (remainingQuantityDamage[r.itemName] || 0) + Math.max(0, Number(r.quantity) || 0);
+            }
+        });
         const remainingWosOutbound = {};
         Object.keys(outboundCountsByProduct).forEach(key => {
             remainingWosOutbound[key] = outboundCountsByProduct[key];
@@ -7273,7 +7337,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const inboundHistoryReversed = [...inboundHistory].reverse();
-        
+
         inboundHistoryReversed.forEach(log => {
             const name = log.item;
             if (log.serials && log.serials.length > 0) {
@@ -7288,10 +7352,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!productStock[itemName]) {
                         productStock[itemName] = {
                             name: itemName,
-                            serialsCount: 0
+                            serialsCount: 0,
+                            freshCount: 0
                         };
                     }
-                    
+
                     let isDispatched = false;
                     if (outboundSerialsSet.has(cleanInboundSerial)) {
                         isDispatched = true;
@@ -7302,6 +7367,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (!isDispatched) {
                         productStock[itemName].serialsCount++;
+                        productStock[itemName].freshCount++;
                     }
                 });
             } else {
@@ -7309,10 +7375,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!productStock[name]) {
                         productStock[name] = {
                             name: name,
-                            serialsCount: 0
+                            serialsCount: 0,
+                            freshCount: 0
                         };
                     }
-                    
+
                     const inboundQty = log.count;
                     const remOut = remainingWosOutbound[name] || 0;
                     if (remOut >= inboundQty) {
@@ -7320,7 +7387,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         const availableQty = inboundQty - remOut;
                         remainingWosOutbound[name] = 0;
+                        const qtyDamaged = Math.min(availableQty, remainingQuantityDamage[name] || 0);
+                        remainingQuantityDamage[name] = Math.max(0, (remainingQuantityDamage[name] || 0) - qtyDamaged);
                         productStock[name].serialsCount += availableQty;
+                        productStock[name].freshCount += availableQty - qtyDamaged;
                     }
                 }
             }
@@ -7438,7 +7508,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     saveWosItems(currentWosItems);
                     renderWosDropdownItems();
                 }
-                
+
                 // Automatically select the newly created item
                 if (wosItemSelect) wosItemSelect.value = cleanName;
                 if (wosItemDropdownSelectedText) wosItemDropdownSelectedText.textContent = cleanName;
@@ -7564,7 +7634,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderOutboundWosDropdownItems() {
         if (!outboundWosItemDropdownList) return;
         outboundWosItemDropdownList.innerHTML = '';
-        
+
         // Scan completed Inbound history to find items successfully inwarded without serial numbers!
         const history = getHistory();
         const inwardedWosItems = Array.from(new Set(
@@ -7836,7 +7906,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             data.forEach(row => {
                 const tr = document.createElement('tr');
-                
+
                 // Color code Activity
                 const badgeColor = row.activity === 'INWARD' ? 'var(--accent-blue)' : 'var(--accent-rose)';
                 const badgeBg = row.activity === 'INWARD' ? 'rgba(59,130,246,0.1)' : 'rgba(244,63,94,0.1)';
@@ -7944,7 +8014,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dot = document.getElementById('systemStatusDot');
         const text = document.getElementById('systemStatusText');
         if (!dot || !text) return;
-        
+
         if (connected) {
             dot.style.backgroundColor = 'var(--accent-emerald)';
             dot.style.boxShadow = '0 0 8px var(--accent-emerald)';
@@ -7988,7 +8058,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const accessLockOverlay = document.getElementById('accessLockOverlay');
     const accessOverlayDeviceId = document.getElementById('accessOverlayDeviceId');
     const btnUnlockOverlayWithPass = document.getElementById('btnUnlockOverlayWithPass');
-    
+
     if (accessOverlayDeviceId) {
         accessOverlayDeviceId.textContent = deviceId;
     }
@@ -8133,7 +8203,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ttsAudioEl.src = url;
                 ttsAudioEl.playbackRate = rate;
                 ttsAudioEl.volume = 1.0;
-                
+
                 ttsAudioEl.onended = () => {
                     isSpeaking = false;
                     processSpeechQueue();
@@ -8166,7 +8236,7 @@ document.addEventListener('DOMContentLoaded', () => {
         utterance.lang = 'en-US';
         utterance.rate = rate;
         utterance.pitch = 1.0;
-        
+
         utterance.onend = () => {
             isSpeaking = false;
             processSpeechQueue();
@@ -8406,7 +8476,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnClearAllDevicesBtn.addEventListener('click', () => {
             const msg = "Are you sure you want to clear all device authorization records?\n\nThis will instantly lock all other devices. If your own device is locked, you can unlock it using the Admin Password '1998'.";
             if (!confirm(msg)) return;
-            
+
             if (isFirebaseConnected && db) {
                 db.ref('wms_data/devices').set(null).then(() => {
                     alert("All device records cleared successfully.");
@@ -8421,7 +8491,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadDevicesInManager() {
         if (!isFirebaseConnected || !db || !deviceManagerTableBody) return;
-        
+
         db.ref('wms_data/devices').on('value', (snapshot) => {
             deviceManagerTableBody.innerHTML = '';
             const devices = snapshot.val();
@@ -8433,7 +8503,7 @@ document.addEventListener('DOMContentLoaded', () => {
             Object.values(devices).forEach(dev => {
                 const tr = document.createElement('tr');
                 tr.style.borderBottom = '1px solid rgba(255, 255, 255, 0.05)';
-                
+
                 let statusBadge = `<span style="font-size: 0.7rem; font-weight: 700; background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(245, 158, 11, 0.2); text-transform: uppercase;">Pending</span>`;
                 if (dev.status === 'approved') {
                     statusBadge = `<span style="font-size: 0.7rem; font-weight: 700; background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.2); text-transform: uppercase;">Approved</span>`;
@@ -8651,7 +8721,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Mode is 'barcode': Gather and group all sequences flats
             const allSequences = [];
             const productNames = Array.from(new Set(row.serials.map(s => s.itemName).filter(Boolean)));
-            
+
             productNames.forEach((pName, pIdx) => {
                 const productSerials = row.serials.filter(s => s.itemName === pName);
 
@@ -8796,7 +8866,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     card.style.gap = '16px';
                     card.style.color = '#000000';
                     card.style.boxShadow = '0 10px 25px rgba(0,0,0,0.05)';
-                    
+
                     card.innerHTML = `
                         <div style="text-align: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px; width: 100%;">
                             <span style="font-size: 0.75rem; color: #64748b; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">
@@ -8880,7 +8950,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Display range text and large total count
                     const boxText = seq.startBox === seq.endBox ? `Box ${seq.startBox}` : `Boxes ${seq.startBox} - ${seq.endBox}`;
-                    
+
                     card.innerHTML = `
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; width: 100%;">
                             <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -8903,7 +8973,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div style="display: flex; justify-content: center; background: white; padding: 16px; border-radius: var(--radius-sm); margin: 4px 0;">
                             <canvas id="activeQrCanvas" style="width: 160px; height: 160px;"></canvas>
                         </div>
@@ -8973,9 +9043,9 @@ document.addEventListener('DOMContentLoaded', () => {
         archivedSequenceKeys.clear(); // Clear any cached archives
         archivedSequenceStack = [];
         singleModeSeqGroups.clear();
-        
+
         renderFirstSerialsModalContent();
-        
+
         if (outboundFirstSerialsModal) {
             outboundFirstSerialsModal.classList.add('active');
         }
@@ -9038,7 +9108,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderFirstSerialsModalContent();
                 return;
             }
-            
+
             const resetBtn = e.target.closest('#btnResetBarcodeArchives');
             if (resetBtn) {
                 archivedSequenceKeys.clear();
@@ -9070,7 +9140,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const activeNode = document.activeElement;
         const outboundConfigModal = document.getElementById('outboundConfigModal');
         const isConfigModalActive = outboundConfigModal && outboundConfigModal.classList.contains('active');
-        
+
         // Handle "p" key paste shortcut when an input in the Outbound Config Modal is focused and empty
         if (activeNode && isConfigModalActive) {
             const tagName = activeNode.tagName.toLowerCase();
@@ -9099,7 +9169,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
         }
-        
+
         // Handle custom hotkeys inside Outbound Config Modal (when open but inputs not focused)
         if (isConfigModalActive) {
             const key = e.key.toLowerCase();
@@ -9250,9 +9320,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function removeDamageRecord(serial) {
         if (!confirm(`Are you sure you want to restore serial number "${serial}" back to available stock?`)) return;
-        
+
         let records = getDamageRecords();
-        records = records.filter(r => r.serial.trim().toUpperCase() !== serial.trim().toUpperCase());
+        records = records.filter(r => String(r.serial || '').trim().toUpperCase() !== serial.trim().toUpperCase());
         saveDamageRecords(records);
 
         renderDamageUI();
@@ -9264,38 +9334,140 @@ document.addEventListener('DOMContentLoaded', () => {
         const records = getDamageRecords();
         const body = document.getElementById('damageTableBody');
         if (!body) return;
+        body.replaceChildren();
 
-        body.innerHTML = '';
-        if (records.length === 0) {
-            body.innerHTML = `
-                <tr>
-                    <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">No damaged items recorded.</td>
-                </tr>
-            `;
+        if (!records.length) {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = 4;
+            td.textContent = 'No damaged items recorded.';
+            td.style.textAlign = 'center';
+            td.style.padding = '24px';
+            body.appendChild(tr);
+            tr.appendChild(td);
             return;
         }
 
-        // Render reversed so latest damaged items appear first
         records.slice().reverse().forEach(r => {
             const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td style="padding: 10px 8px; font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary);">${r.timestamp}</td>
-                <td style="padding: 10px 8px; font-weight: 700; color: var(--text-primary);">${r.itemName}</td>
-                <td style="padding: 10px 8px; font-family: var(--font-mono); font-weight: 700; color: var(--accent-rose);">${r.serial}</td>
-                <td style="padding: 10px 8px; text-align: right;">
-                    <button class="btn-restore-damaged btn-primary" data-serial="${r.serial}" style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.72rem; font-weight: 700; cursor: pointer; border-style: solid;">
-                        Restore Stock
-                    </button>
-                </td>
-            `;
-            
-            tr.querySelector('.btn-restore-damaged').addEventListener('click', (e) => {
-                const serial = e.currentTarget.getAttribute('data-serial');
-                removeDamageRecord(serial);
+            const values = [
+                r.timestamp || '',
+                r.itemName || '',
+                r.serial ? r.serial : `Qty: ${Number(r.quantity) || 0}`
+            ];
+            if (!r.serial && r.reason) values[2] += ` — ${r.reason}`;
+
+            values.forEach((value, index) => {
+                const td = document.createElement('td');
+                td.textContent = String(value);
+                td.style.padding = '10px 8px';
+                if (index === 1) td.style.fontWeight = '700';
+                if (index === 2) td.style.color = 'var(--accent-rose)';
+                tr.appendChild(td);
             });
 
+            const action = document.createElement('td');
+            action.style.textAlign = 'right';
+            action.style.padding = '10px 8px';
+            const btn = document.createElement('button');
+            btn.className = 'btn-restore-damaged btn-primary';
+            btn.textContent = 'Restore Stock';
+            btn.style.cssText = 'background:rgba(16,185,129,.1);border:1px solid var(--accent-emerald);color:var(--accent-emerald);padding:4px 8px;border-radius:var(--radius-sm);font-size:.72rem;font-weight:700;cursor:pointer;';
+            btn.addEventListener('click', () => {
+                if (!r.serial && r.id) restoreQuantityDamage(r.id);
+                else removeDamageRecord(r.serial);
+            });
+            action.appendChild(btn);
+            tr.appendChild(action);
             body.appendChild(tr);
         });
+    }
+
+    // Quantity damage without serial number
+    function populateNoSerialDamageProducts() {
+        const select = document.getElementById('noSerialDamageProduct');
+        if (!select) return;
+
+        const previous = select.value;
+        const history = getHistory();
+
+        const validNames = [...new Set(
+            history
+                .filter(log => log && (!log.serials || log.serials.length === 0)
+                    && Number(log.count) > 0 && log.item)
+                .map(log => String(log.item).trim())
+                .filter(Boolean)
+        )].sort((a, b) => a.localeCompare(b));
+
+        select.replaceChildren(new Option('Select product', ''));
+        validNames.forEach(name => select.add(new Option(name, name)));
+
+        if (validNames.includes(previous)) select.value = previous;
+    }
+
+    function getNoSerialDamagedQty(itemName) {
+        return getDamageRecords().reduce((sum, r) => {
+            if (r && !r.serial && r.itemName === itemName) {
+                return sum + Math.max(0, Number(r.quantity) || 0);
+            }
+            return sum;
+        }, 0);
+    }
+
+    function markQuantityAsDamaged() {
+        const product = document.getElementById('noSerialDamageProduct');
+        const qtyInput = document.getElementById('noSerialDamageQuantity');
+        const reasonInput = document.getElementById('noSerialDamageReason');
+        if (!product || !qtyInput || !reasonInput) return;
+
+        const itemName = product.value;
+        const quantity = Number(qtyInput.value);
+        const reason = reasonInput.value.trim();
+
+        if (!itemName) return alert('Please select a product.');
+        if (!Number.isInteger(quantity) || quantity < 1) return alert('Enter a valid quantity.');
+        if (!reason) return alert('Please enter the damage reason.');
+
+        const stockMap = getProductStockMap();
+        const fresh = Math.max(0, Number(stockMap[itemName]?.freshCount) || 0);
+        if (quantity > fresh) {
+            return alert(`Insufficient fresh stock. Available fresh quantity: ${fresh}`);
+        }
+
+        const records = getDamageRecords();
+        records.push({
+            id: 'damage_qty_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            type: 'no-serial',
+            serial: '',
+            itemName,
+            quantity,
+            reason,
+            timestamp: new Date().toLocaleString()
+        });
+        saveDamageRecords(records);
+        renderDamageUI();
+        renderInventoryPanel();
+        renderOrderQueueUI();
+        qtyInput.value = '1';
+        reasonInput.value = '';
+        alert(`${quantity} PC(s) of "${itemName}" marked damaged.`);
+    }
+
+    function restoreQuantityDamage(id) {
+        const records = getDamageRecords();
+        const record = records.find(r => r && r.id === id && !r.serial);
+        if (!record) return alert('Damage record not found. Refresh and try again.');
+        if (!confirm(`Restore ${record.quantity} PC(s) of "${record.itemName}" to fresh stock?`)) return;
+        saveDamageRecords(records.filter(r => !(r && r.id === id)));
+        renderDamageUI();
+        renderInventoryPanel();
+        renderOrderQueueUI();
+    }
+
+    const btnMarkNoSerialDamaged = document.getElementById('btnMarkNoSerialDamaged');
+    if (btnMarkNoSerialDamaged) {
+        populateNoSerialDamageProducts();
+        btnMarkNoSerialDamaged.addEventListener('click', markQuantityAsDamaged);
     }
 
     // Damage input scanner triggers
@@ -9489,7 +9661,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   Math.sin(dLon/2) * Math.sin(dLon/2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         const airDistance = R * c;
-        
+
         // Exact pintopindistance.tools GST distance formula
         return Math.round(airDistance * GST_PIN_DISTANCE_FACTOR);
     }
@@ -9603,7 +9775,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function saveOdaData(records, filesHistory) {
         // Compress records structure: [ [pincode, courier, remark, fileId, fileName], ... ]
         const compressedRecords = records.map(r => [r.pincode, r.courier, r.remark, r.fileId || '', r.fileName || '']);
-        
+
         try {
             localStorage.setItem('wms_oda_records', JSON.stringify(compressedRecords));
         } catch (e) {
@@ -9738,21 +9910,21 @@ document.addEventListener('DOMContentLoaded', () => {
         // 3. Render Active ODA Database Table
         const searchInput = document.getElementById('odaSearchInput');
         const filterText = searchInput ? searchInput.value.trim().toLowerCase() : '';
-        
+
         const body = document.getElementById('odaTableBody');
         if (!body) return;
         body.innerHTML = '';
-        
+
         let filtered = memoryOdaRecords;
         if (filterText) {
             filtered = memoryOdaRecords.filter(r => {
-                return r.pincode.includes(filterText) || 
+                return r.pincode.includes(filterText) ||
                        r.courier.toLowerCase().includes(filterText) ||
                        r.remark.toLowerCase().includes(filterText) ||
                        (r.fileName && r.fileName.toLowerCase().includes(filterText));
             });
         }
-        
+
         if (filtered.length === 0) {
             body.innerHTML = `
                 <tr>
@@ -9763,10 +9935,10 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             return;
         }
-        
+
         const displayLimit = 200;
         const displayList = filtered.slice(0, displayLimit);
-        
+
         displayList.forEach(r => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -9777,7 +9949,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             body.appendChild(tr);
         });
-        
+
         if (filtered.length > displayLimit) {
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -9792,7 +9964,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleOdaFileUpload(file) {
         pendingUploadedFileName = file.name || 'ODA_Sheet.xlsx';
-        
+
         let derivedCourier = 'Generic';
         if (file.name) {
             const cleanName = file.name.split('.')[0]
@@ -9815,16 +9987,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     const bytes = new Uint8Array(data);
                     workbook = XLSX.read(bytes, { type: 'array' });
                 }
-                
+
                 const firstSheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[firstSheetName];
                 const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
-                
+
                 if (!jsonData || jsonData.length === 0) {
                     alert("The uploaded sheet appears to be empty.");
                     return;
                 }
-                
+
                 // 1. Smart Header Row Detection (scan first 10 rows for keywords)
                 let headerRowIdx = 0;
                 let maxMatchedKeywords = 0;
@@ -9844,12 +10016,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const headers = (jsonData[headerRowIdx] || []).map(h => String(h || '').trim().toLowerCase());
-                
+
                 // 2. Comprehensive Column Index Identification
                 let courierIdx = headers.findIndex(h => h.includes('courier') || h.includes('carrier') || h.includes('partner') || h.includes('provider') || h.includes('vendor'));
                 let pincodeIdx = headers.findIndex(h => h.includes('pincode') || h.includes('pin_code') || h.includes('pin code') || h.includes('postal') || h.includes('zip') || h === 'pin' || h.includes('dest pin') || h.includes('destination pin'));
                 let remarkIdx = headers.findIndex(h => h.includes('remark') || h.includes('oda') || h.includes('status') || h.includes('servic') || h.includes('zone'));
-                
+
                 // 3. Fallback Auto-Discovery: Inspect first 30 data rows for 6-digit pincode numbers!
                 if (pincodeIdx === -1) {
                     const colScores = {};
@@ -9877,7 +10049,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (pincodeIdx === -1) pincodeIdx = 0;
                 if (courierIdx === -1) courierIdx = (pincodeIdx === 0) ? 1 : 0;
                 if (remarkIdx === -1) remarkIdx = (pincodeIdx === 2 || courierIdx === 2) ? 3 : 2;
-                
+
                 const parsedRecords = [];
                 let skippedRowsCount = 0;
 
@@ -9887,11 +10059,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         skippedRowsCount++;
                         continue;
                     }
-                    
+
                     const courier = String(row[courierIdx] || '').trim() || derivedCourier;
                     const pincode = String(row[pincodeIdx] || '').trim().replace(/\D/g, '');
                     const remark = String(row[remarkIdx] || '').trim();
-                    
+
                     if (pincode && pincode.length >= 3) {
                         parsedRecords.push({
                             courier: courier,
@@ -9902,30 +10074,30 @@ document.addEventListener('DOMContentLoaded', () => {
                         skippedRowsCount++;
                     }
                 }
-                
+
                 if (parsedRecords.length === 0) {
                     alert("Could not parse any valid pincode records from the file.");
                     return;
                 }
-                
+
                 pendingUploadedOdaRecords = parsedRecords;
                 const progressText = document.getElementById('odaUploadProgressText');
                 const progressContainer = document.getElementById('odaUploadProgress');
-                
+
                 const totalSheetRows = jsonData.length - headerRowIdx - 1;
                 const skippedMsg = skippedRowsCount > 0 ? ` (${skippedRowsCount} empty/header/summary rows skipped)` : '';
-                
+
                 if (progressText) {
                     progressText.textContent = `Successfully parsed ${parsedRecords.length} valid pincodes from ${totalSheetRows} total rows${skippedMsg} in "${pendingUploadedFileName}". Ready to merge.`;
                 }
                 if (progressContainer) progressContainer.style.display = 'flex';
-                
+
             } catch (err) {
                 console.error("Error reading file:", err);
                 alert("Failed to parse the file: " + err.message);
             }
         };
-        
+
         reader.readAsArrayBuffer(file);
     }
 
@@ -9941,25 +10113,25 @@ document.addEventListener('DOMContentLoaded', () => {
         odaDropZone.addEventListener('click', () => {
             odaFileInput.click();
         });
-        
+
         odaFileInput.addEventListener('change', (e) => {
             const files = e.target.files;
             if (files.length > 0) {
                 handleOdaFileUpload(files[0]);
             }
         });
-        
+
         odaDropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
             odaDropZone.style.borderColor = 'var(--accent-emerald)';
             odaDropZone.style.background = 'rgba(16, 185, 129, 0.04)';
         });
-        
+
         odaDropZone.addEventListener('dragleave', () => {
             odaDropZone.style.borderColor = 'rgba(59, 130, 246, 0.3)';
             odaDropZone.style.background = 'rgba(59, 130, 246, 0.02)';
         });
-        
+
         odaDropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             odaDropZone.style.borderColor = 'rgba(59, 130, 246, 0.3)';
@@ -9976,7 +10148,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (pendingUploadedOdaRecords && pendingUploadedOdaRecords.length > 0) {
                 const fileId = 'file_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
                 const now = new Date();
-                const uploadTime = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + 
+                const uploadTime = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' +
                                    now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
                 const fileName = pendingUploadedFileName || `ODA_File_${now.toISOString().slice(0, 10)}.xlsx`;
 
