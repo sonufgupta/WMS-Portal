@@ -725,13 +725,74 @@ document.addEventListener('DOMContentLoaded', () => {
                 "Total Weight (kg)": parseFloat(sumWeight.toFixed(3))
             });
 
-            // Create new sheet
-            const ws = XLSX.utils.json_to_sheet(sheetRows);
+            const now = new Date();
+
+            // Create a professional Stock Overview Excel report
+            const reportDate = now.toLocaleDateString('en-GB');
+            const headers = Object.keys(sheetRows[0]);
+
+            const ws = XLSX.utils.aoa_to_sheet([
+                ["MUMBAI BRANCH - BHIWANDI"],
+                ["CURRENT STOCK REPORT"],
+                [`Report Date: ${reportDate}`],
+                [],
+                headers
+            ]);
+
+            XLSX.utils.sheet_add_json(ws, sheetRows, {
+                origin: "A6",
+                skipHeader: true
+            });
+
+            const lastRow = 5 + sheetRows.length;
+            const lastCol = headers.length - 1;
+            const lastColLetter = XLSX.utils.encode_col(lastCol);
+
+            ws["!merges"] = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } },
+                { s: { r: 1, c: 0 }, e: { r: 1, c: lastCol } },
+                { s: { r: 2, c: 0 }, e: { r: 2, c: lastCol } }
+            ];
+
+            ws["!cols"] = headers.map(header => {
+                const values = [
+                    header,
+                    ...sheetRows.map(row => String(row[header] ?? ""))
+                ];
+                const maxLength = Math.max(...values.map(value => value.length));
+                const preferredMax = header === "Product Name" ? 48
+                    : header === "Damage Remark" ? 42
+                    : header === "Total Weight (kg)" ? 20
+                    : 16;
+                return {
+                    wch: Math.min(
+                        preferredMax,
+                        Math.max(header.length + 2, Math.min(maxLength + 2, preferredMax))
+                    )
+                };
+            });
+
+            ws["!rows"] = [
+                { hpt: 28 },
+                { hpt: 24 },
+                { hpt: 20 },
+                { hpt: 8 },
+                { hpt: 24 }
+            ];
+
+            ws["!autofilter"] = {
+                ref: `A5:${lastColLetter}${5 + sheetRows.length - 2}`
+            };
+
+            ws["!freeze"] = { xSplit: 0, ySplit: 5 };
+
+            // Set workbook opening view (supported by Excel-compatible viewers)
             const wb = XLSX.utils.book_new();
+            wb.Workbook = wb.Workbook || {};
+            wb.Workbook.Views = [{ RTL: false }];
             XLSX.utils.book_append_sheet(wb, ws, "Current Stock");
 
             // Format Filename: mumbai stock report ( bhiwandi ) DD-MM-YYYY HH-MM-SS
-            const now = new Date();
             const dateStr = now.toLocaleDateString('en-GB').replace(/\//g, '-'); // DD-MM-YYYY
             const timeStr = now.toLocaleTimeString('en-US', { hour12: false }).replace(/\:/g, '-'); // HH-MM-SS
             const filename = `mumbai stock report ( bhiwandi ) ${dateStr} ${timeStr}`.toUpperCase() + ".xlsx";
