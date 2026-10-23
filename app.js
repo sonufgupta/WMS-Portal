@@ -638,6 +638,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
+            // Collect saved damage remarks by product for the Stock Overview export.
+            const damageRemarksByProduct = {};
+            getDamageRecords().forEach(record => {
+                if (!record || !record.itemName) return;
+
+                const remark = String(record.reason || '').trim()
+                    || (record.serial
+                        ? `Serial damaged: ${record.serial}`
+                        : 'Quantity damaged');
+
+                if (!damageRemarksByProduct[record.itemName]) {
+                    damageRemarksByProduct[record.itemName] = [];
+                }
+                if (!damageRemarksByProduct[record.itemName].includes(remark)) {
+                    damageRemarksByProduct[record.itemName].push(remark);
+                }
+            });
+
             // 3. Compile stock rows list
             const sheetRows = [];
             let rowIdx = 1;
@@ -667,6 +685,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 sheetRows.push({
                     "S.No.": rowIdx++,
                     "Product Name": item.name,
+                    "Damage Remark": (damageRemarksByProduct[item.name] || []).join("; "),
                     "Fresh PC": freshQty,
                     "Damaged PC": damagedQty,
                     "Total PC": currentPcQty,
@@ -689,6 +708,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sheetRows.push({
                 "S.No.": "",
                 "Product Name": "",
+                "Damage Remark": "",
                 "Fresh PC": "",
                 "Damaged PC": "",
                 "Total PC": "",
@@ -698,6 +718,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sheetRows.push({
                 "S.No.": "",
                 "Product Name": "TOTAL",
+                "Damage Remark": "",
                 "Fresh PC": sumFresh,
                 "Damaged PC": sumDamaged,
                 "Total PC": sumPcs,
