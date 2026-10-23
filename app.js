@@ -9339,6 +9339,32 @@ document.addEventListener('DOMContentLoaded', () => {
         alert(`Success: Product "${foundInbound.itemName}" with Serial "${cleanSerial}" marked as DAMAGED and removed from stock.`);
     }
 
+    function editDamageRemark(record) {
+        const records = getDamageRecords();
+        const index = records.indexOf(record);
+        if (index < 0) {
+            alert('Damage record not found. Refresh and try again.');
+            return;
+        }
+
+        const currentRemark = String(record.reason || '');
+        const updatedRemark = prompt('Edit damage remark:', currentRemark);
+        if (updatedRemark === null) return;
+
+        const cleanedRemark = updatedRemark.trim();
+        if (!cleanedRemark) {
+            alert('Please enter a damage remark.');
+            return;
+        }
+
+        records[index] = { ...record, reason: cleanedRemark };
+        saveDamageRecords(records);
+        renderDamageUI();
+        renderInventoryPanel();
+        renderOrderQueueUI();
+        alert('Damage remark updated successfully.');
+    }
+
     function removeDamageRecord(serial) {
         if (!confirm(`Are you sure you want to restore serial number "${serial}" back to available stock?`)) return;
 
@@ -9376,7 +9402,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 r.itemName || '',
                 r.serial ? r.serial : `Qty: ${Number(r.quantity) || 0}`
             ];
-            if (!r.serial && r.reason) values[2] += ` — ${r.reason}`;
+            if (r.reason) values[2] += ` — ${r.reason}`;
 
             values.forEach((value, index) => {
                 const td = document.createElement('td');
@@ -9390,6 +9416,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const action = document.createElement('td');
             action.style.textAlign = 'right';
             action.style.padding = '10px 8px';
+            const editBtn = document.createElement('button');
+            editBtn.textContent = 'Edit Remark';
+            editBtn.style.cssText = 'background:rgba(59,130,246,.1);border:1px solid var(--accent-blue);color:var(--accent-blue);padding:4px 8px;border-radius:var(--radius-sm);font-size:.72rem;font-weight:700;cursor:pointer;margin-right:6px;';
+            editBtn.addEventListener('click', () => editDamageRemark(r));
+            action.appendChild(editBtn);
+
             const btn = document.createElement('button');
             btn.className = 'btn-restore-damaged btn-primary';
             btn.textContent = 'Restore Stock';
