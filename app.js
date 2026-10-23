@@ -786,6 +786,98 @@ document.addEventListener('DOMContentLoaded', () => {
 
             ws["!freeze"] = { xSplit: 0, ySplit: 5 };
 
+            // Apply screenshot-matched Excel cell styling
+            const thinBlack = {
+                style: "thin",
+                color: { rgb: "000000" }
+            };
+            const cellBorder = {
+                top: thinBlack,
+                bottom: thinBlack,
+                left: thinBlack,
+                right: thinBlack
+            };
+
+            const lastDataRow = 4 + sheetRows.length;
+            const totalRow = lastDataRow;
+            const baseStyle = {
+                font: { name: "Arial", sz: 10, color: { rgb: "000000" } },
+                alignment: { vertical: "center" },
+                border: cellBorder
+            };
+
+            // Ensure every cell in merged title rows exists for consistent fills
+            for (let r = 0; r <= lastDataRow; r++) {
+                for (let c = 0; c <= lastCol; c++) {
+                    const addr = XLSX.utils.encode_cell({ r, c });
+                    if (!ws[addr]) ws[addr] = { t: "s", v: "" };
+                    ws[addr].s = JSON.parse(JSON.stringify(baseStyle));
+                }
+            }
+
+            // Yellow main title
+            for (let c = 0; c <= lastCol; c++) {
+                ws[XLSX.utils.encode_cell({ r: 0, c })].s = {
+                    font: { name: "Arial", sz: 16, bold: true, color: { rgb: "000000" } },
+                    fill: { patternType: "solid", fgColor: { rgb: "FFFF00" } },
+                    alignment: { horizontal: "center", vertical: "center" },
+                    border: cellBorder
+                };
+            }
+
+            // Blue report title and date rows
+            for (const r of [1, 2]) {
+                for (let c = 0; c <= lastCol; c++) {
+                    ws[XLSX.utils.encode_cell({ r, c })].s = {
+                        font: { name: "Arial", sz: r === 1 ? 12 : 11, bold: r === 1, color: { rgb: "000000" } },
+                        fill: { patternType: "solid", fgColor: { rgb: "B4C7E7" } },
+                        alignment: { horizontal: "center", vertical: "center" },
+                        border: cellBorder
+                    };
+                }
+            }
+
+            // Light-blue bold column headings (Excel row 5)
+            for (let c = 0; c <= lastCol; c++) {
+                ws[XLSX.utils.encode_cell({ r: 4, c })].s = {
+                    font: { name: "Arial", sz: 10, bold: true, color: { rgb: "000000" } },
+                    fill: { patternType: "solid", fgColor: { rgb: "B4C7E7" } },
+                    alignment: { vertical: "center", horizontal: c === 1 || c === 5 ? "left" : "center" },
+                    border: cellBorder
+                };
+            }
+
+            // Table cells: thin black borders, compact readable rows
+            for (let r = 5; r < totalRow; r++) {
+                for (let c = 0; c <= lastCol; c++) {
+                    const cell = ws[XLSX.utils.encode_cell({ r, c })];
+                    cell.s = {
+                        ...baseStyle,
+                        alignment: {
+                            vertical: "center",
+                            horizontal: c === 1 || c === 5 ? "left" : "right"
+                        }
+                    };
+                }
+            }
+
+            // Highlight the final TOTAL row in light blue and bold
+            for (let c = 0; c <= lastCol; c++) {
+                ws[XLSX.utils.encode_cell({ r: totalRow, c })].s = {
+                    font: { name: "Arial", sz: 10, bold: true, color: { rgb: "000000" } },
+                    fill: { patternType: "solid", fgColor: { rgb: "B4C7E7" } },
+                    alignment: {
+                        vertical: "center",
+                        horizontal: c === 1 || c === 5 ? "left" : "right"
+                    },
+                    border: cellBorder
+                };
+            }
+
+            // Print and view settings
+            ws["!pageSetup"] = { orientation: "landscape", fitToWidth: 1, fitToHeight: 0 };
+            ws["!printOptions"] = { horizontalCentered: true };
+
             // Set workbook opening view (supported by Excel-compatible viewers)
             const wb = XLSX.utils.book_new();
             wb.Workbook = wb.Workbook || {};
