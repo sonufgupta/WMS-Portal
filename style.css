@@ -660,14 +660,51 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: 0
 .btn-mobile-delete { background: var(--accent-rose-glow); border-color: rgba(225, 29, 72, 0.35); color: var(--accent-rose); }
 .btn-mobile-delete:hover { background: var(--accent-rose); color: #fff; }
 
-/* app.js sometimes writes inline grey backgrounds in generated card blocks */
-.mobile-log-card div[style*="background"],
-.outbound-cards-grid div[style*="background"],
-.inbound-cards-grid div[style*="background"] {
-    background: var(--bg-soft) !important;
+/* LIGHT MODE ONLY: app.js writes inline white/dark colours into generated cards.
+   Dark mode already looks right, so these fixes do not touch it. */
+[data-theme="light"] .outbound-cards-grid > div,
+[data-theme="light"] .inbound-cards-grid > div {
+    background: var(--bg-card) !important;
+    border-color: var(--border-color) !important;
     color: var(--text-primary) !important;
+}
+[data-theme="light"] .outbound-cards-grid > div:hover,
+[data-theme="light"] .inbound-cards-grid > div:hover { border-color: var(--brand) !important; }
+
+/* inner product panel inside a card */
+[data-theme="light"] .outbound-cards-grid > div div[style*="background"],
+[data-theme="light"] .inbound-cards-grid > div div[style*="background"] {
+    background: var(--bg-soft) !important;
     border-color: var(--border-color) !important;
 }
+
+/* white text -> black text (titles, shop names, vehicle, labels) */
+[data-theme="light"] .outbound-cards-grid [style*="color:#fff"],
+[data-theme="light"] .outbound-cards-grid [style*="color: #fff"],
+[data-theme="light"] .outbound-cards-grid [style*="color:#ffffff"],
+[data-theme="light"] .outbound-cards-grid [style*="color: #ffffff"],
+[data-theme="light"] .outbound-cards-grid [style*="color:white"],
+[data-theme="light"] .outbound-cards-grid [style*="color: white"],
+[data-theme="light"] .outbound-cards-grid [style*="color:var(--text-primary)"],
+[data-theme="light"] .outbound-cards-grid [style*="color: var(--text-primary)"],
+[data-theme="light"] .inbound-cards-grid [style*="color:#fff"],
+[data-theme="light"] .inbound-cards-grid [style*="color: #fff"],
+[data-theme="light"] .inbound-cards-grid [style*="color:#ffffff"],
+[data-theme="light"] .inbound-cards-grid [style*="color: #ffffff"],
+[data-theme="light"] .inbound-cards-grid [style*="color:white"],
+[data-theme="light"] .inbound-cards-grid [style*="color: white"],
+[data-theme="light"] .inbound-cards-grid [style*="color:var(--text-primary)"],
+[data-theme="light"] .inbound-cards-grid [style*="color: var(--text-primary)"],
+[data-theme="light"] .outbound-cards-grid h1, [data-theme="light"] .outbound-cards-grid h2,
+[data-theme="light"] .outbound-cards-grid h3, [data-theme="light"] .outbound-cards-grid h4,
+[data-theme="light"] .inbound-cards-grid h1, [data-theme="light"] .inbound-cards-grid h2,
+[data-theme="light"] .inbound-cards-grid h3, [data-theme="light"] .inbound-cards-grid h4 {
+    color: var(--text-primary) !important;
+}
+/* white text on a coloured button/badge must stay readable */
+[data-theme="light"] .outbound-cards-grid button[style*="color:#fff"],
+[data-theme="light"] .inbound-cards-grid button[style*="color:#fff"] { color: #fff !important; }
+
 .mobile-log-card .quantity, .mobile-log-card .total-quantity { color: var(--accent-emerald); font-weight: 700; }
 .mobile-log-card hr { border: none; border-top: 1px solid var(--border-color); }
 
