@@ -856,3 +856,38 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: 0
     flex: 0 0 38px;
     align-self: center;
 }
+
+/* FIX: Keep product picker inside the scrollable inbound modal.
+   The old absolutely-positioned menu was clipped by .modal-card overflow-y:auto. */
+#inboundConfigModal #configItemDropdownMenu,
+#addProductToActiveSessionModal #activeConfigItemDropdownMenu {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    max-height: min(46vh, 360px);
+    margin-top: 6px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 5;
+    box-sizing: border-box;
+    overscroll-behavior: contain;
+}
+
+#inboundConfigModal .custom-dropdown-container.active,
+#addProductToActiveSessionModal .custom-dropdown-container.active {
+    z-index: 5;
+}
+
+#inboundConfigModal .wms-product-search,
+#addProductToActiveSessionModal .wms-product-search {
+    position: sticky;
+    top: 0;
+    background: var(--bg-card);
+}
+
+#inboundConfigModal .wms-product-choice,
+#addProductToActiveSessionModal .wms-product-choice {
+    min-height: 48px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
