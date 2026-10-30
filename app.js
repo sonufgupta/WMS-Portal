@@ -2619,52 +2619,63 @@ document.addEventListener('DOMContentLoaded', () => {
         loadInboundItems();
         configItemDropdownList.innerHTML = '';
 
+        const menu = configItemDropdownMenu;
+        let search = menu ? menu.querySelector('.wms-product-search') : null;
+        if (menu && !search) {
+            search = document.createElement('input');
+            search.type = 'search';
+            search.className = 'wms-product-search';
+            search.placeholder = 'Search full product name...';
+            search.setAttribute('aria-label', 'Search products');
+            menu.insertBefore(search, configItemDropdownList);
+            search.addEventListener('input', () => {
+                const q = search.value.trim().toLowerCase();
+                configItemDropdownList.querySelectorAll('.custom-dropdown-item').forEach(row => {
+                    row.hidden = !row.dataset.search.includes(q);
+                });
+            });
+            search.addEventListener('click', e => e.stopPropagation());
+        }
+        if (search) search.value = '';
+
         inboundItems.forEach(item => {
             const li = document.createElement('li');
             li.className = 'custom-dropdown-item';
-            li.setAttribute('data-value', item);
+            li.dataset.value = item;
+            li.dataset.search = String(item).toLowerCase();
 
-            li.innerHTML = `
-                <span class="custom-dropdown-item-text">${item}</span>
-                <button type="button" class="btn-delete-dropdown-item" data-item="${item}" title="Delete Item">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                </button>
-            `;
+            const choose = document.createElement('button');
+            choose.type = 'button';
+            choose.className = 'wms-product-choice';
+            choose.textContent = item;
+            choose.title = item;
+            choose.addEventListener('click', () => {
+                selectDropdownItem(item);
+                closeDropdownMenu();
+            });
 
-            // Selection trigger on text click
-            const textSpan = li.querySelector('.custom-dropdown-item-text');
-            if (textSpan) {
-                textSpan.addEventListener('click', () => {
-                    selectDropdownItem(item);
-                    closeDropdownMenu();
-                });
-            }
-
-            // Secure deletion trigger on delete button click
-            const deleteBtn = li.querySelector('.btn-delete-dropdown-item');
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', (e) => {
-                    e.stopPropagation(); // Avoid triggering trigger toggle or selection click
-
-                    const pwd = prompt(`Enter password to delete item "${item}":`);
-                    if (pwd === '2026') {
-                        inboundItems = inboundItems.filter(i => i !== item);
-                        saveInboundItems();
-                        renderDropdownItems();
-
-                        // Reset if active item was deleted
-                        if (configItemSelect && configItemSelect.value === item) {
-                            configItemSelect.value = '';
-                            if (configItemDropdownSelectedText) configItemDropdownSelectedText.textContent = 'Choose an item...';
-                        }
-                    } else if (pwd !== null) {
-                        alert('Incorrect password! Item was not deleted.');
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'btn-delete-dropdown-item';
+            del.title = 'Delete Item';
+            del.setAttribute('aria-label', `Delete ${item}`);
+            del.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>';
+            del.addEventListener('click', e => {
+                e.stopPropagation();
+                const pwd = prompt(`Enter password to delete item "${item}":`);
+                if (pwd === '2026') {
+                    inboundItems = inboundItems.filter(i => i !== item);
+                    saveInboundItems();
+                    renderDropdownItems();
+                    renderActiveDropdownItems();
+                    if (configItemSelect?.value === item) {
+                        configItemSelect.value = '';
+                        if (configItemDropdownSelectedText) configItemDropdownSelectedText.textContent = 'Choose an item...';
                     }
-                });
-            }
+                } else if (pwd !== null) alert('Incorrect password! Item was not deleted.');
+            });
 
+            li.append(choose, del);
             configItemDropdownList.appendChild(li);
         });
     }
@@ -3769,51 +3780,63 @@ document.addEventListener('DOMContentLoaded', () => {
         loadInboundItems();
         activeConfigItemDropdownList.innerHTML = '';
 
+        const menu = document.getElementById('activeConfigItemDropdownMenu');
+        let search = menu ? menu.querySelector('.wms-product-search') : null;
+        if (menu && !search) {
+            search = document.createElement('input');
+            search.type = 'search';
+            search.className = 'wms-product-search';
+            search.placeholder = 'Search full product name...';
+            search.setAttribute('aria-label', 'Search products');
+            menu.insertBefore(search, activeConfigItemDropdownList);
+            search.addEventListener('input', () => {
+                const q = search.value.trim().toLowerCase();
+                activeConfigItemDropdownList.querySelectorAll('.custom-dropdown-item').forEach(row => {
+                    row.hidden = !row.dataset.search.includes(q);
+                });
+            });
+            search.addEventListener('click', e => e.stopPropagation());
+        }
+        if (search) search.value = '';
+
         inboundItems.forEach(item => {
             const li = document.createElement('li');
             li.className = 'custom-dropdown-item';
-            li.setAttribute('data-value', item);
+            li.dataset.value = item;
+            li.dataset.search = String(item).toLowerCase();
 
-            li.innerHTML = `
-                <span class="custom-dropdown-item-text">${item}</span>
-                <button type="button" class="btn-delete-dropdown-item" data-item="${item}" title="Delete Item">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                </button>
-            `;
+            const choose = document.createElement('button');
+            choose.type = 'button';
+            choose.className = 'wms-product-choice';
+            choose.textContent = item;
+            choose.title = item;
+            choose.addEventListener('click', () => {
+                selectActiveDropdownItem(item);
+                closeActiveDropdownMenu();
+            });
 
-            // Selection trigger
-            const textSpan = li.querySelector('.custom-dropdown-item-text');
-            if (textSpan) {
-                textSpan.addEventListener('click', () => {
-                    selectActiveDropdownItem(item);
-                    closeActiveDropdownMenu();
-                });
-            }
-
-            // Secure deletion trigger
-            const deleteBtn = li.querySelector('.btn-delete-dropdown-item');
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const pwd = prompt(`Enter password to delete item "${item}":`);
-                    if (pwd === '2026') {
-                        inboundItems = inboundItems.filter(i => i !== item);
-                        saveInboundItems();
-                        renderDropdownItems();
-                        renderActiveDropdownItems();
-
-                        if (activeConfigItemSelect && activeConfigItemSelect.value === item) {
-                            activeConfigItemSelect.value = '';
-                            if (activeConfigItemDropdownSelectedText) activeConfigItemDropdownSelectedText.textContent = 'Choose an item...';
-                        }
-                    } else if (pwd !== null) {
-                        alert('Incorrect password! Item was not deleted.');
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'btn-delete-dropdown-item';
+            del.title = 'Delete Item';
+            del.setAttribute('aria-label', `Delete ${item}`);
+            del.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>';
+            del.addEventListener('click', e => {
+                e.stopPropagation();
+                const pwd = prompt(`Enter password to delete item "${item}":`);
+                if (pwd === '2026') {
+                    inboundItems = inboundItems.filter(i => i !== item);
+                    saveInboundItems();
+                    renderDropdownItems();
+                    renderActiveDropdownItems();
+                    if (activeConfigItemSelect?.value === item) {
+                        activeConfigItemSelect.value = '';
+                        if (activeConfigItemDropdownSelectedText) activeConfigItemDropdownSelectedText.textContent = 'Choose an item...';
                     }
-                });
-            }
+                } else if (pwd !== null) alert('Incorrect password! Item was not deleted.');
+            });
 
+            li.append(choose, del);
             activeConfigItemDropdownList.appendChild(li);
         });
     }
