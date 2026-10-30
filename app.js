@@ -95,6 +95,64 @@ document.addEventListener('DOMContentLoaded', () => {
         return inboundSerialLogMap;
     }
 
+    // Current WMS membership: a serial is active only when its latest
+    // Inbound event is newer than its latest completed Outbound event.
+    // Historical logs are retained; they do not permanently block re-entry.
+    function getCurrentActiveSerialMap() {
+        const latestEvents = new Map();
+        const inbound = getHistory() || [];
+        const outbound = getOutboundHistory() || [];
+
+        // Histories are newest-first. Reverse them so equal/legacy timestamps
+        // resolve in chronological list order, with Outbound processed after Inbound.
+        [...inbound].reverse().forEach(log => {
+            (log.serials || []).forEach(entry => {
+                if (!entry || !entry.serial) return;
+                const key = String(entry.serial).trim().toUpperCase();
+                if (!key) return;
+                const eventAt = Number(log.eventAt || log.timestampEpoch || 0);
+                const previous = latestEvents.get(key);
+                if (!previous || eventAt >= previous.eventAt) {
+                    latestEvents.set(key, { type: 'inbound', eventAt, log, entry });
+                }
+            });
+        });
+
+        [...outbound].reverse().forEach(log => {
+            (log.serials || []).forEach(entry => {
+                if (!entry || !entry.serial) return;
+                const key = String(entry.serial).trim().toUpperCase();
+                if (!key) return;
+                const eventAt = Number(log.eventAt || log.timestampEpoch || 0);
+                const previous = latestEvents.get(key);
+                if (!previous || eventAt >= previous.eventAt) {
+                    latestEvents.set(key, { type: 'outbound', eventAt, log, entry });
+                }
+            });
+        });
+
+        const active = new Map();
+        latestEvents.forEach((event, key) => {
+            if (event.type === 'inbound') active.set(key, event);
+        });
+        return active;
+    }
+
+    // Damage belongs to the current Inbound cycle only. A serial re-entering
+    // after a completed Outbound starts a clean stock membership.
+    function getCurrentDamagedSerialSet(activeMap = getCurrentActiveSerialMap()) {
+        const damaged = new Set();
+        (getDamageRecords() || []).forEach(record => {
+            if (!record || !record.serial) return;
+            const key = String(record.serial).trim().toUpperCase();
+            const member = activeMap.get(key);
+            if (!member) return;
+            const damageAt = Number(record.eventAt || 0);
+            if (damageAt >= Number(member.eventAt || 0)) damaged.add(key);
+        });
+        return damaged;
+    }
+
     function getOutboundSerialLogMap() {
         if (outboundSerialLogMap !== null) return outboundSerialLogMap;
         const history = getOutboundHistory();
@@ -1900,13 +1958,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
             }).join('');
 
-            let finalBoxCount = row.boxCount;
-            if ((!finalBoxCount || finalBoxCount <= 0) && row.serials && row.serials.length > 0) {
-                const uniqueBoxes = new Set(row.serials.map(s => s.boxNo));
+            let finalBoxCount = 0;
+            if (row.serials && row.serials.length > 0) {
+                const uniqueBoxes = new Set(
+                    row.serials.map(s => `${s.itemName || row.item || ''}::${s.boxNo}`)
+                );
                 finalBoxCount = uniqueBoxes.size;
-            }
-            if (!finalBoxCount || finalBoxCount < 0) {
-                finalBoxCount = 0;
+            } else {
+                finalBoxCount = Math.max(0, Number(row.boxCount) || 0);
             }
 
             let countDisplay = `${row.count} PCs (${finalBoxCount} Boxes)`;
@@ -3147,23 +3206,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Check for duplicates across session
-        const serialsList = activeSession.serials.map(item => item.serial);
-        if (serialsList.includes(cleanSerial)) {
-            const foundItem = activeSession.serials.find(item => item.serial === cleanSerial);
+        const serialsList = activeSession.serials.map(item => String(item.serial || '').trim().toUpperCase());
+        if (serialsList.includes(cleanSerial.toUpperCase())) {
+            const foundItem = activeSession.serials.find(item => String(item.serial || '').trim().toUpperCase() === cleanSerial.toUpperCase());
             showScanWarning('duplicate', foundItem.boxNo, cleanSerial);
             return false;
         }
 
-        // Check for duplicates across past inbound history logs (case-insensitive)
+        // Duplicate rule: block only while this serial is currently inside WMS.
+        // A serial that has completed Outbound may enter again as a new Inbound cycle.
         const cleanSerialUpper = cleanSerial.toUpperCase();
-        const alreadyInboundLog = getInboundSerialLogMap().get(cleanSerialUpper);
+        const currentMembership = getCurrentActiveSerialMap().get(cleanSerialUpper);
 
-        if (alreadyInboundLog) {
+        if (currentMembership) {
             showSkuWarningModal(
                 'Already Inbound Alert!',
-                'This serial barcode already exists in a previously saved inbound history session.',
-                'RECEIVED ON VEHICLE:',
-                alreadyInboundLog.vehicle || 'N/A',
+                'This serial number is already an active member of WMS stock. It must be successfully dispatched before it can be received again.',
+                'CURRENT STATUS:',
+                'ALREADY IN WMS',
                 'EXISTING BARCODE:',
                 cleanSerial,
                 false,
@@ -3616,13 +3676,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 // Add to history array & save to localStorage
                 const historyData = getHistory();
-                const uniqueBoxes = new Set(activeSession.serials.map(s => s.boxNo));
+                const uniqueBoxes = new Set(
+                    activeSession.serials.map(s => `${s.itemName || ''}::${s.boxNo}`)
+                );
                 const boxCountVal = uniqueBoxes.size;
 
                 const newLogId = Date.now().toString();
                 historyData.unshift({
                     id: newLogId,
                     timestamp: timeStr,
+                    eventAt: now.getTime(),
                     vehicle: activeSession.vehicle,
                     item: activeSession.items.map(i => i.name).join(' + '),
                     count: count,
@@ -4854,7 +4917,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Damaged check (O(1) Set lookup)
-        const isDamaged = getDamageSerialsFastSet().has(cleanSerialUpper);
+        const isDamaged = getCurrentDamagedSerialSet().has(cleanSerialUpper);
         if (isDamaged) {
             showSkuWarningModal(
                 'Damaged Product Alert!',
@@ -4868,26 +4931,40 @@ document.addEventListener('DOMContentLoaded', () => {
             return false;
         }
 
-        // Already Dispatched check (O(1) Map lookup)
-        const alreadyDispatchedLog = getOutboundSerialLogMap().get(cleanSerialUpper);
-
-        if (alreadyDispatchedLog) {
+        // A serial can be dispatched only if it is currently inside WMS.
+        // Old Outbound history is not itself a block if a later Inbound re-entry exists.
+        const currentMembership = getCurrentActiveSerialMap().get(cleanSerialUpper);
+        if (!currentMembership) {
             showSkuWarningModal(
-                'Already Dispatched Alert!',
-                `The scanned serial barcode "${cleanSerial}" has already been dispatched in a previous outbound session.`,
-                'DISPATCHED TO SHOP:',
-                alreadyDispatchedLog.shopName || 'N/A',
-                'INVOICE / SO NO:',
-                alreadyDispatchedLog.invoiceNo || 'N/A',
+                'Serial Not In Current Stock!',
+                `Serial "${cleanSerial}" is not currently an active member of WMS. Complete Inbound first.`,
+                'REQUIRED STATUS:',
+                'CURRENTLY IN WMS',
+                'SCANNED BARCODE:',
+                cleanSerial,
                 false,
-                false,
-                cleanSerial
+                false
+            );
+            return false;
+        }
+
+        // Damaged items stay in WMS but cannot be dispatched as Fresh stock.
+        const currentDamage = getCurrentDamagedSerialSet().has(cleanSerialUpper);
+        if (currentDamage) {
+            showSkuWarningModal(
+                'Damaged Product Alert!',
+                `Serial "${cleanSerial}" is currently marked DAMAGED and cannot be dispatched.`,
+                'STATUS:',
+                'DAMAGED',
+                'SCANNED BARCODE:',
+                cleanSerial,
+                false
             );
             return false;
         }
 
         // Duplicate scan check
-        const isDup = activeOutboundSession.serials.some(s => s.serial === cleanSerial);
+        const isDup = activeOutboundSession.serials.some(s => String(s.serial || '').trim().toUpperCase() === cleanSerialUpper);
         if (isDup) {
             showSkuWarningModal(
                 'Duplicate Outbound Scan!',
@@ -6094,6 +6171,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const logObj = {
             id: Date.now().toString(),
             timestamp: timeStr,
+            eventAt: now.getTime(),
             shopName: activeOutboundSession.shopName,
             invoiceNo: activeOutboundSession.invoiceNo,
             pincode: activeOutboundSession.pincode || '',
@@ -6424,6 +6502,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const outboundCountsByProduct = {};
 
         // Track all serials that exist in the inbound database so we can identify if an outbound serial is unmatched
+        const currentActiveSerials = getCurrentActiveSerialMap();
         const inboundSerialsSet = new Set(getInboundSerialLogMap().keys());
         const inboundHistory = getHistory();
 
@@ -6459,7 +6538,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const productStock = {};
         const weights = getProductWeights();
         const damageRecords = getDamageRecords();
-        const damageSerials = new Set(damageRecords.map(r => String(r.serial || '').trim().toUpperCase()).filter(Boolean));
+        const damageSerials = getCurrentDamagedSerialSet(currentActiveSerials);
 
         // Copy outbound counts to keep track of remaining to deduct for WOS (FIFO)
         const remainingQuantityDamage = {};
@@ -6506,16 +6585,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     productStock[itemName].inboundCount++;
 
-                    // Deduction logic: dispatch if matched exactly, or if matched to an unmatched count for this product in FIFO order
-                    let isDispatched = false;
-                    if (outboundSerialsSet.has(cleanInboundSerial)) {
-                        isDispatched = true;
-                    } else if (remainingUnmatchedOutbound[itemName] && remainingUnmatchedOutbound[itemName] > 0) {
-                        isDispatched = true;
-                        remainingUnmatchedOutbound[itemName]--; // Consume one unmatched outbound scan
-                    }
+                    // Count only the latest active Inbound membership for this serial.
+                    // Old inbound/outbound history remains available for audit, but cannot
+                    // double-count a re-entered serial or permanently remove it from stock.
+                    const currentEntry = currentActiveSerials.get(cleanInboundSerial);
+                    const isCurrentInbound = Boolean(
+                        currentEntry &&
+                        currentEntry.type === 'inbound' &&
+                        currentEntry.log === log &&
+                        currentEntry.entry === s
+                    );
 
-                    if (!isDispatched) {
+                    if (isCurrentInbound) {
                         productStock[itemName].serialsCount++;
                         if (damageSerials.has(cleanInboundSerial)) {
                             productStock[itemName].damagedCount++;
@@ -6675,13 +6756,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     log.serials.forEach(s => {
                         const name = s.itemName || log.item;
                         if (s.serial.toLowerCase().includes(query) || name.toLowerCase().includes(query)) {
-                            const isDispatched = outboundSerialsSet.has(s.serial);
-                            const isDamaged = damageSerials.has(s.serial.trim().toUpperCase());
-                            const outDetails = outboundDetailsMap[s.serial];
+                            const serialKey = s.serial.trim().toUpperCase();
+                            const currentState = currentActiveSerials.get(serialKey);
+                            const isCurrentRecord = Boolean(currentState && currentState.log === log && currentState.entry === s);
+                            const isDispatched = !currentState || currentState.type === 'outbound';
+                            const isDamaged = isCurrentRecord && damageSerials.has(serialKey);
+                            const outDetails = outboundDetailsMap[serialKey];
 
-                            let status = 'In Stock';
-                            if (isDispatched) status = 'Dispatched';
-                            else if (isDamaged) status = 'Damaged';
+                            let status = 'Dispatched';
+                            if (isCurrentRecord) status = isDamaged ? 'Damaged' : 'In Stock';
 
                             filteredList.push({
                                 serial: s.serial,
@@ -9450,25 +9533,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const cleanSerial = serial.trim().toUpperCase();
         if (!cleanSerial) return;
 
-        // Verify if it's already marked as damaged (O(1) Set lookup)
-        const isDup = getDamageSerialsFastSet().has(cleanSerial);
-        if (isDup) {
+        const activeMember = getCurrentActiveSerialMap().get(cleanSerial);
+        if (!activeMember) {
+            alert(`Error: Serial number "${cleanSerial}" is not currently in WMS stock.`);
+            return;
+        }
+
+        // A serial can be marked damaged once per active Inbound cycle.
+        if (getCurrentDamagedSerialSet().has(cleanSerial)) {
             alert(`Error: Serial number "${cleanSerial}" is already marked as damaged!`);
             return;
         }
 
-        // Verify if serial number exists in Inbound logs (O(1) Map lookup)
-        const foundInboundLog = getInboundSerialLogMap().get(cleanSerial);
-        let foundInbound = null;
-        if (foundInboundLog && foundInboundLog.serials) {
-            const sObj = foundInboundLog.serials.find(s => s.serial && s.serial.trim().toUpperCase() === cleanSerial);
-            if (sObj) {
-                foundInbound = {
-                    itemName: sObj.itemName || foundInboundLog.item,
-                    inboundLogId: foundInboundLog.id
-                };
-            }
-        }
+        const foundInbound = {
+            itemName: activeMember.entry.itemName || activeMember.log.item,
+            inboundLogId: activeMember.log.id
+        };
 
         if (!foundInbound) {
             alert(`Error: Serial number "${cleanSerial}" not found in Inbound logs. Damage registration rejected!`);
@@ -9481,7 +9561,8 @@ document.addEventListener('DOMContentLoaded', () => {
             serial: cleanSerial,
             itemName: foundInbound.itemName,
             inboundLogId: foundInbound.inboundLogId,
-            timestamp: new Date().toLocaleString()
+            timestamp: new Date().toLocaleString(),
+            eventAt: Date.now()
         });
 
         saveDamageRecords(records);
