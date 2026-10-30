@@ -6700,7 +6700,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const totalDamagedEl = document.getElementById('inventoryTotalDamaged');
         if (totalDamagedEl) {
-            totalDamagedEl.textContent = Object.values(productStock).reduce((sum, item) => sum + item.damagedCount, 0);
+            // Overview Total Damaged follows the Damage Register history:
+            // each serial-number damage record counts as 1 PC, while
+            // non-serial damage records contribute their recorded quantity.
+            // This is intentionally separate from current-stock calculations,
+            // which continue to apply FIFO/active-serial rules in Product Stock Register.
+            const totalDamageRegisterQty = (damageRecords || []).reduce((sum, record) => {
+                if (!record) return sum;
+                if (isSerialDamageRecord(record)) return sum + 1;
+                return sum + Math.max(0, Number(record.quantity) || 0);
+            }, 0);
+            totalDamagedEl.textContent = totalDamageRegisterQty;
         }
 
         // Map Colors dynamically to products
