@@ -79,6 +79,14 @@ document.addEventListener('DOMContentLoaded', () => {
     let damageSerialsFastSet = null;   // Set of cleanSerialUpper
     let deletedSerialsFastMap = null;  // cleanSerialUpper -> deletedObj
 
+    // Damage records are handled in two separate workflows:
+    // 1) Records with a real serial number use serial-cycle validation.
+    // 2) Records without a serial number remain quantity-based (WOS) and
+    //    must never be filtered by current-serial Inbound/Outbound rules.
+    function isSerialDamageRecord(record) {
+        return Boolean(record && typeof record.serial === 'string' && record.serial.trim());
+    }
+
     function getInboundSerialLogMap() {
         if (inboundSerialLogMap !== null) return inboundSerialLogMap;
         const history = getHistory();
@@ -162,7 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function getCurrentDamagedSerialSet(activeMap = getCurrentActiveSerialMap()) {
         const damaged = new Set();
         (getDamageRecords() || []).forEach(record => {
-            if (!record || !record.serial) return;
+            if (!isSerialDamageRecord(record)) return;
             const key = String(record.serial).trim().toUpperCase();
             const member = activeMap.get(key);
             if (!member) return;
@@ -193,7 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const records = getDamageRecords();
         damageSerialsFastSet = new Set();
         for (const r of records) {
-            if (r && r.serial) {
+            if (isSerialDamageRecord(r)) {
                 damageSerialsFastSet.add(r.serial.trim().toUpperCase());
             }
         }
@@ -613,7 +621,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const productStock = {};
             const remainingQuantityDamage = {};
         getDamageRecords().forEach(r => {
-            if (r && !r.serial && r.itemName) {
+            if (r && !isSerialDamageRecord(r) && r.itemName) {
                 remainingQuantityDamage[r.itemName] = (remainingQuantityDamage[r.itemName] || 0) + Math.max(0, Number(r.quantity) || 0);
             }
         });
@@ -6552,7 +6560,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Copy outbound counts to keep track of remaining to deduct for WOS (FIFO)
         const remainingQuantityDamage = {};
         getDamageRecords().forEach(r => {
-            if (r && !r.serial && r.itemName) {
+            if (r && !isSerialDamageRecord(r) && r.itemName) {
                 remainingQuantityDamage[r.itemName] = (remainingQuantityDamage[r.itemName] || 0) + Math.max(0, Number(r.quantity) || 0);
             }
         });
@@ -7575,7 +7583,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const remainingWosOutbound = { ...outboundCountsByProduct };
         const remainingQuantityDamage = {};
         (getDamageRecords() || []).forEach(record => {
-            if (record && !record.serial && record.itemName) {
+            if (record && !isSerialDamageRecord(record) && record.itemName) {
                 remainingQuantityDamage[record.itemName] = (remainingQuantityDamage[record.itemName] || 0) + Math.max(0, Number(record.quantity) || 0);
             }
         });
@@ -9607,7 +9615,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.textContent = 'Restore Stock';
             btn.style.cssText = 'background:rgba(16,185,129,.1);border:1px solid var(--accent-emerald);color:var(--accent-emerald);padding:4px 8px;border-radius:var(--radius-sm);font-size:.72rem;font-weight:700;cursor:pointer;';
             btn.addEventListener('click', () => {
-                if (!r.serial && r.id) restoreQuantityDamage(r.id);
+                if (!isSerialDamageRecord(r) && r.id) restoreQuantityDamage(r.id);
                 else removeDamageRecord(r.serial);
             });
             action.appendChild(btn);
@@ -9640,7 +9648,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getNoSerialDamagedQty(itemName) {
         return getDamageRecords().reduce((sum, r) => {
-            if (r && !r.serial && r.itemName === itemName) {
+            if (r && !isSerialDamageRecord(r) && r.itemName === itemName) {
                 return sum + Math.max(0, Number(r.quantity) || 0);
             }
             return sum;
@@ -9688,7 +9696,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function restoreQuantityDamage(id) {
         const records = getDamageRecords();
-        const record = records.find(r => r && r.id === id && !r.serial);
+        const record = records.find(r => r && r.id === id && !isSerialDamageRecord(r));
         if (!record) return alert('Damage record not found. Refresh and try again.');
         if (!confirm(`Restore ${record.quantity} PC(s) of "${record.itemName}" to fresh stock?`)) return;
         saveDamageRecords(records.filter(r => !(r && r.id === id)));
