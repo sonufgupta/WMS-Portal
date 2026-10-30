@@ -99,36 +99,55 @@ document.addEventListener('DOMContentLoaded', () => {
     // Inbound event is newer than its latest completed Outbound event.
     // Historical logs are retained; they do not permanently block re-entry.
     function getCurrentActiveSerialMap() {
+        // Build one event timeline per normalized serial. The newest event wins:
+        // Inbound = physically inside WMS; Outbound = no longer inside WMS.
+        // Histories are stored newest-first, so list position is used only as a
+        // deterministic fallback for legacy records that have no event timestamp.
         const latestEvents = new Map();
-        const inbound = getHistory() || [];
-        const outbound = getOutboundHistory() || [];
+        const events = [];
+        let fallbackOrder = 0;
 
-        // Histories are newest-first. Reverse them so equal/legacy timestamps
-        // resolve in chronological list order, with Outbound processed after Inbound.
-        [...inbound].reverse().forEach(log => {
-            (log.serials || []).forEach(entry => {
-                if (!entry || !entry.serial) return;
-                const key = String(entry.serial).trim().toUpperCase();
-                if (!key) return;
-                const eventAt = Number(log.eventAt || log.timestampEpoch || 0);
-                const previous = latestEvents.get(key);
-                if (!previous || eventAt >= previous.eventAt) {
-                    latestEvents.set(key, { type: 'inbound', eventAt, log, entry });
-                }
-            });
-        });
+        const readEventTime = (log) => {
+            const candidates = [log && log.eventAt, log && log.timestampEpoch, log && log.id];
+            for (const value of candidates) {
+                const numeric = Number(value);
+                if (Number.isFinite(numeric) && numeric > 0) return numeric;
+            }
+            const parsed = Date.parse(String((log && (log.date || log.timestamp)) || ''));
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
 
-        [...outbound].reverse().forEach(log => {
-            (log.serials || []).forEach(entry => {
-                if (!entry || !entry.serial) return;
-                const key = String(entry.serial).trim().toUpperCase();
-                if (!key) return;
-                const eventAt = Number(log.eventAt || log.timestampEpoch || 0);
-                const previous = latestEvents.get(key);
-                if (!previous || eventAt >= previous.eventAt) {
-                    latestEvents.set(key, { type: 'outbound', eventAt, log, entry });
-                }
+        const collect = (history, type) => {
+            // Reverse newest-first history to preserve chronological fallback order.
+            [...(history || [])].reverse().forEach(log => {
+                const eventAt = readEventTime(log);
+                (log && Array.isArray(log.serials) ? log.serials : []).forEach(entry => {
+                    if (!entry || !entry.serial) return;
+                    const key = String(entry.serial).trim().toUpperCase();
+                    if (!key) return;
+                    events.push({ key, type, eventAt, order: fallbackOrder++, log, entry });
+                });
             });
+        };
+
+        collect(getHistory(), 'inbound');
+        collect(getOutboundHistory(), 'outbound');
+
+        events.forEach(event => {
+            const previous = latestEvents.get(event.key);
+            if (!previous) {
+                latestEvents.set(event.key, event);
+                return;
+            }
+            const eventTime = event.eventAt || event.order;
+            const previousTime = previous.eventAt || previous.order;
+            // If timestamps match, Outbound wins: the serial has left the warehouse.
+            // For same-type ties, the later chronological record wins.
+            if (eventTime > previousTime ||
+                (eventTime === previousTime && event.type === 'outbound' && previous.type !== 'outbound') ||
+                (eventTime === previousTime && event.type === previous.type && event.order > previous.order)) {
+                latestEvents.set(event.key, event);
+            }
         });
 
         const active = new Map();
@@ -549,7 +568,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const history = getHistory();
             const outboundHistory = getOutboundHistory();
             const weights = getProductWeights();
-            const damageSerials = new Set(getDamageRecords().map(r => String(r.serial || '').trim().toUpperCase()));
+            const currentActiveSerials = getCurrentActiveSerialMap();
+            const damageSerials = getCurrentDamagedSerialSet(currentActiveSerials);
 
             // 1. Gather all completed outbound scans and build normalizations
             const outboundSerialsSet = new Set();
@@ -633,15 +653,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         productStock[itemName].inboundCount++;
 
-                        let isDispatched = false;
-                        if (outboundSerialsSet.has(cleanInboundSerial)) {
-                            isDispatched = true;
-                        } else if (remainingUnmatchedOutbound[itemName] && remainingUnmatchedOutbound[itemName] > 0) {
-                            isDispatched = true;
-                            remainingUnmatchedOutbound[itemName]--;
-                        }
+                        const currentEntry = currentActiveSerials.get(cleanInboundSerial);
+                        const isCurrentInbound = Boolean(
+                            currentEntry && currentEntry.type === 'inbound' &&
+                            currentEntry.log === log && currentEntry.entry === s
+                        );
 
-                        if (!isDispatched) {
+                        if (isCurrentInbound) {
                             productStock[itemName].serialsCount++;
                             if (damageSerials.has(cleanInboundSerial)) {
                                 productStock[itemName].damagedCount++;
@@ -2619,63 +2637,52 @@ document.addEventListener('DOMContentLoaded', () => {
         loadInboundItems();
         configItemDropdownList.innerHTML = '';
 
-        const menu = configItemDropdownMenu;
-        let search = menu ? menu.querySelector('.wms-product-search') : null;
-        if (menu && !search) {
-            search = document.createElement('input');
-            search.type = 'search';
-            search.className = 'wms-product-search';
-            search.placeholder = 'Search full product name...';
-            search.setAttribute('aria-label', 'Search products');
-            menu.insertBefore(search, configItemDropdownList);
-            search.addEventListener('input', () => {
-                const q = search.value.trim().toLowerCase();
-                configItemDropdownList.querySelectorAll('.custom-dropdown-item').forEach(row => {
-                    row.hidden = !row.dataset.search.includes(q);
-                });
-            });
-            search.addEventListener('click', e => e.stopPropagation());
-        }
-        if (search) search.value = '';
-
         inboundItems.forEach(item => {
             const li = document.createElement('li');
             li.className = 'custom-dropdown-item';
-            li.dataset.value = item;
-            li.dataset.search = String(item).toLowerCase();
+            li.setAttribute('data-value', item);
 
-            const choose = document.createElement('button');
-            choose.type = 'button';
-            choose.className = 'wms-product-choice';
-            choose.textContent = item;
-            choose.title = item;
-            choose.addEventListener('click', () => {
-                selectDropdownItem(item);
-                closeDropdownMenu();
-            });
+            li.innerHTML = `
+                <span class="custom-dropdown-item-text">${item}</span>
+                <button type="button" class="btn-delete-dropdown-item" data-item="${item}" title="Delete Item">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
+            `;
 
-            const del = document.createElement('button');
-            del.type = 'button';
-            del.className = 'btn-delete-dropdown-item';
-            del.title = 'Delete Item';
-            del.setAttribute('aria-label', `Delete ${item}`);
-            del.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>';
-            del.addEventListener('click', e => {
-                e.stopPropagation();
-                const pwd = prompt(`Enter password to delete item "${item}":`);
-                if (pwd === '2026') {
-                    inboundItems = inboundItems.filter(i => i !== item);
-                    saveInboundItems();
-                    renderDropdownItems();
-                    renderActiveDropdownItems();
-                    if (configItemSelect?.value === item) {
-                        configItemSelect.value = '';
-                        if (configItemDropdownSelectedText) configItemDropdownSelectedText.textContent = 'Choose an item...';
+            // Selection trigger on text click
+            const textSpan = li.querySelector('.custom-dropdown-item-text');
+            if (textSpan) {
+                textSpan.addEventListener('click', () => {
+                    selectDropdownItem(item);
+                    closeDropdownMenu();
+                });
+            }
+
+            // Secure deletion trigger on delete button click
+            const deleteBtn = li.querySelector('.btn-delete-dropdown-item');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Avoid triggering trigger toggle or selection click
+
+                    const pwd = prompt(`Enter password to delete item "${item}":`);
+                    if (pwd === '2026') {
+                        inboundItems = inboundItems.filter(i => i !== item);
+                        saveInboundItems();
+                        renderDropdownItems();
+
+                        // Reset if active item was deleted
+                        if (configItemSelect && configItemSelect.value === item) {
+                            configItemSelect.value = '';
+                            if (configItemDropdownSelectedText) configItemDropdownSelectedText.textContent = 'Choose an item...';
+                        }
+                    } else if (pwd !== null) {
+                        alert('Incorrect password! Item was not deleted.');
                     }
-                } else if (pwd !== null) alert('Incorrect password! Item was not deleted.');
-            });
+                });
+            }
 
-            li.append(choose, del);
             configItemDropdownList.appendChild(li);
         });
     }
@@ -3538,48 +3545,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Pre-build sets for O(1) duplicate checks
-        const existingSerialsSet = new Set(activeSession.serials.map(s => s.serial));
+        const existingSerialsSet = new Set(activeSession.serials.map(s => String(s.serial || '').trim().toUpperCase()));
         const batchSerialsSet = new Set();
 
         // Pre-validate all items in allTempSerials
         for (let i = 0; i < allTempSerials.length; i++) {
             const checkSerial = allTempSerials[i].serial;
             const targetBoxNo = allTempSerials[i].boxNo;
+            const normalizedCheckSerial = String(checkSerial || '').trim().toUpperCase();
 
-            // Check duplicate across existing serials in session
-            if (existingSerialsSet.has(checkSerial)) {
-                const foundItem = activeSession.serials.find(item => item.serial === checkSerial);
+            // Check duplicate across existing serials in session (case-insensitive)
+            if (existingSerialsSet.has(normalizedCheckSerial)) {
+                const foundItem = activeSession.serials.find(item => String(item.serial || '').trim().toUpperCase() === normalizedCheckSerial);
                 showScanWarning('duplicate-seq', foundItem ? foundItem.boxNo : 'N/A', checkSerial);
                 return;
             }
 
             // Check duplicate in same batch
-            if (batchSerialsSet.has(checkSerial)) {
+            if (batchSerialsSet.has(normalizedCheckSerial)) {
                 showScanWarning('duplicate-batch', targetBoxNo, checkSerial);
                 return;
             }
-            batchSerialsSet.add(checkSerial);
+            batchSerialsSet.add(normalizedCheckSerial);
 
-            // Check duplicate across past history database (case-insensitive)
-            const inboundHistory = getHistory();
-            let alreadyInboundLog = null;
-            const cleanSerialUpper = checkSerial.toUpperCase();
-            for (const log of inboundHistory) {
-                if (log.serials) {
-                    const found = log.serials.find(s => s && s.serial && s.serial.trim().toUpperCase() === cleanSerialUpper);
-                    if (found) {
-                        alreadyInboundLog = log;
-                        break;
-                    }
-                }
-            }
-
-            if (alreadyInboundLog) {
+            // A serial is a duplicate only while it is currently inside WMS.
+            // Historical Inbound records must not block re-entry after Outbound.
+            const cleanSerialUpper = checkSerial.trim().toUpperCase();
+            const currentMembership = getCurrentActiveSerialMap().get(cleanSerialUpper);
+            if (currentMembership) {
                 showSkuWarningModal(
                     'Already Inbound Alert!',
-                    'A generated sequence serial barcode already exists in a previously saved inbound history session.',
-                    'RECEIVED ON VEHICLE:',
-                    alreadyInboundLog.vehicle || 'N/A',
+                    'This serial number is already inside WMS stock. It can be received again only after a completed Outbound transaction.',
+                    'CURRENT STATUS:',
+                    'ALREADY IN WMS',
                     'EXISTING BARCODE:',
                     checkSerial,
                     false,
@@ -3780,63 +3778,51 @@ document.addEventListener('DOMContentLoaded', () => {
         loadInboundItems();
         activeConfigItemDropdownList.innerHTML = '';
 
-        const menu = document.getElementById('activeConfigItemDropdownMenu');
-        let search = menu ? menu.querySelector('.wms-product-search') : null;
-        if (menu && !search) {
-            search = document.createElement('input');
-            search.type = 'search';
-            search.className = 'wms-product-search';
-            search.placeholder = 'Search full product name...';
-            search.setAttribute('aria-label', 'Search products');
-            menu.insertBefore(search, activeConfigItemDropdownList);
-            search.addEventListener('input', () => {
-                const q = search.value.trim().toLowerCase();
-                activeConfigItemDropdownList.querySelectorAll('.custom-dropdown-item').forEach(row => {
-                    row.hidden = !row.dataset.search.includes(q);
-                });
-            });
-            search.addEventListener('click', e => e.stopPropagation());
-        }
-        if (search) search.value = '';
-
         inboundItems.forEach(item => {
             const li = document.createElement('li');
             li.className = 'custom-dropdown-item';
-            li.dataset.value = item;
-            li.dataset.search = String(item).toLowerCase();
+            li.setAttribute('data-value', item);
 
-            const choose = document.createElement('button');
-            choose.type = 'button';
-            choose.className = 'wms-product-choice';
-            choose.textContent = item;
-            choose.title = item;
-            choose.addEventListener('click', () => {
-                selectActiveDropdownItem(item);
-                closeActiveDropdownMenu();
-            });
+            li.innerHTML = `
+                <span class="custom-dropdown-item-text">${item}</span>
+                <button type="button" class="btn-delete-dropdown-item" data-item="${item}" title="Delete Item">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
+            `;
 
-            const del = document.createElement('button');
-            del.type = 'button';
-            del.className = 'btn-delete-dropdown-item';
-            del.title = 'Delete Item';
-            del.setAttribute('aria-label', `Delete ${item}`);
-            del.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>';
-            del.addEventListener('click', e => {
-                e.stopPropagation();
-                const pwd = prompt(`Enter password to delete item "${item}":`);
-                if (pwd === '2026') {
-                    inboundItems = inboundItems.filter(i => i !== item);
-                    saveInboundItems();
-                    renderDropdownItems();
-                    renderActiveDropdownItems();
-                    if (activeConfigItemSelect?.value === item) {
-                        activeConfigItemSelect.value = '';
-                        if (activeConfigItemDropdownSelectedText) activeConfigItemDropdownSelectedText.textContent = 'Choose an item...';
+            // Selection trigger
+            const textSpan = li.querySelector('.custom-dropdown-item-text');
+            if (textSpan) {
+                textSpan.addEventListener('click', () => {
+                    selectActiveDropdownItem(item);
+                    closeActiveDropdownMenu();
+                });
+            }
+
+            // Secure deletion trigger
+            const deleteBtn = li.querySelector('.btn-delete-dropdown-item');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const pwd = prompt(`Enter password to delete item "${item}":`);
+                    if (pwd === '2026') {
+                        inboundItems = inboundItems.filter(i => i !== item);
+                        saveInboundItems();
+                        renderDropdownItems();
+                        renderActiveDropdownItems();
+
+                        if (activeConfigItemSelect && activeConfigItemSelect.value === item) {
+                            activeConfigItemSelect.value = '';
+                            if (activeConfigItemDropdownSelectedText) activeConfigItemDropdownSelectedText.textContent = 'Choose an item...';
+                        }
+                    } else if (pwd !== null) {
+                        alert('Incorrect password! Item was not deleted.');
                     }
-                } else if (pwd !== null) alert('Incorrect password! Item was not deleted.');
-            });
+                });
+            }
 
-            li.append(choose, del);
             activeConfigItemDropdownList.appendChild(li);
         });
     }
@@ -7552,133 +7538,70 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getProductStockMap() {
-        if (cachedProductStockMap !== null) {
-            return cachedProductStockMap;
-        }
-
-        const outboundHistory = getOutboundHistory();
-        const outboundSerialsSet = new Set();
-        const outboundCountsByProduct = {};
-        const unmatchedOutboundCounts = {};
-
-        const damageRecords = getDamageRecords();
-        const damageSerials = new Set(damageRecords.map(r => String(r.serial || '').trim().toUpperCase()).filter(Boolean));
-
-        const inboundSerialsSet = new Set();
-        const inboundHistory = getHistory();
-        inboundHistory.forEach(log => {
-            if (log.serials) {
-                log.serials.forEach(s => {
-                    if (s && s.serial) {
-                        inboundSerialsSet.add(s.serial.trim().toUpperCase());
-                    }
-                });
-            }
-        });
-
-        outboundHistory.forEach(log => {
-            if (log.serials) {
-                log.serials.forEach(s => {
-                    const cleanSerial = s.serial.trim().toUpperCase();
-                    outboundSerialsSet.add(cleanSerial);
-                    const itemName = s.itemName;
-                    if (!outboundCountsByProduct[itemName]) {
-                        outboundCountsByProduct[itemName] = 0;
-                    }
-                    outboundCountsByProduct[itemName]++;
-
-                    if (!inboundSerialsSet.has(cleanSerial) && !cleanSerial.includes('WOS-OUT-')) {
-                        if (!unmatchedOutboundCounts[itemName]) {
-                            unmatchedOutboundCounts[itemName] = 0;
-                        }
-                        unmatchedOutboundCounts[itemName]++;
-                    }
-                });
-            }
-        });
+        if (cachedProductStockMap !== null) return cachedProductStockMap;
 
         const productStock = {};
         const weights = getProductWeights();
+        const activeSerials = getCurrentActiveSerialMap();
+        const damagedSerials = getCurrentDamagedSerialSet(activeSerials);
 
-        const remainingQuantityDamage = {};
-        getDamageRecords().forEach(r => {
-            if (r && !r.serial && r.itemName) {
-                remainingQuantityDamage[r.itemName] = (remainingQuantityDamage[r.itemName] || 0) + Math.max(0, Number(r.quantity) || 0);
+        // Serialized stock is derived only from each serial's latest WMS event.
+        // This prevents old inbound rows from being counted again and allows a
+        // serial to re-enter after it has completed an Outbound cycle.
+        activeSerials.forEach((membership, serialKey) => {
+            const entry = membership.entry || {};
+            const itemName = entry.itemName || membership.log.item;
+            if (!itemName) return;
+            if (!productStock[itemName]) {
+                productStock[itemName] = { name: itemName, serialsCount: 0, freshCount: 0, damagedCount: 0 };
             }
-        });
-        const remainingWosOutbound = {};
-        Object.keys(outboundCountsByProduct).forEach(key => {
-            remainingWosOutbound[key] = outboundCountsByProduct[key];
-        });
-
-        const remainingUnmatchedOutbound = {};
-        Object.keys(unmatchedOutboundCounts).forEach(key => {
-            remainingUnmatchedOutbound[key] = unmatchedOutboundCounts[key];
+            productStock[itemName].serialsCount++;
+            if (damagedSerials.has(serialKey)) productStock[itemName].damagedCount++;
+            else productStock[itemName].freshCount++;
         });
 
-        const inboundHistoryReversed = [...inboundHistory].reverse();
-
-        inboundHistoryReversed.forEach(log => {
-            const name = log.item;
-            if (log.serials && log.serials.length > 0) {
-                log.serials.forEach(s => {
-                    const itemName = s.itemName || name;
-                    const cleanInboundSerial = s.serial.trim().toUpperCase();
-
-                    if (damageSerials.has(cleanInboundSerial)) {
-                        return; // Damaged, not available in stock
-                    }
-
-                    if (!productStock[itemName]) {
-                        productStock[itemName] = {
-                            name: itemName,
-                            serialsCount: 0,
-                            freshCount: 0
-                        };
-                    }
-
-                    let isDispatched = false;
-                    if (outboundSerialsSet.has(cleanInboundSerial)) {
-                        isDispatched = true;
-                    } else if (remainingUnmatchedOutbound[itemName] && remainingUnmatchedOutbound[itemName] > 0) {
-                        isDispatched = true;
-                        remainingUnmatchedOutbound[itemName]--;
-                    }
-
-                    if (!isDispatched) {
-                        productStock[itemName].serialsCount++;
-                        productStock[itemName].freshCount++;
-                    }
-                });
-            } else {
-                if (name && log.count > 0) {
-                    if (!productStock[name]) {
-                        productStock[name] = {
-                            name: name,
-                            serialsCount: 0,
-                            freshCount: 0
-                        };
-                    }
-
-                    const inboundQty = log.count;
-                    const remOut = remainingWosOutbound[name] || 0;
-                    if (remOut >= inboundQty) {
-                        remainingWosOutbound[name] -= inboundQty;
-                    } else {
-                        const availableQty = inboundQty - remOut;
-                        remainingWosOutbound[name] = 0;
-                        const qtyDamaged = Math.min(availableQty, remainingQuantityDamage[name] || 0);
-                        remainingQuantityDamage[name] = Math.max(0, (remainingQuantityDamage[name] || 0) - qtyDamaged);
-                        productStock[name].serialsCount += availableQty;
-                        productStock[name].freshCount += availableQty - qtyDamaged;
-                    }
+        // Preserve the existing quantity-based (non-serial/WOS) stock workflow.
+        const outboundCountsByProduct = {};
+        (getOutboundHistory() || []).forEach(log => {
+            (log.serials || []).forEach(entry => {
+                if (!entry || !entry.serial) return;
+                const key = String(entry.serial).trim().toUpperCase();
+                if (!getInboundSerialLogMap().has(key)) {
+                    const item = entry.itemName || '';
+                    if (item) outboundCountsByProduct[item] = (outboundCountsByProduct[item] || 0) + 1;
                 }
+            });
+        });
+        const remainingWosOutbound = { ...outboundCountsByProduct };
+        const remainingQuantityDamage = {};
+        (getDamageRecords() || []).forEach(record => {
+            if (record && !record.serial && record.itemName) {
+                remainingQuantityDamage[record.itemName] = (remainingQuantityDamage[record.itemName] || 0) + Math.max(0, Number(record.quantity) || 0);
             }
+        });
+        [...(getHistory() || [])].reverse().forEach(log => {
+            if (log.serials && log.serials.length) return;
+            const name = log.item;
+            const inboundQty = Math.max(0, Number(log.count) || 0);
+            if (!name || !inboundQty) return;
+            if (!productStock[name]) {
+                productStock[name] = { name, serialsCount: 0, freshCount: 0, damagedCount: 0 };
+            }
+            const remOut = remainingWosOutbound[name] || 0;
+            const availableQty = Math.max(0, inboundQty - remOut);
+            remainingWosOutbound[name] = Math.max(0, remOut - inboundQty);
+            const qtyDamaged = Math.min(availableQty, remainingQuantityDamage[name] || 0);
+            remainingQuantityDamage[name] = Math.max(0, (remainingQuantityDamage[name] || 0) - qtyDamaged);
+            productStock[name].serialsCount += availableQty;
+            productStock[name].freshCount += availableQty - qtyDamaged;
+            productStock[name].damagedCount += qtyDamaged;
         });
 
         cachedProductStockMap = productStock;
         return cachedProductStockMap;
-    }    function renderOrderQueueUI() {
+    }
+
+    function renderOrderQueueUI() {
         // No-op since Order Assign has been removed
     }
 
